@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1781115040692,
+      "tag": "0000_powerful_meteorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781121920443,
+      "tag": "0001_familiar_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781133421568,
+      "tag": "0002_blushing_northstar",
+      "breakpoints": true
+    }
+  ]
+}
