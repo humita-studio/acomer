@@ -215,6 +215,15 @@ export const mesas = pgTable(
     restauranteId: uuid('restaurant_id').notNull(),
     identificador: text('identificador').notNull(),
     qrToken: uuid('qr_token').notNull().defaultRandom().unique(),
+    // Posición y forma dentro del plano del local
+    ambienteId: uuid('ambiente_id').references(() => ambientes.id, { onDelete: 'set null' }),
+    posX: integer('pos_x').notNull().default(0),
+    posY: integer('pos_y').notNull().default(0),
+    ancho: integer('ancho').notNull().default(2),
+    alto: integer('alto').notNull().default(2),
+    forma: text('forma').notNull().default('cuadrada'), // 'redonda' | 'cuadrada'
+    capacidad: integer('capacidad').notNull().default(4),
+    rotacion: integer('rotacion').notNull().default(0), // 0 | 90 | 180 | 270
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
@@ -225,6 +234,64 @@ export const mesas = pgTable(
       name: 'mesas_restaurant_id_fk',
     }).onDelete('cascade'),
     qrTokenIdx: uniqueIndex('mesas_qr_token_idx').on(table.qrToken),
+    formaCheck: check('mesas_forma_check', sql`forma IN ('redonda','cuadrada')`),
+  })
+)
+
+// ============================================================================
+// Plano del local (ambientes y elementos de dibujo)
+// ============================================================================
+
+export const ambientes = pgTable(
+  'ambientes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    nombre: text('nombre').notNull(), // "Salón", "Patio", "Terraza"
+    orden: integer('orden').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'ambientes_restaurant_id_fk',
+    }).onDelete('cascade'),
+  })
+)
+
+export const elementosPlano = pgTable(
+  'elementos_plano',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    ambienteId: uuid('ambiente_id').notNull(),
+    tipo: text('tipo').notNull().default('pared'), // 'pared' | 'barra' | 'contorno' | 'decoracion'
+    posX: integer('pos_x').notNull().default(0),
+    posY: integer('pos_y').notNull().default(0),
+    ancho: integer('ancho').notNull().default(1),
+    alto: integer('alto').notNull().default(1),
+    rotacion: integer('rotacion').notNull().default(0),
+    etiqueta: text('etiqueta'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'elementos_plano_restaurant_id_fk',
+    }).onDelete('cascade'),
+    ambienteIdFk: foreignKey({
+      columns: [table.ambienteId],
+      foreignColumns: [ambientes.id],
+      name: 'elementos_plano_ambiente_id_fk',
+    }).onDelete('cascade'),
+    tipoCheck: check(
+      'elementos_plano_tipo_check',
+      sql`tipo IN ('pared','barra','contorno','decoracion')`
+    ),
   })
 )
 
@@ -470,6 +537,8 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   modificadores: many(modificadores),
   modificadoresPrecios: many(modificadoresPrecios),
   mesas: many(mesas),
+  ambientes: many(ambientes),
+  elementosPlano: many(elementosPlano),
   sesionesMesa: many(sesionesMesa),
   itemsBorradorMesa: many(itemsBorradorMesa),
   pedidos: many(pedidos),
@@ -558,7 +627,31 @@ export const mesasRelations = relations(mesas, ({ one, many }) => ({
     fields: [mesas.restauranteId],
     references: [restaurantes.id],
   }),
+  ambiente: one(ambientes, {
+    fields: [mesas.ambienteId],
+    references: [ambientes.id],
+  }),
   sesiones: many(sesionesMesa),
+}))
+
+export const ambientesRelations = relations(ambientes, ({ one, many }) => ({
+  restaurante: one(restaurantes, {
+    fields: [ambientes.restauranteId],
+    references: [restaurantes.id],
+  }),
+  mesas: many(mesas),
+  elementos: many(elementosPlano),
+}))
+
+export const elementosPlanoRelations = relations(elementosPlano, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [elementosPlano.restauranteId],
+    references: [restaurantes.id],
+  }),
+  ambiente: one(ambientes, {
+    fields: [elementosPlano.ambienteId],
+    references: [ambientes.id],
+  }),
 }))
 
 export const sesionesMesaRelations = relations(sesionesMesa, ({ one, many }) => ({

@@ -58,7 +58,19 @@ export async function getOrCreateSesionMesa(tenantSlug: string, qrToken: string)
       estado: 'Activa',
     }).returning({ id: sesionesMesa.id });
 
-    return { 
+    // Avisar al panel admin (plano del local) que la mesa pasó a ocupada
+    try {
+      const supabase = await createSupabaseServerClient();
+      await supabase.channel(`admin_restaurant_${tenantId}`).send({
+        type: 'broadcast',
+        event: 'ocupacion_cambiada',
+        payload: { mesaId: mesa.id, ocupada: true },
+      });
+    } catch (e) {
+      console.error('[getOrCreateSesionMesa] broadcast ocupacion', e);
+    }
+
+    return {
       success: true, 
       sesionId: nuevaSesion[0].id,
       mesaIdentificador: mesa.identificador,

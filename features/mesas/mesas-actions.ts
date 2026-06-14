@@ -5,6 +5,7 @@ import { mesas } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export async function crearMesa(identificador: string) {
@@ -75,7 +76,20 @@ export async function liberarMesaAction(mesaId: string) {
         )
       );
 
+    // Avisar al panel admin (plano del local) que la mesa pasó a libre
+    try {
+      const supabase = await createSupabaseServerClient();
+      await supabase.channel(`admin_restaurant_${session.restauranteId}`).send({
+        type: 'broadcast',
+        event: 'ocupacion_cambiada',
+        payload: { mesaId, ocupada: false },
+      });
+    } catch (e) {
+      console.error('[liberarMesaAction] broadcast ocupacion', e);
+    }
+
     revalidatePath('/admin/mesas');
+    revalidatePath('/admin/plano');
     return { success: true, message: 'Mesa liberada correctamente' };
   } catch (error) {
     console.error('[liberarMesaAction]', error);
