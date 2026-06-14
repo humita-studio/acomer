@@ -17,6 +17,7 @@ import type { CartItem } from '@/features/comanda/store';
 import { getMetodosPago } from '@/features/pagos/get-metodos-pago';
 import { obtenerTicketAction } from '@/features/pagos/obtener-ticket-action';
 import { ResumenPago } from '@/features/pagos/components/ResumenPago';
+import { obtenerTicketMesa } from '@/features/comanda/obtener-ticket-mesa';
 
 type ModificadorSnapshot = {
   id: string;
@@ -138,49 +139,8 @@ export default async function ComandaPage({
     modificadores: (item.modificadores as ModificadorSnapshot[]) || [],
   }));
 
-  // 4b. Cargar pedidos ya confirmados para mostrarlos al cliente
-  const pedidosMesa = await db.query.pedidos.findMany({
-    where: (t, { eq, and, ne }) => and(
-        eq(t.sesionMesaId, sesionId),
-        ne(t.estado, 'Cancelado')
-    ),
-    with: {
-        items: {
-            with: {
-                modificadores: true
-            }
-        }
-    }
-  });
-
-  const pedidosConfirmadosMap = new Map<string, any>();
-  for (const pedido of pedidosMesa) {
-    for (const item of pedido.items) {
-      const modKey = JSON.stringify(item.modificadores || []);
-      const key = `${item.productoId}-${modKey}`;
-      const existing = pedidosConfirmadosMap.get(key);
-
-      const precioTotalMods = (item.modificadores as any[] || []).reduce((acc: number, mod: any) => acc + (Number(mod.precioExtraSnapshot) || 0), 0);
-      const precioUnitarioBase = Number((item as any).precioUnitarioSnapshot || (item as any).precioUnitario || 0);
-      const precioItemConMods = precioUnitarioBase + precioTotalMods;
-      const itemCantidad = Number(item.cantidad);
-
-      if (existing) {
-          existing.cantidad += itemCantidad;
-          existing.subtotal += (itemCantidad * precioItemConMods);
-      } else {
-          pedidosConfirmadosMap.set(key, {
-              id: item.id,
-              nombre: (item as any).nombreProductoSnapshot || (item as any).nombreProducto || 'Producto sin nombre',
-              cantidad: itemCantidad,
-              precioUnitario: precioUnitarioBase,
-              modificadores: (item.modificadores as any[] || []).map(m => ({ nombre: m.nombreModificadorSnapshot, precioExtra: Number(m.precioExtraSnapshot || 0) })),
-              subtotal: itemCantidad * precioItemConMods
-          });
-      }
-    }
-  }
-  const pedidosConfirmados = Array.from(pedidosConfirmadosMap.values());
+  // 4b. Cargar el ticket acumulado de la mesa (pedidos confirmados)
+  const { items: pedidosConfirmados } = await obtenerTicketMesa(sesionId);
 
   // Mapear DB a la estructura de la UI
   const menuProductos: ProductoMenu[] = prods.map(p => ({

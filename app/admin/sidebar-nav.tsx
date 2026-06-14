@@ -14,7 +14,6 @@ export function SidebarNav({ role }: { role: RoleType }) {
     { href: '/admin/staff', label: '👥 Empleados', section: 'staff' },
     { href: '/admin/mesas', label: '🪑 Mesas', section: 'tables' },
     { href: '/admin/reportes', label: '📊 Reportes', section: 'reports' },
-    { href: '/admin/cocina', label: '👨‍🍳 Cocina', section: 'kitchen' },
     { href: '/admin/caja', label: '💳 Caja', section: 'cashier' },
     { href: '/admin/cobros', label: '💵 Cobros', section: 'cashier' },
     { href: '/admin/configuracion', label: '⚙️ Configuración', section: 'settings' },

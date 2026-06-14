@@ -64,7 +64,7 @@ export default async function MesasPage() {
     return (
         <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestión de Mesas</h1>
-            <MesasManager mesas={mesasConEstado} origin={origin} userRole={session.role} />
+            <MesasManager mesas={mesasConEstado} origin={origin} userRole={session.role} tenantId={session.restauranteId} />
         </div>
     );
 }

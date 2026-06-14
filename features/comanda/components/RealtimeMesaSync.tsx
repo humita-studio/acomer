@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { useComandaStore, CartItem } from '../store';
 import { obtenerBorrador } from '../borrador-actions';
@@ -13,6 +14,7 @@ type RealtimeMesaSyncProps = {
 };
 
 export function RealtimeMesaSync({ sesionMesaId, tenantId, initialItems }: RealtimeMesaSyncProps) {
+  const router = useRouter();
   const setItems = useComandaStore((state) => state.setItems);
   const setBroadcastFn = useComandaStore((state) => state._setBroadcastFn);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -59,6 +61,10 @@ export function RealtimeMesaSync({ sesionMesaId, tenantId, initialItems }: Realt
         console.log('📡 Broadcast recibido: cart_changed — refetching...');
         refetchBorrador();
       })
+      // El mozo cargó productos al ticket desde el admin → refrescar la vista del comensal
+      .on('broadcast', { event: 'ticket_actualizado' }, () => {
+        router.refresh();
+      })
       // SECONDARY: Also listen for pedido state changes via postgres_changes
       .on(
         'postgres_changes',
@@ -94,7 +100,7 @@ export function RealtimeMesaSync({ sesionMesaId, tenantId, initialItems }: Realt
       channelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [sesionMesaId, refetchBorrador, setBroadcastFn]);
+  }, [sesionMesaId, refetchBorrador, setBroadcastFn, router]);
 
   return null;
 }

@@ -56,8 +56,9 @@ export async function eliminarMesa(id: string) {
 export async function liberarMesaAction(mesaId: string) {
   try {
     const session = await getCurrentSession();
-    if (!session || !hasPermission(session.role, 'canManageTables')) {
-      return { success: false, message: 'No tienes permiso para gestionar mesas' };
+    // La libera quien gestiona mesas (owner/admin) o quien toma pedidos (mozo)
+    if (!session || (!hasPermission(session.role, 'canManageTables') && !hasPermission(session.role, 'canTakeOrders'))) {
+      return { success: false, message: 'No tienes permiso para liberar la mesa' };
     }
 
     const { sesionesMesa } = await import('@/shared/db/schema');

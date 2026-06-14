@@ -9,7 +9,8 @@ export interface RolePermissions {
   canManageMenu: boolean;      // CRUD categorías y productos
   canManagePrices: boolean;    // Modificar precios
   canManageStaff: boolean;     // Invitar empleados, asignar roles
-  canManageTables: boolean;    // Crear/modificar mesas
+  canManageTables: boolean;    // Crear/modificar mesas (alta, QR, eliminar)
+  canTakeOrders: boolean;      // Cargar productos al ticket de una mesa desde el admin (mozo)
   canViewReports: boolean;     // Ver reportes y estadísticas
   canProcessPayments: boolean; // Procesar pagos
   canMarkDelivered: boolean;   // Marcar platos como entregados (mozo)
@@ -22,6 +23,7 @@ export interface RolePermissions {
 
 export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
   owner: {
+    canTakeOrders: true,
     canManageMenu: true,
     canManagePrices: true,
     canManageStaff: true,
@@ -36,6 +38,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageSettings: true,
   },
   admin: {
+    canTakeOrders: true,
     canManageMenu: true,
     canManagePrices: true,
     canManageStaff: false, // El admin no puede crear otros admins
@@ -50,6 +53,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageSettings: true,
   },
   cajero: {
+    canTakeOrders: false,
     canManageMenu: false,
     canManagePrices: false,
     canManageStaff: false,
@@ -64,6 +68,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageSettings: false,
   },
   mozo: {
+    canTakeOrders: true,
     canManageMenu: false,
     canManagePrices: false,
     canManageStaff: false,
@@ -78,6 +83,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageSettings: false,
   },
   cocina: {
+    canTakeOrders: false,
     canManageMenu: false,
     canManagePrices: false,
     canManageStaff: false,
@@ -122,7 +128,8 @@ export function canAccessSection(
     case 'staff':
       return permissions.canManageStaff;
     case 'tables':
-      return permissions.canManageTables;
+      // Mesas es la pantalla operativa del mozo: la ve quien gestione mesas o tome pedidos
+      return permissions.canManageTables || permissions.canTakeOrders;
     case 'reports':
       return permissions.canViewReports;
     case 'kitchen':

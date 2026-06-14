@@ -1,0 +1,253 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { agregarItemsStaffAction } from '@/features/comanda/agregar-items-staff-action';
+import { liberarMesaAction } from '@/features/mesas/mesas-actions';
+import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/comanda/components/MenuDigital';
+import type { TicketItem } from '@/features/comanda/obtener-ticket-mesa';
+
+type Props = {
+  mesaId: string;
+  sesionMesaId: string;
+  categorias: CategoriaMenu[];
+  productos: ProductoMenu[];
+  ticketInicial: { items: TicketItem[]; total: number };
+};
+
+export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos, ticketInicial }: Props) {
+  const router = useRouter();
+  const [activeCategory, setActiveCategory] = useState<string>(categorias[0]?.id || '');
+  const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
+  const [cantidad, setCantidad] = useState(1);
+  const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isLiberating, setIsLiberating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeProducts = productos.filter((p) => p.categoriaId === activeCategory);
+
+  const openProduct = (prod: ProductoMenu) => {
+    setSelectedProduct(prod);
+    setCantidad(1);
+    setSelectedModIds([]);
+    setError(null);
+  };
+
+  const toggleMod = (mod: ModificadorMenu) => {
+    setSelectedModIds((prev) =>
+      prev.includes(mod.id) ? prev.filter((id) => id !== mod.id) : [...prev, mod.id],
+    );
+  };
+
+  const modsTotal = selectedProduct
+    ? selectedProduct.modificadores
+        .filter((m) => selectedModIds.includes(m.id))
+        .reduce((sum, m) => sum + m.precioExtra, 0)
+    : 0;
+  const subtotalModal = selectedProduct ? (selectedProduct.precio + modsTotal) * cantidad : 0;
+
+  const handleAgregar = async () => {
+    if (!selectedProduct) return;
+    setIsAdding(true);
+    setError(null);
+    const res = await agregarItemsStaffAction(sesionMesaId, [
+      { productoId: selectedProduct.id, cantidad, modificadorIds: selectedModIds },
+    ]);
+    setIsAdding(false);
+    if (res.success) {
+      setSelectedProduct(null);
+      router.refresh();
+    } else {
+      setError(res.message || 'No se pudo agregar el producto');
+    }
+  };
+
+  const handleLiberar = async () => {
+    if (!confirm('¿Liberar la mesa? Se cerrará la sesión actual.')) return;
+    setIsLiberating(true);
+    setError(null);
+    const res = await liberarMesaAction(mesaId);
+    setIsLiberating(false);
+    if (res.success) {
+      router.push('/admin/mesas');
+      router.refresh();
+    } else {
+      setError(res.message || 'No se pudo liberar la mesa');
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Ticket de la mesa */}
+      <aside className="lg:col-span-1">
+        <div className="bg-white rounded-lg shadow p-5 lg:sticky lg:top-6">
+          <h2 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">Cuenta de la mesa</h2>
+
+          {ticketInicial.items.length === 0 ? (
+            <p className="text-sm text-gray-500 py-6 text-center">Todavía no hay pedidos en esta mesa.</p>
+          ) : (
+            <div className="space-y-3">
+              {ticketInicial.items.map((item) => (
+                <div key={item.id} className="flex justify-between items-start text-sm">
+                  <div>
+                    <p className="font-medium text-gray-800">
+                      {item.cantidad}× {item.nombre}
+                    </p>
+                    {item.modificadores.length > 0 && (
+                      <p className="text-xs text-gray-500">
+                        + {item.modificadores.map((m) => m.nombre).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  <span className="font-semibold text-gray-700">${item.subtotal.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-between items-center mt-4 pt-3 border-t font-bold text-gray-800">
+            <span>Total</span>
+            <span>${ticketInicial.total.toFixed(2)}</span>
+          </div>
+
+          <button
+            onClick={handleLiberar}
+            disabled={isLiberating}
+            className="w-full mt-5 text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 py-2 rounded-md transition text-sm font-bold disabled:opacity-50"
+          >
+            {isLiberating ? 'Liberando...' : 'Liberar Mesa'}
+          </button>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg mt-4 text-sm font-medium">{error}</div>
+          )}
+        </div>
+      </aside>
+
+      {/* Selector de productos */}
+      <section className="lg:col-span-2">
+        <div className="bg-white rounded-lg shadow p-5">
+          <h2 className="font-bold text-lg text-gray-800 mb-4">Agregar al pedido</h2>
+
+          {categorias.length === 0 ? (
+            <p className="text-sm text-gray-500">No hay productos cargados en el menú.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto whitespace-nowrap pb-3 mb-2">
+                <div className="flex gap-2">
+                  {categorias.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={`px-4 py-2 rounded-full font-medium text-sm transition-colors ${
+                        activeCategory === cat.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {cat.nombre}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {activeProducts.length === 0 ? (
+                  <p className="text-sm text-gray-500 py-6">No hay productos en esta categoría.</p>
+                ) : (
+                  activeProducts.map((prod) => (
+                    <button
+                      key={prod.id}
+                      onClick={() => openProduct(prod)}
+                      className="text-left bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-300 transition-all flex justify-between items-center"
+                    >
+                      <div>
+                        <h3 className="font-semibold text-gray-800">{prod.nombre}</h3>
+                        <p className="font-bold text-blue-600 mt-1">${prod.precio.toFixed(2)}</p>
+                      </div>
+                      <span className="bg-blue-50 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center shrink-0 ml-3 text-xl">
+                        +
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Modal de carga de producto */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-xl">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h2 className="font-bold text-xl">{selectedProduct.nombre}</h2>
+              <button onClick={() => setSelectedProduct(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              <div className="font-medium text-gray-700">Precio base: ${selectedProduct.precio.toFixed(2)}</div>
+
+              {selectedProduct.permiteAdicionales && selectedProduct.modificadores.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold border-b pb-2">Adicionales</h3>
+                  {selectedProduct.modificadores.map((mod) => (
+                    <label
+                      key={mod.id}
+                      className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                          checked={selectedModIds.includes(mod.id)}
+                          onChange={() => toggleMod(mod)}
+                        />
+                        <span className="font-medium">{mod.nombre}</span>
+                      </div>
+                      {mod.precioExtra > 0 && <span className="text-gray-600">+${mod.precioExtra.toFixed(2)}</span>}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-center gap-6 py-2">
+                <button
+                  onClick={() => setCantidad(Math.max(1, cantidad - 1))}
+                  className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-2xl hover:bg-gray-200"
+                >
+                  -
+                </button>
+                <span className="text-2xl font-bold w-8 text-center">{cantidad}</span>
+                <button
+                  onClick={() => setCantidad(cantidad + 1)}
+                  className="w-12 h-12 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-2xl hover:bg-blue-200"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
+              {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-3 text-sm font-medium">{error}</div>
+              )}
+              <button
+                onClick={handleAgregar}
+                disabled={isAdding}
+                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors flex justify-between px-6 items-center disabled:bg-blue-400"
+              >
+                <span>{isAdding ? 'Agregando...' : 'Agregar al pedido'}</span>
+                <span>${subtotalModal.toFixed(2)}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

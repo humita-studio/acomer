@@ -1,12 +1,41 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { crearMesa, eliminarMesa, liberarMesaAction } from '@/features/mesas/mesas-actions';
+import { hasPermission, type RoleType } from '@/features/authorization/roles';
+import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 
-export function MesasManager({ mesas, origin, userRole }: { mesas: any[], origin: string, userRole: string }) {
+export function MesasManager({ mesas, origin, userRole, tenantId }: { mesas: any[], origin: string, userRole: string, tenantId: string }) {
   const [loading, setLoading] = useState(false);
   const [liberandoId, setLiberandoId] = useState<string | null>(null);
+  const [avisos, setAvisos] = useState<{ id: string; texto: string }[]>([]);
+
+  // Escuchar alertas de las mesas (llamar mozo / pedir cuenta) en tiempo real
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase.channel(`admin_restaurant_${tenantId}`);
+
+    const pushAviso = (texto: string) => {
+      const id = crypto.randomUUID();
+      setAvisos((prev) => [{ id, texto }, ...prev].slice(0, 5));
+      setTimeout(() => setAvisos((prev) => prev.filter((a) => a.id !== id)), 20000);
+    };
+
+    channel
+      .on('broadcast', { event: 'alerta_mesa' }, ({ payload }) => {
+        pushAviso(`🔔 ${payload?.mesaIdentificador || 'Una mesa'} está llamando al mozo`);
+      })
+      .on('broadcast', { event: 'cuenta_solicitada' }, () => {
+        pushAviso('💵 Una mesa pidió la cuenta — revisá Cobros');
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenantId]);
 
   const handleCrearMesa = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,9 +55,21 @@ export function MesasManager({ mesas, origin, userRole }: { mesas: any[], origin
   };
 
   const canManage = userRole === 'owner' || userRole === 'admin';
+  const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
+      {avisos.length > 0 && (
+        <div className="mb-6 space-y-2">
+          {avisos.map((a) => (
+            <div key={a.id} className="flex justify-between items-center bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-lg text-sm font-medium animate-in fade-in slide-in-from-top-2">
+              <span>{a.texto}</span>
+              <button onClick={() => setAvisos((prev) => prev.filter((x) => x.id !== a.id))} className="text-amber-500 hover:text-amber-700 ml-3">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {canManage && (
         <form onSubmit={handleCrearMesa} className="flex gap-4 mb-8">
           <input 
@@ -80,9 +121,17 @@ export function MesasManager({ mesas, origin, userRole }: { mesas: any[], origin
                 />
               </div>
 
-              <div className="flex gap-2 w-full mt-auto">
+              <div className="flex gap-2 w-full mt-auto flex-wrap">
+                {mesa.ocupada && canTakeOrders && (
+                  <Link
+                    href={`/admin/mesas/${mesa.id}`}
+                    className="flex-1 min-w-[130px] text-center text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 py-2 rounded-md transition text-sm font-bold"
+                  >
+                    Ver / Agregar pedido
+                  </Link>
+                )}
                 {mesa.ocupada && canManage && (
-                  <button 
+                  <button
                     onClick={() => handleLiberarMesa(mesa.id, mesa.identificador)}
                     disabled={liberandoId === mesa.id}
                     className="flex-1 text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 py-2 rounded-md transition text-sm font-bold disabled:opacity-50"

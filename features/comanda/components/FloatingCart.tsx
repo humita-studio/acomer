@@ -4,25 +4,23 @@ import { useState } from 'react';
 import { useComandaStore } from '../store';
 import { enviarPedidoAction } from '../enviar-pedido-actions';
 import { eliminarItemBorrador, actualizarCantidadBorrador } from '../borrador-actions';
-import { PaymentMethodModal } from '../../pagos/components/PaymentMethodModal';
-import type { MetodoPago } from '../../pagos/get-metodos-pago';
+import { useRouter } from 'next/navigation';
 
 type FloatingCartProps = {
   tenantId: string;
   sesionMesaId: string;
-  metodosPago: MetodoPago[];
   pedidosConfirmados?: any[];
 };
 
-export function FloatingCart({ tenantId, sesionMesaId, metodosPago, pedidosConfirmados = [] }: FloatingCartProps) {
+export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }: FloatingCartProps) {
+  const router = useRouter();
   const { items, getTotal, optimisticRemove, optimisticUpdateQuantity } = useComandaStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Consideramo si el carrito está vacío y no hay pedidos confirmados
-  if (items.length === 0 && pedidosConfirmados.length === 0 && !showPaymentModal) return null;
+  if (items.length === 0 && pedidosConfirmados.length === 0) return null;
 
   const totalBorrador = getTotal();
   const totalItemsBorrador = items.reduce((sum, item) => sum + item.cantidad, 0);
@@ -61,8 +59,9 @@ export function FloatingCart({ tenantId, sesionMesaId, metodosPago, pedidosConfi
         useComandaStore.getState().clearCart();
         setIsOpen(false);
         broadcastChange();
-        // Abrir modal de pagos y luego recargar
-        setShowPaymentModal(true);
+        // Pedir ≠ pagar: el pedido va a la cocina; el comensal paga cuando quiera con "Pagar Cuenta"
+        router.refresh();
+        alert('¡Pedido enviado! Podés seguir pidiendo o tocar "Pagar Cuenta" cuando quieras.');
       } else {
         setError(res.message);
       }
@@ -76,7 +75,7 @@ export function FloatingCart({ tenantId, sesionMesaId, metodosPago, pedidosConfi
   return (
     <>
       {/* Botón flotante siempre visible cuando hay items pero el cart está cerrado */}
-      {!isOpen && (items.length > 0 || pedidosConfirmados.length > 0) && !showPaymentModal && (
+      {!isOpen && (items.length > 0 || pedidosConfirmados.length > 0) && (
         <div className="fixed bottom-6 left-0 right-0 px-4 z-40 animate-in slide-in-from-bottom-10 fade-in">
           <div className="max-w-2xl mx-auto">
             <button 
@@ -228,17 +227,6 @@ export function FloatingCart({ tenantId, sesionMesaId, metodosPago, pedidosConfi
         </div>
       )}
 
-      {/* Modal de Pago post-confirmación */}
-      <PaymentMethodModal
-        isOpen={showPaymentModal}
-        onClose={() => {
-          setShowPaymentModal(false);
-          window.location.reload();
-        }}
-        sesionMesaId={sesionMesaId}
-        tenantId={tenantId}
-        metodosPago={metodosPago}
-      />
     </>
   );
 }
