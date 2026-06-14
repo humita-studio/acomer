@@ -1,27 +1,36 @@
 'use client';
 
+import { useDraggable } from '@dnd-kit/core';
 import { Users } from 'lucide-react';
-import { GRID_PX, type MesaPlano, type Modo } from './plano-types';
+import { type MesaPlano, type Modo } from './plano-types';
 
 export function MesaNode({
   mesa,
   modo,
+  cell,
   seleccionada,
   ocupada,
-  onBodyPointerDown,
+  puedeArrastrar,
   onResizePointerDown,
   onClick,
 }: {
   mesa: MesaPlano;
   modo: Modo;
+  cell: number;
   seleccionada: boolean;
   ocupada: boolean;
-  onBodyPointerDown?: (e: React.PointerEvent) => void;
+  puedeArrastrar: boolean;
   onResizePointerDown?: (e: React.PointerEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const editando = modo === 'editar';
   const esRedonda = mesa.forma === 'redonda';
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: mesa.id,
+    disabled: !puedeArrastrar,
+    data: { kind: 'mesa', posX: mesa.posX, posY: mesa.posY, ancho: mesa.ancho, alto: mesa.alto },
+  });
 
   // Colores: en modo operación reflejan ocupación; en edición, neutro
   let estilo: string;
@@ -29,29 +38,39 @@ export function MesaNode({
     estilo = seleccionada
       ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-300'
       : 'border-gray-400 bg-white';
+  } else if (seleccionada) {
+    estilo = ocupada
+      ? 'border-orange-500 bg-orange-100 ring-2 ring-orange-300'
+      : 'border-green-500 bg-green-100 ring-2 ring-green-300';
   } else if (ocupada) {
     estilo = 'border-orange-400 bg-orange-50 hover:bg-orange-100';
   } else {
     estilo = 'border-green-400 bg-green-50 hover:bg-green-100';
   }
 
+  // Durante el arrastre, dnd-kit nos da un translate en px de pantalla; como el
+  // lienzo ya no usa scale CSS, esos px coinciden 1:1 con el lienzo.
+  const translate = transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) ` : '';
+
   return (
     <div
+      ref={setNodeRef}
       className="absolute select-none touch-none"
       style={{
-        left: mesa.posX * GRID_PX,
-        top: mesa.posY * GRID_PX,
-        width: mesa.ancho * GRID_PX,
-        height: mesa.alto * GRID_PX,
-        transform: `rotate(${mesa.rotacion}deg)`,
+        left: mesa.posX * cell,
+        top: mesa.posY * cell,
+        width: mesa.ancho * cell,
+        height: mesa.alto * cell,
+        transform: `${translate}rotate(${mesa.rotacion}deg)`,
+        zIndex: isDragging ? 30 : seleccionada ? 5 : 1,
       }}
     >
       <div
-        onPointerDown={editando ? onBodyPointerDown : undefined}
-        onClick={!editando ? onClick : undefined}
+        {...(puedeArrastrar ? { ...listeners, ...attributes } : {})}
+        onClick={onClick}
         className={`w-full h-full border-2 shadow-sm flex flex-col items-center justify-center overflow-hidden transition-colors ${estilo} ${
           esRedonda ? 'rounded-full' : 'rounded-lg'
-        } ${editando ? 'cursor-move' : 'cursor-pointer'}`}
+        } ${puedeArrastrar ? 'cursor-move' : 'cursor-pointer'}`}
         title={mesa.identificador}
       >
         <span className="text-[11px] font-bold text-gray-800 leading-tight px-1 text-center truncate max-w-full">
@@ -75,7 +94,10 @@ export function MesaNode({
       {/* Tirador de redimensionar (solo seleccionada en edición) */}
       {editando && seleccionada && onResizePointerDown && (
         <div
-          onPointerDown={onResizePointerDown}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onResizePointerDown(e);
+          }}
           className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize shadow"
           title="Redimensionar"
         />

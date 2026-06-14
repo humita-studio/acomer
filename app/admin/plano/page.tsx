@@ -1,8 +1,9 @@
 import { db } from '@/shared/db';
-import { ambientes, elementosPlano, mesas, sesionesMesa } from '@/shared/db/schema';
+import { ambientes, elementosPlano, mesas, restaurantes, sesionesMesa } from '@/shared/db/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { ensureAmbientePorDefecto } from '@/features/mesas/plano-data';
 import { PlanoManager } from './plano-manager';
 
@@ -39,6 +40,7 @@ export default async function PlanoPage() {
   const mesasUI = mesasData.map((m) => ({
     id: m.id,
     identificador: m.identificador,
+    qrToken: m.qrToken,
     ambienteId: m.ambienteId,
     posX: m.posX,
     posY: m.posY,
@@ -64,6 +66,19 @@ export default async function PlanoPage() {
     etiqueta: e.etiqueta,
   }));
 
+  // Origin público (subdominio del tenant) para los QR de las mesas
+  const headersList = await headers();
+  const host = headersList.get('host') || 'localhost:3000';
+  const [tenant] = await db
+    .select({ slug: restaurantes.slug })
+    .from(restaurantes)
+    .where(eq(restaurantes.id, session.restauranteId))
+    .limit(1);
+  const tenantSlug = tenant?.slug || 'demo';
+  const origin = host.includes('localhost')
+    ? `http://${tenantSlug}.localhost:3000`
+    : `https://${tenantSlug}.${host.replace('app.', '')}`;
+
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Plano del local</h1>
@@ -71,6 +86,7 @@ export default async function PlanoPage() {
         ambientes={ambientesUI}
         mesas={mesasUI}
         elementos={elementosUI}
+        origin={origin}
         userRole={session.role}
         tenantId={session.restauranteId}
       />

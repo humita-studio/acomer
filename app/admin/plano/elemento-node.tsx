@@ -1,23 +1,32 @@
 'use client';
 
-import { GRID_PX, type ElementoPlanoUI, type Modo } from './plano-types';
+import { useDraggable } from '@dnd-kit/core';
+import { type ElementoPlanoUI, type Modo } from './plano-types';
 
 export function ElementoNode({
   elemento,
   modo,
+  cell,
   seleccionado,
-  onBodyPointerDown,
+  puedeArrastrar,
   onResizePointerDown,
   onClick,
 }: {
   elemento: ElementoPlanoUI;
   modo: Modo;
+  cell: number;
   seleccionado: boolean;
-  onBodyPointerDown?: (e: React.PointerEvent) => void;
+  puedeArrastrar: boolean;
   onResizePointerDown?: (e: React.PointerEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const editando = modo === 'editar';
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: elemento.id,
+    disabled: !puedeArrastrar,
+    data: { kind: 'elemento', posX: elemento.posX, posY: elemento.posY, ancho: elemento.ancho, alto: elemento.alto },
+  });
 
   // Estilo por tipo de elemento
   let estilo: string;
@@ -37,23 +46,26 @@ export function ElementoNode({
       break;
   }
 
+  const translate = transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) ` : '';
+
   return (
     <div
+      ref={setNodeRef}
       className="absolute select-none touch-none"
       style={{
-        left: elemento.posX * GRID_PX,
-        top: elemento.posY * GRID_PX,
-        width: elemento.ancho * GRID_PX,
-        height: elemento.alto * GRID_PX,
-        transform: `rotate(${elemento.rotacion}deg)`,
-        zIndex: 0,
+        left: elemento.posX * cell,
+        top: elemento.posY * cell,
+        width: elemento.ancho * cell,
+        height: elemento.alto * cell,
+        transform: `${translate}rotate(${elemento.rotacion}deg)`,
+        zIndex: isDragging ? 30 : 0,
       }}
     >
       <div
-        onPointerDown={editando ? onBodyPointerDown : undefined}
+        {...(puedeArrastrar ? { ...listeners, ...attributes } : {})}
         onClick={editando ? onClick : undefined}
         className={`w-full h-full flex items-center justify-center overflow-hidden rounded-sm ${estilo} ${
-          editando ? 'cursor-move' : 'cursor-default'
+          puedeArrastrar ? 'cursor-move' : 'cursor-default'
         } ${seleccionado ? 'ring-2 ring-blue-400' : ''}`}
       >
         {elemento.etiqueta && (
@@ -65,7 +77,10 @@ export function ElementoNode({
 
       {editando && seleccionado && onResizePointerDown && (
         <div
-          onPointerDown={onResizePointerDown}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onResizePointerDown(e);
+          }}
           className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize shadow"
           title="Redimensionar"
         />

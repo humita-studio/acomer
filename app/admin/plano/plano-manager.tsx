@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Pencil,
   Eye,
@@ -14,6 +15,11 @@ import {
   Circle,
   MousePointer2,
   Minus,
+  Users,
+  QrCode,
+  DoorOpen,
+  ClipboardList,
+  List as ListIcon,
 } from 'lucide-react';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
@@ -27,6 +33,7 @@ import {
   eliminarElementoPlano,
   guardarLayoutAction,
 } from '@/features/mesas/plano-actions';
+import { liberarMesaAction } from '@/features/mesas/mesas-actions';
 import { PlanoCanvas } from './plano-canvas';
 import {
   type AmbienteUI,
@@ -47,17 +54,20 @@ export function PlanoManager({
   ambientes: initialAmbientes,
   mesas: initialMesas,
   elementos: initialElementos,
+  origin,
   userRole,
   tenantId,
 }: {
   ambientes: AmbienteUI[];
   mesas: MesaPlano[];
   elementos: ElementoPlanoUI[];
+  origin: string;
   userRole: string;
   tenantId: string;
 }) {
   const router = useRouter();
   const canManage = hasPermission(userRole as RoleType, 'canManageTables');
+  const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
 
   const [modo, setModo] = useState<Modo>('ver');
   // Copia de trabajo: solo existe mientras se edita. En modo operación se
@@ -68,6 +78,9 @@ export function PlanoManager({
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [dirty, setDirty] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [liberandoId, setLiberandoId] = useState<string | null>(null);
+  const [mostrarLista, setMostrarLista] = useState(false);
+  const [avisos, setAvisos] = useState<{ id: string; texto: string }[]>([]);
 
   const editando = modo === 'editar';
 
@@ -76,13 +89,26 @@ export function PlanoManager({
     modoRef.current = modo;
   }, [modo]);
 
-  // Realtime: cambios de ocupación → refrescar (solo en modo operación)
+  // Realtime: ocupación + alertas de mesa (llamar mozo / pedir cuenta)
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel(`admin_restaurant_${tenantId}`);
+
+    const pushAviso = (texto: string) => {
+      const id = crypto.randomUUID();
+      setAvisos((prev) => [{ id, texto }, ...prev].slice(0, 5));
+      setTimeout(() => setAvisos((prev) => prev.filter((a) => a.id !== id)), 20000);
+    };
+
     channel
       .on('broadcast', { event: 'ocupacion_cambiada' }, () => {
         if (modoRef.current === 'ver') router.refresh();
+      })
+      .on('broadcast', { event: 'alerta_mesa' }, ({ payload }) => {
+        pushAviso(`🔔 ${payload?.mesaIdentificador || 'Una mesa'} está llamando al mozo`);
+      })
+      .on('broadcast', { event: 'cuenta_solicitada' }, () => {
+        pushAviso('💵 Una mesa pidió la cuenta — revisá Cobros');
       })
       .subscribe();
     return () => {
@@ -110,6 +136,7 @@ export function PlanoManager({
   const selElemento =
     seleccion?.tipo === 'elemento' ? elementos.find((e) => e.id === seleccion.id) ?? null : null;
   const ambienteActivo = ambientes.find((a) => a.id === activeId) ?? null;
+  const ambNombre = (id: string | null) => ambientes.find((a) => a.id === id)?.nombre ?? '—';
 
   // ---- Mutaciones de la copia de trabajo ----
   const patchDraft = (fn: (d: Draft) => Draft, marcarDirty = true) => {
@@ -232,6 +259,22 @@ export function PlanoManager({
     setSeleccion(null);
   };
 
+  // ---- Operación (modo ver) ----
+  const handleLiberar = async (mesa: MesaPlano) => {
+    if (!confirm(`¿Liberar ${mesa.identificador}? Se cerrará la sesión actual.`)) return;
+    setLiberandoId(mesa.id);
+    const res = await liberarMesaAction(mesa.id);
+    setLiberandoId(null);
+    if (res.success) router.refresh();
+    else alert(res.message || 'No se pudo liberar la mesa');
+  };
+
+  const seleccionarMesa = (mesa: MesaPlano) => {
+    if (mesa.ambienteId && mesa.ambienteId !== activeId) setAmbienteActivoId(mesa.ambienteId);
+    setSeleccion({ tipo: 'mesa', id: mesa.id });
+    setMostrarLista(false);
+  };
+
   // ---- Guardado batch de la geometría ----
   const guardar = async () => {
     if (!draft) return;
@@ -270,6 +313,8 @@ export function PlanoManager({
   const entrarEdicion = () => {
     setDraft({ ambientes: initialAmbientes, mesas: initialMesas, elementos: initialElementos });
     setDirty(false);
+    setSeleccion(null);
+    setMostrarLista(false);
     setModo('editar');
   };
 
@@ -290,17 +335,31 @@ export function PlanoManager({
     setAmbienteActivoId(id);
   };
 
-  const onOpenMesa = (mesa: MesaPlano) => {
-    if (mesa.ocupada) {
-      router.push(`/admin/mesas/${mesa.id}`);
-    } else {
-      alert(`${mesa.identificador} está libre (sin sesión activa).`);
-    }
-  };
+  const mostrarPanel = editando ? !!(selMesa || selElemento) : !!selMesa;
 
   return (
     <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-      {/* Barra superior: pestañas + modo */}
+      {/* Alertas en vivo */}
+      {avisos.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {avisos.map((a) => (
+            <div
+              key={a.id}
+              className="flex justify-between items-center bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              <span>{a.texto}</span>
+              <button
+                onClick={() => setAvisos((prev) => prev.filter((x) => x.id !== a.id))}
+                className="text-amber-500 hover:text-amber-700 ml-3"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Barra superior: pestañas de ambiente + acciones */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex flex-wrap items-center gap-1.5">
           {ambientes.map((amb) => {
@@ -330,12 +389,18 @@ export function PlanoManager({
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/admin/mesas"
-            className="text-sm text-gray-500 hover:text-blue-600 underline underline-offset-2"
-          >
-            Ir a Mesas / QR
-          </Link>
+          {!editando && (
+            <button
+              onClick={() => setMostrarLista((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition border ${
+                mostrarLista
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <ListIcon size={16} /> Lista
+            </button>
+          )}
           {canManage && (
             <button
               onClick={toggleModo}
@@ -397,7 +462,7 @@ export function PlanoManager({
         </div>
       )}
 
-      {/* Área principal: lienzo + panel de selección */}
+      {/* Área principal: lienzo + panel lateral */}
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 min-w-0">
           {activeId ? (
@@ -411,7 +476,6 @@ export function PlanoManager({
               onChangeElemento={updateElemento}
               onSelect={setSeleccion}
               onCreateElemento={handleCreateElemento}
-              onOpenMesa={onOpenMesa}
             />
           ) : (
             <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg text-gray-500">
@@ -420,15 +484,15 @@ export function PlanoManager({
           )}
           {!editando && (
             <p className="mt-2 text-xs text-gray-400">
-              Verde = libre · Naranja = ocupada · Tocá una mesa ocupada para ver/cargar su pedido.
+              Verde = libre · Naranja = ocupada · Tocá una mesa para ver su pedido, QR o liberarla.
             </p>
           )}
         </div>
 
-        {/* Panel de selección (edición) */}
-        {editando && (selMesa || selElemento) && (
+        {/* Panel lateral */}
+        {mostrarPanel && (
           <div className="lg:w-72 shrink-0 border border-gray-200 rounded-lg p-4 bg-gray-50 h-fit">
-            {selMesa && (
+            {editando && selMesa && (
               <MesaPanel
                 mesa={selMesa}
                 ambientes={ambientes}
@@ -436,16 +500,74 @@ export function PlanoManager({
                 onDelete={() => handleDeleteMesa(selMesa.id)}
               />
             )}
-            {selElemento && (
+            {editando && selElemento && (
               <ElementoPanel
                 elemento={selElemento}
                 onUpdate={(p) => updateElemento(selElemento.id, p)}
                 onDelete={() => handleDeleteElemento(selElemento.id)}
               />
             )}
+            {!editando && selMesa && (
+              <OperacionPanel
+                mesa={selMesa}
+                origin={origin}
+                canManage={canManage}
+                canTakeOrders={canTakeOrders}
+                liberando={liberandoId === selMesa.id}
+                onLiberar={() => handleLiberar(selMesa)}
+                onClose={() => setSeleccion(null)}
+              />
+            )}
           </div>
         )}
       </div>
+
+      {/* Lista de mesas (complemento, sin pestañas) */}
+      {!editando && mostrarLista && (
+        <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-600">
+            Mesas ({mesas.length})
+          </div>
+          {mesas.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-gray-400">No hay mesas todavía.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {mesas.map((m) => (
+                <li key={m.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${m.ocupada ? 'bg-orange-500' : 'bg-green-500'}`}
+                    title={m.ocupada ? 'Ocupada' : 'Libre'}
+                  />
+                  <button onClick={() => seleccionarMesa(m)} className="flex-1 min-w-0 text-left">
+                    <span className="font-medium text-gray-800">{m.identificador}</span>
+                    <span className="text-xs text-gray-400 ml-2">{ambNombre(m.ambienteId)}</span>
+                  </button>
+                  <span className="flex items-center gap-1 text-xs text-gray-500 shrink-0">
+                    <Users size={12} /> {m.capacidad}
+                  </span>
+                  {m.ocupada && canTakeOrders && (
+                    <Link
+                      href={`/admin/mesas/${m.id}`}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 shrink-0"
+                    >
+                      Pedido
+                    </Link>
+                  )}
+                  {m.ocupada && canManage && (
+                    <button
+                      onClick={() => handleLiberar(m)}
+                      disabled={liberandoId === m.id}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-800 disabled:opacity-50 shrink-0"
+                    >
+                      {liberandoId === m.id ? '...' : 'Liberar'}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -468,6 +590,93 @@ function ToolButton({
     >
       {children}
     </button>
+  );
+}
+
+function OperacionPanel({
+  mesa,
+  origin,
+  canManage,
+  canTakeOrders,
+  liberando,
+  onLiberar,
+  onClose,
+}: {
+  mesa: MesaPlano;
+  origin: string;
+  canManage: boolean;
+  canTakeOrders: boolean;
+  liberando: boolean;
+  onLiberar: () => void;
+  onClose: () => void;
+}) {
+  const url = `${origin}/mesa/${mesa.qrToken}`;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-bold text-gray-800">{mesa.identificador}</h3>
+        <span
+          className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+            mesa.ocupada ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+          }`}
+        >
+          {mesa.ocupada ? 'Ocupada' : 'Libre'}
+        </span>
+      </div>
+
+      <p className="flex items-center gap-1 text-xs text-gray-500">
+        <Users size={12} /> {mesa.capacidad} lugares
+      </p>
+
+      {mesa.ocupada && canTakeOrders && (
+        <Link
+          href={`/admin/mesas/${mesa.id}`}
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100"
+        >
+          <ClipboardList size={15} /> Ver / Agregar pedido
+        </Link>
+      )}
+
+      {mesa.ocupada && canManage && (
+        <button
+          onClick={onLiberar}
+          disabled={liberando}
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 disabled:opacity-50"
+        >
+          <DoorOpen size={15} /> {liberando ? 'Liberando...' : 'Liberar mesa'}
+        </button>
+      )}
+
+      {!mesa.ocupada && (
+        <p className="text-xs text-gray-500 bg-white border border-gray-200 rounded-md p-2">
+          Mesa libre. El cliente abre la sesión al escanear el QR.
+        </p>
+      )}
+
+      <div className="pt-2 border-t border-gray-200">
+        <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase mb-1">
+          <QrCode size={12} /> QR de la comanda
+        </label>
+        <div className="bg-white p-2 border border-gray-200 rounded-lg flex justify-center">
+          <QRCodeSVG value={url} size={148} level="H" />
+        </div>
+        <input
+          type="text"
+          readOnly
+          value={url}
+          onClick={(e) => {
+            e.currentTarget.select();
+            navigator.clipboard?.writeText(url);
+          }}
+          title="Clic para copiar"
+          className="w-full mt-2 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <button onClick={onClose} className="w-full py-1.5 rounded-md text-sm text-gray-500 hover:bg-gray-100">
+        Cerrar
+      </button>
+    </div>
   );
 }
 

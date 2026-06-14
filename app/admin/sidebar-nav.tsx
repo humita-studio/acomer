@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { canAccessSection, type RoleType } from '@/features/authorization/roles';
-import { DollarSign } from 'lucide-react';
 
 export function SidebarNav({ role }: { role: RoleType }) {
   const pathname = usePathname();
@@ -12,8 +11,7 @@ export function SidebarNav({ role }: { role: RoleType }) {
     { href: '/admin', label: '🏠 Dashboard', section: 'dashboard' },
     { href: '/admin/menu', label: '📋 Menú', section: 'menu' },
     { href: '/admin/staff', label: '👥 Empleados', section: 'staff' },
-    { href: '/admin/mesas', label: '🪑 Mesas', section: 'tables' },
-    { href: '/admin/plano', label: '🗺️ Plano del local', section: 'tables' },
+    { href: '/admin/plano', label: '🪑 Mesas', section: 'tables' },
     { href: '/admin/reportes', label: '📊 Reportes', section: 'reports' },
     { href: '/admin/caja', label: '💳 Caja', section: 'cashier' },
     { href: '/admin/cobros', label: '💵 Cobros', section: 'cashier' },
@@ -24,7 +22,10 @@ export function SidebarNav({ role }: { role: RoleType }) {
     <div className="space-y-2">
       {links.map((link) => {
         // El dashboard es accesible para todos los roles permitidos en /admin
-        if (link.section !== 'dashboard' && !canAccessSection(role, link.section as any)) {
+        if (
+          link.section !== 'dashboard' &&
+          !canAccessSection(role, link.section as Exclude<typeof link.section, 'dashboard'>)
+        ) {
           return null;
         }
 
