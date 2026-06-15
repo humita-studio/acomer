@@ -6,6 +6,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { revalidatePath } from 'next/cache';
+import { getPlanoData } from './plano-data';
 
 const TIPOS_ELEMENTO = ['pared', 'barra', 'contorno', 'decoracion'] as const;
 
@@ -27,6 +28,24 @@ function normalizarRotacion(value: unknown) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return 0;
   return ((n % 360) + 360) % 360;
+}
+
+// ============================================================================
+// Lectura del plano (para TanStack Query en cliente)
+// ============================================================================
+
+/**
+ * Devuelve el plano completo del restaurante de la sesión. Lo usa el editor
+ * (PlanoManager) como `queryFn` para refetchear tras invalidar (realtime de
+ * ocupación, guardado, dividir/unir, liberar). Solo requiere sesión válida:
+ * verla está permitido a todos los roles; editar se valida en cada mutación.
+ */
+export async function getPlanoDataAction() {
+  const session = await getCurrentSession();
+  if (!session) {
+    return { ambientes: [], mesas: [], elementos: [] };
+  }
+  return getPlanoData(session.restauranteId);
 }
 
 // ============================================================================

@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
+import { queryKeys } from '@/shared/query/keys';
 import {
     aprobarPagoPresencialAction,
     rechazarPagoPresencialAction,
@@ -16,57 +18,65 @@ export function CobrosManager({
     initialTransacciones: TransaccionCobro[],
     tenantId: string
 }) {
-    const [transacciones, setTransacciones] = useState<TransaccionCobro[]>(initialTransacciones);
-    const [loadingId, setLoadingId] = useState<string | null>(null);
-    const supabase = createSupabaseBrowserClient();
+    const queryClient = useQueryClient();
 
+    // Estado de servidor: la lista de cobros pendientes. `initialData` aprovecha
+    // el fetch que ya hizo el Server Component (page.tsx), sin refetch al montar.
+    const { data: transacciones = [] } = useQuery({
+        queryKey: queryKeys.cobros(tenantId),
+        queryFn: () => getTransaccionesPendientesAction(tenantId),
+        initialData: initialTransacciones,
+    });
+
+    // Realtime: cuando una mesa pide la cuenta, invalidamos la query en vez de
+    // recargar la lista a mano.
     useEffect(() => {
-        // Escuchar nuevos cobros en tiempo real
+        const supabase = createSupabaseBrowserClient();
         const channel = supabase.channel(`admin_restaurant_${tenantId}`);
 
-        channel.on(
-            'broadcast',
-            { event: 'cuenta_solicitada' },
-            (payload) => {
-                // Alguien en una mesa pidió la cuenta, recargar la lista
-                refreshTransacciones();
-            }
-        ).subscribe();
+        channel
+            .on('broadcast', { event: 'cuenta_solicitada' }, () => {
+                queryClient.invalidateQueries({ queryKey: queryKeys.cobros(tenantId) });
+            })
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [tenantId, supabase]);
+    }, [tenantId, queryClient]);
 
-    const refreshTransacciones = async () => {
-        const updated = await getTransaccionesPendientesAction(tenantId);
-        setTransacciones(updated);
-    };
+    const aprobarMutation = useMutation({
+        mutationFn: (id: string) => aprobarPagoPresencialAction(id, tenantId),
+        onSuccess: (res) => {
+            if (res.success) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.cobros(tenantId) });
+            } else {
+                alert(res.message);
+            }
+        },
+    });
 
-    const handleAprobar = async (id: string) => {
+    const rechazarMutation = useMutation({
+        mutationFn: (id: string) => rechazarPagoPresencialAction(id, tenantId),
+        onSuccess: (res) => {
+            if (res.success) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.cobros(tenantId) });
+            } else {
+                alert(res.message);
+            }
+        },
+    });
+
+    const procesando = aprobarMutation.isPending || rechazarMutation.isPending;
+
+    const handleAprobar = (id: string) => {
         if (!confirm('¿Confirmas que recibiste el pago y quieres cerrar la mesa?')) return;
-
-        setLoadingId(id);
-        const res = await aprobarPagoPresencialAction(id, tenantId);
-        if (res.success) {
-            setTransacciones(prev => prev.filter(t => t.id !== id));
-        } else {
-            alert(res.message);
-        }
-        setLoadingId(null);
+        aprobarMutation.mutate(id);
     };
 
-    const handleRechazar = async (id: string) => {
+    const handleRechazar = (id: string) => {
         if (!confirm('¿Rechazar este pago? La mesa seguirá abierta.')) return;
-
-        setLoadingId(id);
-        const res = await rechazarPagoPresencialAction(id, tenantId);
-        if (res.success) {
-            setTransacciones(prev => prev.filter(t => t.id !== id));
-        } else {
-            alert(res.message);
-        }
-        setLoadingId(null);
+        rechazarMutation.mutate(id);
     };
 
     if (transacciones.length === 0) {
@@ -85,57 +95,60 @@ export function CobrosManager({
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
-            {transacciones.map(tx => (
-                <div key={tx.id} className="bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden relative">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
+            {transacciones.map(tx => {
+                const aprobandoEsta = aprobarMutation.isPending && aprobarMutation.variables === tx.id;
+                return (
+                    <div key={tx.id} className="bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
 
-                    <div className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2.5 py-1 rounded-full">
-                                    MESA {tx.mesaIdentificador}
-                                </span>
-                                <p className="text-sm text-gray-500 mt-2">
-                                    {new Date(tx.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <div className="p-6">
+                            <div className="flex justify-between items-start mb-4">
+                                <div>
+                                    <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2.5 py-1 rounded-full">
+                                        MESA {tx.mesaIdentificador}
+                                    </span>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                        {new Date(tx.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl">
+                                    {tx.proveedor === 'efectivo' ? '💵' : '💳'}
+                                </div>
+                            </div>
+
+                            <div className="mb-6">
+                                <p className="text-sm text-gray-500 font-medium">Quiere pagar con</p>
+                                <p className="text-lg font-bold text-gray-900 capitalize">
+                                    {tx.proveedor === 'tarjeta_fisica' ? 'Tarjeta Física' : tx.proveedor}
                                 </p>
                             </div>
-                            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl">
-                                {tx.proveedor === 'efectivo' ? '💵' : '💳'}
+
+                            <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center mb-6">
+                                <span className="text-gray-500 font-medium">Total a cobrar</span>
+                                <span className="text-2xl font-black text-gray-900">${Number(tx.monto).toFixed(2)}</span>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => handleAprobar(tx.id)}
+                                    disabled={procesando}
+                                    className="flex-1 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                                >
+                                    {aprobandoEsta ? 'Aprobando...' : 'Aprobar Cobro'}
+                                </button>
+                                <button
+                                    onClick={() => handleRechazar(tx.id)}
+                                    disabled={procesando}
+                                    className="px-4 py-3 border border-gray-200 text-gray-600 font-bold rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                                    title="Rechazar y mantener mesa abierta"
+                                >
+                                    ✕
+                                </button>
                             </div>
                         </div>
-
-                        <div className="mb-6">
-                            <p className="text-sm text-gray-500 font-medium">Quiere pagar con</p>
-                            <p className="text-lg font-bold text-gray-900 capitalize">
-                                {tx.proveedor === 'tarjeta_fisica' ? 'Tarjeta Física' : tx.proveedor}
-                            </p>
-                        </div>
-
-                        <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center mb-6">
-                            <span className="text-gray-500 font-medium">Total a cobrar</span>
-                            <span className="text-2xl font-black text-gray-900">${Number(tx.monto).toFixed(2)}</span>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => handleAprobar(tx.id)}
-                                disabled={loadingId !== null}
-                                className="flex-1 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-                            >
-                                {loadingId === tx.id ? 'Aprobando...' : 'Aprobar Cobro'}
-                            </button>
-                            <button
-                                onClick={() => handleRechazar(tx.id)}
-                                disabled={loadingId !== null}
-                                className="px-4 py-3 border border-gray-200 text-gray-600 font-bold rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
-                                title="Rechazar y mantener mesa abierta"
-                            >
-                                ✕
-                            </button>
-                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }

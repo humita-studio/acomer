@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Pencil,
@@ -37,23 +37,19 @@ import {
   guardarLayoutAction,
   dividirMesaAction,
   unirMesaAction,
+  getPlanoDataAction,
 } from '@/features/mesas/plano-actions';
 import { liberarMesaAction } from '@/features/mesas/mesas-actions';
+import { queryKeys } from '@/shared/query/keys';
+import type { PlanoData } from '@/features/mesas/plano-data';
 import { PlanoCanvas } from './plano-canvas';
+import { usePlanoStore } from './plano-store';
 import {
   type AmbienteUI,
   type ElementoPlanoUI,
   type Herramienta,
   type MesaPlano,
-  type Modo,
-  type Seleccion,
 } from './plano-types';
-
-interface Draft {
-  ambientes: AmbienteUI[];
-  mesas: MesaPlano[];
-  elementos: ElementoPlanoUI[];
-}
 
 export function PlanoManager({
   ambientes: initialAmbientes,
@@ -63,51 +59,67 @@ export function PlanoManager({
   userRole,
   tenantId,
 }: {
-  ambientes: AmbienteUI[];
-  mesas: MesaPlano[];
-  elementos: ElementoPlanoUI[];
+  ambientes: PlanoData['ambientes'];
+  mesas: PlanoData['mesas'];
+  elementos: PlanoData['elementos'];
   origin: string;
   userRole: string;
   tenantId: string;
 }) {
-  const router = useRouter();
   const canManage = hasPermission(userRole as RoleType, 'canManageTables');
   const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
+  const queryClient = useQueryClient();
 
-  const [modo, setModo] = useState<Modo>('ver');
-  // Copia de trabajo: solo existe mientras se edita. En modo operación se
-  // renderiza directo desde los props (refleja la ocupación en vivo).
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [ambienteActivoId, setAmbienteActivoId] = useState<string>(initialAmbientes[0]?.id ?? '');
-  const [herramienta, setHerramienta] = useState<Herramienta>('seleccionar');
-  const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [liberandoId, setLiberandoId] = useState<string | null>(null);
-  const [mostrarLista, setMostrarLista] = useState(false);
-  const [avisos, setAvisos] = useState<{ id: string; texto: string }[]>([]);
+  // Estado de UI del editor (Zustand). Los datos del plano viven en TanStack Query.
+  const {
+    modo,
+    draft,
+    ambienteActivoId,
+    herramienta,
+    seleccion,
+    dirty,
+    guardando,
+    liberandoId,
+    mostrarLista,
+    avisos,
+    setAmbienteActivoId,
+    setHerramienta,
+    setSeleccion,
+    setDirty,
+    setGuardando,
+    setLiberandoId,
+    setMostrarLista,
+    patchDraft,
+    pushAviso,
+    removeAviso,
+    iniciarEdicion,
+    terminarEdicion,
+    reset,
+  } = usePlanoStore();
 
   const editando = modo === 'editar';
 
-  const modoRef = useRef(modo);
-  useEffect(() => {
-    modoRef.current = modo;
-  }, [modo]);
+  // Estado de servidor: el plano. `initialData` aprovecha el fetch del Server Component.
+  const { data: planoData } = useQuery({
+    queryKey: queryKeys.plano(tenantId),
+    queryFn: getPlanoDataAction,
+    initialData: { ambientes: initialAmbientes, mesas: initialMesas, elementos: initialElementos },
+  });
+
+  // Al desmontar el editor, vuelve al estado inicial (evita estado viejo al volver).
+  useEffect(() => reset, [reset]);
 
   // Realtime: ocupación + alertas de mesa (llamar mozo / pedir cuenta)
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel(`admin_restaurant_${tenantId}`);
 
-    const pushAviso = (texto: string) => {
-      const id = crypto.randomUUID();
-      setAvisos((prev) => [{ id, texto }, ...prev].slice(0, 5));
-      setTimeout(() => setAvisos((prev) => prev.filter((a) => a.id !== id)), 20000);
-    };
-
     channel
       .on('broadcast', { event: 'ocupacion_cambiada' }, () => {
-        if (modoRef.current === 'ver') router.refresh();
+        // En edición se ignora para no pisar la copia de trabajo.
+        if (usePlanoStore.getState().modo === 'ver') {
+          queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
+        }
       })
       .on('broadcast', { event: 'alerta_mesa' }, ({ payload }) => {
         pushAviso(`🔔 ${payload?.mesaIdentificador || 'Una mesa'} está llamando al mozo`);
@@ -119,12 +131,12 @@ export function PlanoManager({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tenantId, router]);
+  }, [tenantId, queryClient, pushAviso]);
 
   // Fuente de datos según el modo
-  const ambientes = editando && draft ? draft.ambientes : initialAmbientes;
-  const mesas = editando && draft ? draft.mesas : initialMesas;
-  const elementos = editando && draft ? draft.elementos : initialElementos;
+  const ambientes = editando && draft ? draft.ambientes : planoData.ambientes;
+  const mesas = editando && draft ? draft.mesas : planoData.mesas;
+  const elementos = editando && draft ? draft.elementos : planoData.elementos;
 
   // Ambiente activo válido (si se borró, cae al primero)
   const activeId = ambientes.some((a) => a.id === ambienteActivoId)
@@ -143,12 +155,7 @@ export function PlanoManager({
   const ambienteActivo = ambientes.find((a) => a.id === activeId) ?? null;
   const ambNombre = (id: string | null) => ambientes.find((a) => a.id === id)?.nombre ?? '—';
 
-  // ---- Mutaciones de la copia de trabajo ----
-  const patchDraft = (fn: (d: Draft) => Draft, marcarDirty = true) => {
-    setDraft((d) => (d ? fn(d) : d));
-    if (marcarDirty) setDirty(true);
-  };
-
+  // ---- Mutaciones de la copia de trabajo (patchDraft viene del store) ----
   const updateMesa = (id: string, partial: Partial<MesaPlano>) =>
     patchDraft((d) => ({ ...d, mesas: d.mesas.map((m) => (m.id === id ? { ...m, ...partial } : m)) }));
 
@@ -314,7 +321,7 @@ export function PlanoManager({
     setLiberandoId(mesa.id);
     const res = await liberarMesaAction(mesa.id);
     setLiberandoId(null);
-    if (res.success) router.refresh();
+    if (res.success) queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     else alert(res.message || 'No se pudo liberar la mesa');
   };
 
@@ -339,7 +346,7 @@ export function PlanoManager({
     const res = await dividirMesaAction(mesa.id, cap);
     if (res.success) {
       if (res.mesa) setSeleccion({ tipo: 'mesa', id: (res.mesa as { id: string }).id });
-      router.refresh();
+      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     } else {
       alert(res.message || 'No se pudo dividir la mesa');
     }
@@ -350,7 +357,7 @@ export function PlanoManager({
     const res = await unirMesaAction(mesa.id);
     if (res.success) {
       setSeleccion(null);
-      router.refresh();
+      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     } else {
       alert(res.message || 'No se pudo unir la mesa');
     }
@@ -386,27 +393,18 @@ export function PlanoManager({
     setGuardando(false);
     if (res.success) {
       setDirty(false);
-      router.refresh(); // sincroniza los props para cuando se vuelva a modo operación
+      // Sincroniza el plano para cuando se vuelva a modo operación.
+      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     } else {
       alert(res.message || 'No se pudo guardar el plano');
     }
   };
 
-  const entrarEdicion = () => {
-    setDraft({ ambientes: initialAmbientes, mesas: initialMesas, elementos: initialElementos });
-    setDirty(false);
-    setSeleccion(null);
-    setMostrarLista(false);
-    setModo('editar');
-  };
+  const entrarEdicion = () => iniciarEdicion(planoData);
 
   const salirEdicion = () => {
     if (dirty && !confirm('Tenés cambios sin guardar. ¿Salir y descartarlos?')) return;
-    setDraft(null);
-    setSeleccion(null);
-    setHerramienta('seleccionar');
-    setDirty(false);
-    setModo('ver');
+    terminarEdicion();
   };
 
   const toggleModo = () => (editando ? salirEdicion() : entrarEdicion());
@@ -431,7 +429,7 @@ export function PlanoManager({
             >
               <span>{a.texto}</span>
               <button
-                onClick={() => setAvisos((prev) => prev.filter((x) => x.id !== a.id))}
+                onClick={() => removeAviso(a.id)}
                 className="text-amber-500 hover:text-amber-700 ml-3"
               >
                 ✕

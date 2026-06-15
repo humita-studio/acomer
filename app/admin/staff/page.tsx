@@ -4,9 +4,10 @@ import {
   inviteEmployee,
   listEmployees,
   deactivateEmployee,
-  type EmployeeListItem,
 } from '@/features/auth/invite-employee';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/shared/query/keys';
 import type { RoleType } from '@/features/authorization/roles';
 
 const ROLES: { value: RoleType; label: string }[] = [
@@ -25,64 +26,62 @@ const ROL_LABELS: Record<string, string> = {
 };
 
 export default function StaffPage() {
+  const queryClient = useQueryClient();
+
+  // Estado de UI local (no es estado de servidor).
   const [email, setEmail] = useState('');
   const [rol, setRol] = useState<RoleType>('mozo');
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [credenciales, setCredenciales] = useState<{ email: string; password: string } | null>(null);
   const [copiado, setCopiado] = useState(false);
-  const [empleados, setEmpleados] = useState<EmployeeListItem[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
 
-  const cargarEmpleados = useCallback(async () => {
-    setLoadingList(true);
-    try {
-      setEmpleados(await listEmployees());
-    } catch {
-      // Si falla, dejamos la lista como estaba; el estado de carga se cierra igual.
-    } finally {
-      setLoadingList(false);
-    }
-  }, []);
+  // Estado de servidor: la lista de empleados.
+  const {
+    data: empleados = [],
+    isLoading: loadingList,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.empleados(),
+    queryFn: listEmployees,
+  });
 
-  useEffect(() => {
-    cargarEmpleados();
-  }, [cargarEmpleados]);
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-    setCredenciales(null);
-    setCopiado(false);
-
-    const emailInvitado = email.trim().toLowerCase();
-
-    try {
-      const result = await inviteEmployee({ email, rol });
+  const inviteMutation = useMutation({
+    mutationFn: (vars: { email: string; rol: RoleType }) => inviteEmployee(vars),
+    onSuccess: (result, variables) => {
       setMessage(result.message);
-
       if (result.success) {
         if (result.tempPassword) {
-          setCredenciales({ email: emailInvitado, password: result.tempPassword });
+          setCredenciales({
+            email: variables.email.trim().toLowerCase(),
+            password: result.tempPassword,
+          });
         }
         setEmail('');
         setRol('mozo');
-        await cargarEmpleados();
+        queryClient.invalidateQueries({ queryKey: queryKeys.empleados() });
       }
-    } catch (error) {
+    },
+    onError: () => {
       setMessage('Error al enviar la invitación');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
 
-  const handleDeactivate = async (perfilId: string) => {
-    const result = await deactivateEmployee(perfilId);
-    setMessage(result.message);
-    if (result.success) {
-      await cargarEmpleados();
-    }
+  const deactivateMutation = useMutation({
+    mutationFn: (perfilId: string) => deactivateEmployee(perfilId),
+    onSuccess: (result) => {
+      setMessage(result.message);
+      if (result.success) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.empleados() });
+      }
+    },
+  });
+
+  const handleInvite = (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage('');
+    setCredenciales(null);
+    setCopiado(false);
+    inviteMutation.mutate({ email, rol });
   };
 
   const copiarCredenciales = async () => {
@@ -141,10 +140,10 @@ export default function StaffPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={inviteMutation.isPending}
               className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition"
             >
-              {loading ? 'Enviando...' : 'Enviar Invitación'}
+              {inviteMutation.isPending ? 'Enviando...' : 'Enviar Invitación'}
             </button>
 
             {message && (
@@ -195,7 +194,7 @@ export default function StaffPage() {
             <h2 className="text-xl font-semibold">Empleados</h2>
             <button
               type="button"
-              onClick={cargarEmpleados}
+              onClick={() => refetch()}
               className="text-sm text-blue-600 hover:underline"
             >
               Actualizar
@@ -230,8 +229,9 @@ export default function StaffPage() {
                     {emp.activo && emp.rol !== 'owner' && (
                       <button
                         type="button"
-                        onClick={() => handleDeactivate(emp.id)}
-                        className="text-xs text-red-600 hover:underline"
+                        onClick={() => deactivateMutation.mutate(emp.id)}
+                        disabled={deactivateMutation.isPending}
+                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
                       >
                         Desactivar
                       </button>

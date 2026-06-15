@@ -1,6 +1,101 @@
 import { db } from '@/shared/db';
-import { ambientes, mesas } from '@/shared/db/schema';
+import { ambientes, elementosPlano, mesas, sesionesMesa } from '@/shared/db/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
+
+/**
+ * Forma de datos del plano que consume el editor (PlanoManager). Estructuralmente
+ * compatible con AmbienteUI / MesaPlano / ElementoPlanoUI de plano-types.ts.
+ */
+export type PlanoData = {
+  ambientes: { id: string; nombre: string; orden: number }[];
+  mesas: {
+    id: string;
+    identificador: string;
+    qrToken: string;
+    parentMesaId: string | null;
+    ambienteId: string | null;
+    posX: number;
+    posY: number;
+    ancho: number;
+    alto: number;
+    forma: string;
+    capacidad: number;
+    rotacion: number;
+    ocupada: boolean;
+  }[];
+  elementos: {
+    id: string;
+    ambienteId: string;
+    tipo: string;
+    posX: number;
+    posY: number;
+    ancho: number;
+    alto: number;
+    rotacion: number;
+    etiqueta: string | null;
+  }[];
+};
+
+/**
+ * Lee el plano completo (ambientes + mesas con ocupación + elementos) ya mapeado
+ * a la forma que usa el editor. Fuente única usada por el Server Component
+ * (/admin/plano) para `initialData` y por el action de lectura para refetch en
+ * cliente (TanStack Query).
+ */
+export async function getPlanoData(restauranteId: string): Promise<PlanoData> {
+  const [ambientesData, mesasData, elementosData, sesionesActivas] = await Promise.all([
+    db
+      .select()
+      .from(ambientes)
+      .where(and(eq(ambientes.restauranteId, restauranteId), isNull(ambientes.deletedAt)))
+      .orderBy(asc(ambientes.orden), asc(ambientes.createdAt)),
+    db
+      .select()
+      .from(mesas)
+      .where(and(eq(mesas.restauranteId, restauranteId), isNull(mesas.deletedAt)))
+      .orderBy(asc(mesas.createdAt)),
+    db
+      .select()
+      .from(elementosPlano)
+      .where(and(eq(elementosPlano.restauranteId, restauranteId), isNull(elementosPlano.deletedAt))),
+    db
+      .select({ mesaId: sesionesMesa.mesaId })
+      .from(sesionesMesa)
+      .where(and(eq(sesionesMesa.restauranteId, restauranteId), eq(sesionesMesa.estado, 'Activa'))),
+  ]);
+
+  const ocupadas = new Set(sesionesActivas.map((s) => s.mesaId));
+
+  return {
+    ambientes: ambientesData.map((a) => ({ id: a.id, nombre: a.nombre, orden: a.orden })),
+    mesas: mesasData.map((m) => ({
+      id: m.id,
+      identificador: m.identificador,
+      qrToken: m.qrToken,
+      parentMesaId: m.parentMesaId,
+      ambienteId: m.ambienteId,
+      posX: m.posX,
+      posY: m.posY,
+      ancho: m.ancho,
+      alto: m.alto,
+      forma: m.forma,
+      capacidad: m.capacidad,
+      rotacion: m.rotacion,
+      ocupada: ocupadas.has(m.id),
+    })),
+    elementos: elementosData.map((e) => ({
+      id: e.id,
+      ambienteId: e.ambienteId,
+      tipo: e.tipo,
+      posX: e.posX,
+      posY: e.posY,
+      ancho: e.ancho,
+      alto: e.alto,
+      rotacion: e.rotacion,
+      etiqueta: e.etiqueta,
+    })),
+  };
+}
 
 /**
  * Garantiza que el restaurante tenga al menos un ambiente y que ninguna mesa
