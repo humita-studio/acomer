@@ -1,7 +1,12 @@
 'use client';
 
-import { inviteEmployee } from '@/features/auth/invite-employee';
-import { useState } from 'react';
+import {
+  inviteEmployee,
+  listEmployees,
+  deactivateEmployee,
+  type EmployeeListItem,
+} from '@/features/auth/invite-employee';
+import { useCallback, useEffect, useState } from 'react';
 import type { RoleType } from '@/features/authorization/roles';
 
 const ROLES: { value: RoleType; label: string }[] = [
@@ -11,6 +16,14 @@ const ROLES: { value: RoleType; label: string }[] = [
   { value: 'cocina', label: 'Cocina' },
 ];
 
+const ROL_LABELS: Record<string, string> = {
+  owner: 'Propietario',
+  admin: 'Administrador',
+  cajero: 'Cajero',
+  mozo: 'Mozo',
+  cocina: 'Cocina',
+};
+
 export default function StaffPage() {
   const [email, setEmail] = useState('');
   const [rol, setRol] = useState<RoleType>('mozo');
@@ -18,6 +31,23 @@ export default function StaffPage() {
   const [message, setMessage] = useState('');
   const [credenciales, setCredenciales] = useState<{ email: string; password: string } | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [empleados, setEmpleados] = useState<EmployeeListItem[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+
+  const cargarEmpleados = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      setEmpleados(await listEmployees());
+    } catch {
+      // Si falla, dejamos la lista como estaba; el estado de carga se cierra igual.
+    } finally {
+      setLoadingList(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarEmpleados();
+  }, [cargarEmpleados]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,11 +68,20 @@ export default function StaffPage() {
         }
         setEmail('');
         setRol('mozo');
+        await cargarEmpleados();
       }
     } catch (error) {
       setMessage('Error al enviar la invitación');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeactivate = async (perfilId: string) => {
+    const result = await deactivateEmployee(perfilId);
+    setMessage(result.message);
+    if (result.success) {
+      await cargarEmpleados();
     }
   };
 
@@ -152,8 +191,56 @@ export default function StaffPage() {
 
         {/* Lista de Empleados */}
         <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Empleados Activos</h2>
-          <p className="text-gray-600 text-sm">La lista de empleados se mostrará aquí...</p>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Empleados</h2>
+            <button
+              type="button"
+              onClick={cargarEmpleados}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Actualizar
+            </button>
+          </div>
+
+          {loadingList ? (
+            <p className="text-gray-600 text-sm">Cargando empleados...</p>
+          ) : empleados.length === 0 ? (
+            <p className="text-gray-600 text-sm">Todavía no hay empleados cargados.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {empleados.map((emp) => (
+                <li key={emp.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{emp.email}</p>
+                    <p className="text-sm text-gray-500">
+                      {ROL_LABELS[emp.rol] ?? emp.rol}
+                      {!emp.activo && ' · Inactivo'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${
+                        emp.activo
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {emp.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                    {emp.activo && emp.rol !== 'owner' && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeactivate(emp.id)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Desactivar
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>

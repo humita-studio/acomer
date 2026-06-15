@@ -242,13 +242,24 @@ export async function deactivateEmployee(
   }
 }
 
+export interface EmployeeListItem {
+  id: string;
+  userId: string;
+  email: string;
+  rol: RoleType;
+  activo: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /**
- * Lista todos los empleados del restaurante.
+ * Lista todos los empleados del restaurante, incluyendo el email (que vive en
+ * Supabase Auth, no en la tabla perfiles_empleados).
  */
-export async function listEmployees() {
+export async function listEmployees(): Promise<EmployeeListItem[]> {
   try {
     const session = await getCurrentSession();
-    
+
     if (!session) {
       return [];
     }
@@ -265,7 +276,27 @@ export async function listEmployees() {
       .from(perfilesEmpleados)
       .where(eq(perfilesEmpleados.restauranteId, session.restauranteId));
 
-    return empleados;
+    // El email no está en la tabla: lo resolvemos por userId contra Auth.
+    const emailPorUserId = new Map<string, string>();
+    try {
+      const supabase = createSupabaseAdminClient();
+      const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      for (const u of data?.users ?? []) {
+        if (u.email) emailPorUserId.set(u.id, u.email);
+      }
+    } catch (e) {
+      console.error('[listEmployees] No se pudieron obtener los emails:', e);
+    }
+
+    return empleados.map((e) => ({
+      id: e.id,
+      userId: e.userId,
+      email: emailPorUserId.get(e.userId) ?? '(sin email)',
+      rol: e.rol as RoleType,
+      activo: e.activo,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+    }));
   } catch (error) {
     console.error('[listEmployees] Error:', error);
     return [];
