@@ -1,5 +1,6 @@
 'use server';
 
+import { randomInt } from 'crypto';
 import { db } from '@/shared/db';
 import { perfilesEmpleados } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -16,6 +17,32 @@ export interface InviteEmployeeResult {
   success: boolean;
   message: string;
   userId?: string;
+  /**
+   * Contraseña temporal generada, presente SOLO cuando se crea una cuenta
+   * nueva. El admin debe entregarla al empleado; no se guarda ni se vuelve a
+   * mostrar. Si el usuario ya existía en Auth no se incluye (conserva su clave).
+   */
+  tempPassword?: string;
+}
+
+/**
+ * Genera una contraseña temporal legible (3 grupos de 4 caracteres, sin
+ * caracteres ambiguos como l/1/0/o) usando un RNG criptográfico.
+ * Ej: "k7qm-3xtp-9abd".
+ */
+function generateTempPassword(): string {
+  const charset = 'abcdefghijkmnpqrstuvwxyz23456789'; // sin l, o, 0, 1
+  const groups = 3;
+  const groupLength = 4;
+  const parts: string[] = [];
+  for (let g = 0; g < groups; g++) {
+    let part = '';
+    for (let i = 0; i < groupLength; i++) {
+      part += charset[randomInt(charset.length)];
+    }
+    parts.push(part);
+  }
+  return parts.join('-');
 }
 
 /**
@@ -39,14 +66,17 @@ export async function inviteEmployee(
     // privilegios elevados que la publishable key no tiene.
     const supabase = createSupabaseAdminClient();
     const email = input.email.trim().toLowerCase();
+    const tempPassword = generateTempPassword();
 
     // 1. Buscar o crear el usuario en Supabase Auth
     const { data: signUpData, error: signUpError } = await supabase.auth.admin.createUser({
       email,
-      password: Math.random().toString(36).slice(-12), // Contraseña temporal
+      password: tempPassword,
       email_confirm: true,
     });
 
+    // Solo hay contraseña temporal que mostrar si creamos una cuenta nueva.
+    const createdNewUser = Boolean(signUpData?.user && !signUpError);
     let finalUserId: string | undefined = signUpData?.user?.id;
 
     if (signUpError || !signUpData.user) {
@@ -91,22 +121,29 @@ export async function inviteEmployee(
     }
 
     // 2. Crear el perfil del empleado en la tabla perfiles_empleados
-    const [nuevoPerfiles] = await db
+    await db
       .insert(perfilesEmpleados)
       .values({
         userId: finalUserId,
         restauranteId: session.restauranteId,
         rol: input.rol,
         activo: true,
-      })
-      .returning();
+      });
 
-    // 3. Enviar correo de invitación (opcional, puede integrarse con SendGrid o similar)
-    // Por ahora, solo registramos la invitación
+    // 3. Devolver la contraseña temporal solo si creamos la cuenta. Si el
+    // usuario ya existía en Auth, conserva su contraseña y debe usar esa.
+    if (createdNewUser) {
+      return {
+        success: true,
+        message: `${email} fue agregado como ${input.rol}. Entregale la contraseña temporal.`,
+        userId: finalUserId,
+        tempPassword,
+      };
+    }
 
     return {
       success: true,
-      message: `${input.email} ha sido invitado como ${input.rol}`,
+      message: `${email} ya tenía cuenta y fue agregado como ${input.rol}. Que ingrese con su contraseña actual.`,
       userId: finalUserId,
     };
   } catch (error) {

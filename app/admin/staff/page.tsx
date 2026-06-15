@@ -16,17 +16,26 @@ export default function StaffPage() {
   const [rol, setRol] = useState<RoleType>('mozo');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [credenciales, setCredenciales] = useState<{ email: string; password: string } | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
+    setCredenciales(null);
+    setCopiado(false);
+
+    const emailInvitado = email.trim().toLowerCase();
 
     try {
       const result = await inviteEmployee({ email, rol });
       setMessage(result.message);
 
       if (result.success) {
+        if (result.tempPassword) {
+          setCredenciales({ email: emailInvitado, password: result.tempPassword });
+        }
         setEmail('');
         setRol('mozo');
       }
@@ -34,6 +43,19 @@ export default function StaffPage() {
       setMessage('Error al enviar la invitación');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const copiarCredenciales = async () => {
+    if (!credenciales) return;
+    try {
+      await navigator.clipboard.writeText(
+        `Email: ${credenciales.email}\nContraseña: ${credenciales.password}`
+      );
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      // El portapapeles puede no estar disponible (http o permisos); se ignora.
     }
   };
 
@@ -95,6 +117,34 @@ export default function StaffPage() {
                 }`}
               >
                 {message}
+              </div>
+            )}
+
+            {credenciales && (
+              <div className="p-4 rounded-md border border-amber-300 bg-amber-50">
+                <p className="text-sm font-semibold text-amber-900 mb-2">
+                  Contraseña temporal (se muestra una sola vez)
+                </p>
+                <p className="text-xs text-amber-800 mb-3">
+                  Copiala y entregásela al empleado. No se vuelve a mostrar. Que la cambie al ingresar.
+                </p>
+                <dl className="text-sm space-y-1 mb-3">
+                  <div className="flex gap-2">
+                    <dt className="text-gray-600 w-24">Email</dt>
+                    <dd className="font-mono break-all">{credenciales.email}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="text-gray-600 w-24">Contraseña</dt>
+                    <dd className="font-mono font-bold tracking-wider">{credenciales.password}</dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  onClick={copiarCredenciales}
+                  className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded-md hover:bg-amber-700 transition"
+                >
+                  {copiado ? 'Copiado ✓' : 'Copiar credenciales'}
+                </button>
               </div>
             )}
           </form>
