@@ -8,4 +8,9 @@ export const queryKeys = {
   empleados: () => ['empleados'] as const,
   plano: (restauranteId: string) => ['plano', restauranteId] as const,
   borrador: (sesionMesaId: string) => ['borrador', sesionMesaId] as const,
+  dashboard: (tenantId: string) => ['dashboard', tenantId] as const,
+  reportes: (tenantId: string, desde: string, hasta: string) =>
+    ['reportes', tenantId, desde, hasta] as const,
+  caja: (tenantId: string) => ['caja', tenantId] as const,
+  cajaHistorial: (tenantId: string) => ['caja', 'historial', tenantId] as const,
 };

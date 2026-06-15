@@ -503,6 +503,63 @@ export const transaccionesPago = pgTable(
 )
 
 // ============================================================================
+// Caja (apertura, movimientos y arqueo de turno)
+// ============================================================================
+
+export const sesionesCaja = pgTable(
+  'sesiones_caja',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    abiertaPor: uuid('abierta_por').notNull(), // auth.users
+    cerradaPor: uuid('cerrada_por'),
+    estado: text('estado').notNull().default('Abierta'), // Abierta | Cerrada
+    montoInicial: numeric('monto_inicial', { precision: 10, scale: 2 }).notNull().default('0'),
+    montoFinalContado: numeric('monto_final_contado', { precision: 10, scale: 2 }),
+    montoEsperado: numeric('monto_esperado', { precision: 10, scale: 2 }),
+    diferencia: numeric('diferencia', { precision: 10, scale: 2 }),
+    notasCierre: text('notas_cierre'),
+    abiertaAt: timestamp('abierta_at', { withTimezone: true }).notNull().defaultNow(),
+    cerradaAt: timestamp('cerrada_at', { withTimezone: true }),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'sesiones_caja_restaurant_id_fk',
+    }).onDelete('cascade'),
+    estadoCheck: check('sesiones_caja_estado_check', sql`estado IN ('Abierta','Cerrada')`),
+  })
+)
+
+export const movimientosCaja = pgTable(
+  'movimientos_caja',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    sesionCajaId: uuid('sesion_caja_id').notNull(),
+    tipo: text('tipo').notNull(), // ingreso | egreso | retiro
+    monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
+    concepto: text('concepto'),
+    registradoPor: uuid('registrado_por'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'movimientos_caja_restaurant_id_fk',
+    }).onDelete('cascade'),
+    sesionCajaIdFk: foreignKey({
+      columns: [table.sesionCajaId],
+      foreignColumns: [sesionesCaja.id],
+      name: 'movimientos_caja_sesion_caja_id_fk',
+    }).onDelete('cascade'),
+    tipoCheck: check('movimientos_caja_tipo_check', sql`tipo IN ('ingreso','egreso','retiro')`),
+  })
+)
+
+// ============================================================================
 // Auditoría y Logs
 // ============================================================================
 
@@ -550,6 +607,8 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   auditLog: many(auditLog),
   configuracionPagos: many(configuracionPagos),
   transaccionesPago: many(transaccionesPago),
+  sesionesCaja: many(sesionesCaja),
+  movimientosCaja: many(movimientosCaja),
 }))
 
 export const perfilesEmpleadosRelations = relations(perfilesEmpleados, ({ one }) => ({
@@ -755,5 +814,24 @@ export const transaccionesPagoRelations = relations(transaccionesPago, ({ one })
   sesionMesa: one(sesionesMesa, {
     fields: [transaccionesPago.sesionMesaId],
     references: [sesionesMesa.id],
+  }),
+}))
+
+export const sesionesCajaRelations = relations(sesionesCaja, ({ one, many }) => ({
+  restaurante: one(restaurantes, {
+    fields: [sesionesCaja.restauranteId],
+    references: [restaurantes.id],
+  }),
+  movimientos: many(movimientosCaja),
+}))
+
+export const movimientosCajaRelations = relations(movimientosCaja, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [movimientosCaja.restauranteId],
+    references: [restaurantes.id],
+  }),
+  sesionCaja: one(sesionesCaja, {
+    fields: [movimientosCaja.sesionCajaId],
+    references: [sesionesCaja.id],
   }),
 }))
