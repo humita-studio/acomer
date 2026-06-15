@@ -44,13 +44,20 @@ export async function getReporteAction(
   hasta: string
 ): Promise<ReporteData> {
   try {
-    const desdeTs = sql`(${desde}::date) AT TIME ZONE ${TZ}`;
-    const hastaTs = sql`((${hasta}::date) + interval '1 day') AT TIME ZONE ${TZ}`;
+    // Render the timezone as a literal, not a bind param: Drizzle would emit a
+    // fresh parameter ($1, $7, $8…) for each ${TZ} interpolation, and Postgres
+    // compares GROUP BY/ORDER BY expressions to the SELECT by parameter slot,
+    // not by value — so the reused expression stops matching and triggers
+    // "column must appear in the GROUP BY clause" (42803). TZ is a constant, so
+    // injecting it as a literal is safe and keeps all clauses byte-identical.
+    const tz = sql.raw(`'${TZ}'`);
+    const desdeTs = sql`(${desde}::date) AT TIME ZONE ${tz}`;
+    const hastaTs = sql`((${hasta}::date) + interval '1 day') AT TIME ZONE ${tz}`;
     const enRango = (col: AnyColumn): SQL =>
       sql`${col} >= ${desdeTs} AND ${col} < ${hastaTs}`;
 
-    const fechaExpr = sql<string>`to_char(${transaccionesPago.createdAt} AT TIME ZONE ${TZ}, 'YYYY-MM-DD')`;
-    const horaExpr = sql<number>`extract(hour from ${sesionesMesa.createdAt} AT TIME ZONE ${TZ})::int`;
+    const fechaExpr = sql<string>`to_char(${transaccionesPago.createdAt} AT TIME ZONE ${tz}, 'YYYY-MM-DD')`;
+    const horaExpr = sql<number>`extract(hour from ${sesionesMesa.createdAt} AT TIME ZONE ${tz})::int`;
 
     const [
       ventasRow,
