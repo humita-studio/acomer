@@ -7,4 +7,5 @@ export const queryKeys = {
   cobros: (tenantId: string) => ['cobros', tenantId] as const,
   empleados: () => ['empleados'] as const,
   plano: (restauranteId: string) => ['plano', restauranteId] as const,
+  borrador: (sesionMesaId: string) => ['borrador', sesionMesaId] as const,
 };

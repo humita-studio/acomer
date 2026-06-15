@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useComandaStore } from '../store';
+import type { CartItem } from '../store';
 import { ProductModal } from './ProductModal';
 import { FloatingCart } from './FloatingCart';
 import { llamarMozoAction } from '../sesion-mesa-actions';
@@ -36,10 +36,11 @@ type MenuDigitalProps = {
     categorias: CategoriaMenu[];
     productos: ProductoMenu[];
     metodosPago: MetodoPago[];
+    initialItems: CartItem[];
     pedidosConfirmados?: any[];
 };
 
-export function MenuDigital({ tenantId, sesionMesaId, mesaIdentificador, categorias, productos, metodosPago, pedidosConfirmados = [] }: MenuDigitalProps) {
+export function MenuDigital({ tenantId, sesionMesaId, mesaIdentificador, categorias, productos, metodosPago, initialItems, pedidosConfirmados = [] }: MenuDigitalProps) {
     const [activeCategory, setActiveCategory] = useState<string>(categorias[0]?.id || '');
     const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
     const [isCalling, setIsCalling] = useState(false);
@@ -139,6 +140,7 @@ export function MenuDigital({ tenantId, sesionMesaId, mesaIdentificador, categor
                 <FloatingCart
                   tenantId={tenantId}
                   sesionMesaId={sesionMesaId}
+                  initialItems={initialItems}
                   pedidosConfirmados={pedidosConfirmados}
                 />
                 

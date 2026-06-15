@@ -1,28 +1,33 @@
 'use client';
 
 import { useState } from 'react';
-import { useComandaStore } from '../store';
-import { enviarPedidoAction } from '../enviar-pedido-actions';
-import { eliminarItemBorrador, actualizarCantidadBorrador } from '../borrador-actions';
-import { useRouter } from 'next/navigation';
+import { getCartTotal, type CartItem } from '../store';
+import {
+  useBorrador,
+  useEliminarItem,
+  useActualizarCantidad,
+  useEnviarPedido,
+} from '../use-borrador';
 
 type FloatingCartProps = {
   tenantId: string;
   sesionMesaId: string;
+  initialItems: CartItem[];
   pedidosConfirmados?: any[];
 };
 
-export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }: FloatingCartProps) {
-  const router = useRouter();
-  const { items, getTotal, optimisticRemove, optimisticUpdateQuantity } = useComandaStore();
+export function FloatingCart({ tenantId, sesionMesaId, initialItems, pedidosConfirmados = [] }: FloatingCartProps) {
+  const { data: items = [] } = useBorrador(sesionMesaId, initialItems);
+  const eliminar = useEliminarItem(tenantId, sesionMesaId);
+  const actualizar = useActualizarCantidad(tenantId, sesionMesaId);
+  const enviar = useEnviarPedido(tenantId, sesionMesaId);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Consideramo si el carrito está vacío y no hay pedidos confirmados
   if (items.length === 0 && pedidosConfirmados.length === 0) return null;
 
-  const totalBorrador = getTotal();
+  const totalBorrador = getCartTotal(items);
   const totalItemsBorrador = items.reduce((sum, item) => sum + item.cantidad, 0);
 
   const totalConfirmado = pedidosConfirmados.reduce((sum, item) => sum + item.subtotal, 0);
@@ -31,44 +36,28 @@ export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }
   const granTotal = totalBorrador + totalConfirmado;
   const totalItemsGeneral = totalItemsBorrador + totalItemsConfirmado;
 
-  const broadcastChange = () => {
-    const fn = useComandaStore.getState()._broadcastChange;
-    if (fn) fn();
+  const handleRemoveItem = (itemId: string) => {
+    eliminar.mutate(itemId);
   };
 
-  const handleRemoveItem = async (itemId: string) => {
-    optimisticRemove(itemId);
-    await eliminarItemBorrador(itemId, tenantId);
-    broadcastChange();
-  };
-
-  const handleUpdateQuantity = async (itemId: string, currentQuantity: number, delta: number) => {
-    const newQuantity = Math.max(1, currentQuantity + delta);
-    optimisticUpdateQuantity(itemId, newQuantity);
-    await actualizarCantidadBorrador(itemId, tenantId, newQuantity);
-    broadcastChange();
+  const handleUpdateQuantity = (itemId: string, currentQuantity: number, delta: number) => {
+    const nuevaCantidad = Math.max(1, currentQuantity + delta);
+    actualizar.mutate({ itemId, nuevaCantidad });
   };
 
   const handleSubmit = async () => {
-    setIsSubmitting(true);
     setError(null);
     try {
-      const res = await enviarPedidoAction(tenantId, sesionMesaId);
-      
+      const res = await enviar.mutateAsync();
       if (res.success) {
-        useComandaStore.getState().clearCart();
         setIsOpen(false);
-        broadcastChange();
         // Pedir ≠ pagar: el pedido va a la cocina; el comensal paga cuando quiera con "Pagar Cuenta"
-        router.refresh();
         alert('¡Pedido enviado! Podés seguir pidiendo o tocar "Pagar Cuenta" cuando quieras.');
       } else {
-        setError(res.message);
+        setError(res.message ?? 'Error al enviar');
       }
-    } catch (e: any) {
-      setError(e.message || 'Error al enviar');
-    } finally {
-      setIsSubmitting(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al enviar');
     }
   };
 
@@ -78,7 +67,7 @@ export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }
       {!isOpen && (items.length > 0 || pedidosConfirmados.length > 0) && (
         <div className="fixed bottom-6 left-0 right-0 px-4 z-40 animate-in slide-in-from-bottom-10 fade-in">
           <div className="max-w-2xl mx-auto">
-            <button 
+            <button
               onClick={() => setIsOpen(true)}
               className="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-2xl shadow-xl shadow-blue-200 flex justify-between items-center hover:bg-blue-700 transition-colors"
             >
@@ -98,7 +87,7 @@ export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-2xl h-[90vh] sm:h-auto sm:max-h-[90vh] sm:rounded-2xl rounded-t-2xl flex flex-col shadow-xl animate-in slide-in-from-bottom-10">
-            
+
             {/* Header */}
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="font-bold text-xl flex items-center gap-2">
@@ -114,7 +103,7 @@ export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }
 
             {/* Cart Items */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              
+
               {/* Pedidos Confirmados */}
               {pedidosConfirmados.length > 0 && (
                 <div>
@@ -164,16 +153,16 @@ export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }
                               ${((item.precioUnitario + item.modificadores.reduce((s,m)=>s+m.precioExtra,0)) * item.cantidad).toFixed(2)}
                             </p>
                           </div>
-                          
+
                           <div className="flex items-center gap-3 bg-gray-50 p-1 rounded-full border">
-                            <button 
+                            <button
                               onClick={() => handleUpdateQuantity(item.id, item.cantidad, -1)}
                               className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm"
                             >
                               -
                             </button>
                             <span className="font-medium w-4 text-center">{item.cantidad}</span>
-                            <button 
+                            <button
                               onClick={() => handleUpdateQuantity(item.id, item.cantidad, 1)}
                               className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm"
                             >
@@ -181,8 +170,8 @@ export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }
                             </button>
                           </div>
                         </div>
-                        
-                        <button 
+
+                        <button
                           onClick={() => handleRemoveItem(item.id)}
                           className="text-red-500 text-sm font-medium self-start mt-2 hover:underline"
                         >
@@ -207,16 +196,16 @@ export function FloatingCart({ tenantId, sesionMesaId, pedidosConfirmados = [] }
                   <span>A Enviar Ahora</span>
                   <span>${totalBorrador.toFixed(2)}</span>
                 </div>
-                <button 
+                <button
                   onClick={handleSubmit}
-                  disabled={isSubmitting}
+                  disabled={enviar.isPending}
                   className="w-full bg-blue-600 disabled:bg-blue-400 text-white font-bold py-4 rounded-xl transition-colors shadow-md shadow-blue-200"
                 >
-                  {isSubmitting ? 'Enviando...' : 'Confirmar Pedido'}
+                  {enviar.isPending ? 'Enviando...' : 'Confirmar Pedido'}
                 </button>
               </div>
             )}
-            
+
             {items.length === 0 && pedidosConfirmados.length > 0 && (
                <div className="p-4 border-t bg-gray-50 rounded-b-2xl text-center text-sm text-gray-500">
                   Todo tu pedido ya fue enviado a cocina.

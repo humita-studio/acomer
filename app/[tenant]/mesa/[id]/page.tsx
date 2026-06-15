@@ -164,11 +164,10 @@ export default async function ComandaPage({
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Realtime listener invisible — hydrates the store with initial items */}
-      <RealtimeMesaSync 
-        sesionMesaId={sesionId} 
-        tenantId={tenantId} 
-        initialItems={initialCartItems}
+      {/* Realtime listener invisible — invalida el borrador y avisa a otros dispositivos */}
+      <RealtimeMesaSync
+        sesionMesaId={sesionId}
+        tenantId={tenantId}
       />
 
       <header className="bg-white p-4 border-b text-center sticky top-0 z-20 shadow-sm">
@@ -176,13 +175,14 @@ export default async function ComandaPage({
         <p className="text-sm text-gray-500">Sesión Compartida • Todos ven el mismo pedido</p>
       </header>
 
-      <MenuDigital 
+      <MenuDigital
         tenantId={tenantId}
         sesionMesaId={sesionId}
         mesaIdentificador={mesaIdentificador}
         categorias={cats as CategoriaMenu[]}
         productos={menuProductos}
         metodosPago={metodosPago}
+        initialItems={initialCartItems}
         pedidosConfirmados={pedidosConfirmados}
       />
     </main>

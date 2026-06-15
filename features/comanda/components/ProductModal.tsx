@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useComandaStore, Modificador } from '../store';
-import { agregarItemBorrador } from '../borrador-actions';
+import { type Modificador } from '../store';
+import { useAgregarItem } from '../use-borrador';
 import { ProductoMenu } from './MenuDigital';
 
 type ProductModalProps = {
@@ -13,10 +13,9 @@ type ProductModalProps = {
 };
 
 export function ProductModal({ product, sesionMesaId, tenantId, onClose }: ProductModalProps) {
-  const { optimisticAdd, optimisticUpdateQuantity, items } = useComandaStore();
+  const agregar = useAgregarItem(tenantId, sesionMesaId);
   const [cantidad, setCantidad] = useState(1);
   const [selectedMods, setSelectedMods] = useState<Modificador[]>([]);
-  const [isAdding, setIsAdding] = useState(false);
 
   const toggleModificador = (mod: Modificador) => {
     const exists = selectedMods.find((m) => m.id === mod.id);
@@ -31,56 +30,26 @@ export function ProductModal({ product, sesionMesaId, tenantId, onClose }: Produ
   const subtotal = (product.precio + modsTotal) * cantidad;
 
   const handleAddToCart = async () => {
-    setIsAdding(true);
-
-    // Optimistic local update for instant feedback
-    const sameItem = items.find((e) => {
-      if (e.productoId !== product.id) return false;
-      if (e.modificadores.length !== selectedMods.length) return false;
-      
-      const dbModIds = [...e.modificadores].map(m => m.id).sort();
-      const newModIds = [...selectedMods].map(m => m.id).sort();
-      
-      return dbModIds.every((id, idx) => id === newModIds[idx]);
-    });
-
-    if (sameItem) {
-      optimisticUpdateQuantity(sameItem.id, sameItem.cantidad + cantidad);
-    } else {
-      const tempId = crypto.randomUUID();
-      optimisticAdd({
-        id: tempId,
+    // onMutate aplica el update optimista al instante; esperamos a que resuelva
+    // (la mutación notifica a otros dispositivos y reconcilia) antes de cerrar.
+    try {
+      await agregar.mutateAsync({
         productoId: product.id,
-        nombre: product.nombre,
+        nombreProducto: product.nombre,
         precioUnitario: product.precio,
         cantidad,
         modificadores: selectedMods,
       });
+    } catch {
+      // Si falla, onError ya revirtió el optimismo; cerramos igual.
     }
-
-    // Close modal immediately for snappy feel
     onClose();
-
-    // Persist to DB
-    await agregarItemBorrador(sesionMesaId, tenantId, {
-      productoId: product.id,
-      nombreProducto: product.nombre,
-      precioUnitario: product.precio,
-      cantidad,
-      modificadores: selectedMods,
-    });
-
-    // Broadcast change to other devices
-    const broadcastFn = useComandaStore.getState()._broadcastChange;
-    if (broadcastFn) broadcastFn();
-
-    setIsAdding(false);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in">
       <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-xl animate-in slide-in-from-bottom-10">
-        
+
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="font-bold text-xl">{product.nombre}</h2>
@@ -108,8 +77,8 @@ export function ProductModal({ product, sesionMesaId, tenantId, onClose }: Produ
                 return (
                   <label key={mod.id} className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
                         checked={isSelected}
                         onChange={() => toggleModificador(mod)}
@@ -127,14 +96,14 @@ export function ProductModal({ product, sesionMesaId, tenantId, onClose }: Produ
 
           {/* Selector de Cantidad */}
           <div className="flex items-center justify-center gap-6 py-4">
-            <button 
+            <button
               onClick={() => setCantidad(Math.max(1, cantidad - 1))}
               className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-2xl hover:bg-gray-200"
             >
               -
             </button>
             <span className="text-2xl font-bold w-8 text-center">{cantidad}</span>
-            <button 
+            <button
               onClick={() => setCantidad(cantidad + 1)}
               className="w-12 h-12 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-2xl hover:bg-blue-200"
             >
@@ -145,12 +114,12 @@ export function ProductModal({ product, sesionMesaId, tenantId, onClose }: Produ
 
         {/* Footer / Add to Cart */}
         <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
-          <button 
+          <button
             onClick={handleAddToCart}
-            disabled={isAdding}
+            disabled={agregar.isPending}
             className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors flex justify-between px-6 items-center shadow-md shadow-blue-200 disabled:bg-blue-400"
           >
-            <span>{isAdding ? 'Agregando...' : 'Agregar al Pedido'}</span>
+            <span>{agregar.isPending ? 'Agregando...' : 'Agregar al Pedido'}</span>
             <span>${subtotal.toFixed(2)}</span>
           </button>
         </div>
