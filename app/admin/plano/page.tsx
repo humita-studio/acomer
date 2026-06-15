@@ -41,6 +41,7 @@ export default async function PlanoPage() {
     id: m.id,
     identificador: m.identificador,
     qrToken: m.qrToken,
+    parentMesaId: m.parentMesaId,
     ambienteId: m.ambienteId,
     posX: m.posX,
     posY: m.posY,

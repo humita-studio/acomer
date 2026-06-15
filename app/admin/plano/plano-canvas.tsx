@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -8,11 +8,11 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
-  type Modifier,
 } from '@dnd-kit/core';
 import {
   COLS,
   GRID_PX,
+  LINE_THICKNESS,
   MIN_CELL,
   ROWS,
   type ElementoPlanoUI,
@@ -25,8 +25,21 @@ import { MesaNode } from './mesa-node';
 import { ElementoNode } from './elemento-node';
 
 const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min), max);
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-type Draft = { posX: number; posY: number; ancho: number; alto: number } | null;
+// Geometría de una pared dibujada como línea A→B: un rectángulo fino rotado
+// cuyo centro cae sobre el medio de la línea.
+function lineaARect(ax: number, ay: number, bx: number, by: number) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = Math.hypot(dx, dy);
+  const rot = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const cx = (ax + bx) / 2;
+  const cy = (ay + by) / 2;
+  return { posX: cx - len / 2, posY: cy - LINE_THICKNESS / 2, ancho: len, alto: LINE_THICKNESS, rot };
+}
+
+type Draft = { posX: number; posY: number; ancho: number; alto: number; rot: number } | null;
 
 export function PlanoCanvas({
   mesas,
@@ -47,7 +60,14 @@ export function PlanoCanvas({
   onChangeMesa: (id: string, partial: Partial<MesaPlano>) => void;
   onChangeElemento: (id: string, partial: Partial<ElementoPlanoUI>) => void;
   onSelect: (sel: Seleccion | null) => void;
-  onCreateElemento: (rect: { tipo: Herramienta; posX: number; posY: number; ancho: number; alto: number }) => void;
+  onCreateElemento: (rect: {
+    tipo: Herramienta;
+    posX: number;
+    posY: number;
+    ancho: number;
+    alto: number;
+    rotacion?: number;
+  }) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -77,31 +97,22 @@ export function PlanoCanvas({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  // Modificador: el preview del arrastre salta a la grilla
-  const snapToGrid = useMemo<Modifier>(
-    () => ({ transform }) => ({
-      ...transform,
-      x: Math.round(transform.x / cell) * cell,
-      y: Math.round(transform.y / cell) * cell,
-    }),
-    [cell]
-  );
-
   const handleDragStart = (e: DragStartEvent) => {
     const d = e.active.data.current as { kind: 'mesa' | 'elemento' } | undefined;
     if (d) onSelect({ tipo: d.kind, id: String(e.active.id) });
   };
 
+  // Colocación libre: la posición final es el delta exacto (sin snap a la grilla).
   const handleDragEnd = (e: DragEndEvent) => {
     const d = e.active.data.current as
       | { kind: 'mesa' | 'elemento'; posX: number; posY: number; ancho: number; alto: number }
       | undefined;
     if (!d) return;
-    const dx = Math.round(e.delta.x / cell);
-    const dy = Math.round(e.delta.y / cell);
-    if (dx === 0 && dy === 0) return;
-    const posX = clamp(d.posX + dx, 0, COLS - d.ancho);
-    const posY = clamp(d.posY + dy, 0, ROWS - d.alto);
+    const dx = e.delta.x / cell;
+    const dy = e.delta.y / cell;
+    if (!dx && !dy) return;
+    const posX = round2(clamp(d.posX + dx, 0, COLS - d.ancho));
+    const posY = round2(clamp(d.posY + dy, 0, ROWS - d.alto));
     if (d.kind === 'mesa') onChangeMesa(String(e.active.id), { posX, posY });
     else onChangeElemento(String(e.active.id), { posX, posY });
   };
@@ -119,15 +130,16 @@ export function PlanoCanvas({
     const startY = e.clientY;
     const orig = { posX: node.posX, posY: node.posY, ancho: node.ancho, alto: node.alto };
     const c = cellRef.current || GRID_PX;
+    const minSize = kind === 'mesa' ? 0.5 : 0.2;
     const commit = (partial: Partial<MesaPlano & ElementoPlanoUI>) =>
       kind === 'mesa' ? onChangeMesa(node.id, partial) : onChangeElemento(node.id, partial);
 
     const onMove = (ev: PointerEvent) => {
-      const dGX = Math.round((ev.clientX - startX) / c);
-      const dGY = Math.round((ev.clientY - startY) / c);
+      const dGX = (ev.clientX - startX) / c;
+      const dGY = (ev.clientY - startY) / c;
       commit({
-        ancho: clamp(orig.ancho + dGX, 1, COLS - orig.posX),
-        alto: clamp(orig.alto + dGY, 1, ROWS - orig.posY),
+        ancho: round2(clamp(orig.ancho + dGX, minSize, COLS - orig.posX)),
+        alto: round2(clamp(orig.alto + dGY, minSize, ROWS - orig.posY)),
       });
     };
     const onUp = () => {
@@ -138,44 +150,62 @@ export function PlanoCanvas({
     window.addEventListener('pointerup', onUp);
   };
 
-  const clientToCell = (clientX: number, clientY: number) => {
+  // Punto (fraccional) del lienzo a partir de coordenadas de pantalla
+  const clientToPoint = (clientX: number, clientY: number) => {
     const rect = surfaceRef.current!.getBoundingClientRect();
     const c = cellRef.current || GRID_PX;
-    const x = clamp(Math.floor((clientX - rect.left) / c), 0, COLS - 1);
-    const y = clamp(Math.floor((clientY - rect.top) / c), 0, ROWS - 1);
-    return { x, y };
+    return {
+      x: clamp((clientX - rect.left) / c, 0, COLS),
+      y: clamp((clientY - rect.top) / c, 0, ROWS),
+    };
   };
 
-  // Dibujar un elemento (pared / barra) arrastrando sobre el fondo
+  // Dibujar un elemento (pared / barra como rectángulo, o pared como línea)
   const onSurfacePointerDown = (e: React.PointerEvent) => {
     if (modo !== 'editar') return;
     if (herramienta === 'seleccionar') {
-      // Sólo deseleccionar al tocar el fondo vacío (no un nodo)
       if (e.target === surfaceRef.current) onSelect(null);
       return;
     }
     e.preventDefault();
-    const origin = clientToCell(e.clientX, e.clientY);
+    const origin = clientToPoint(e.clientX, e.clientY);
+    const esLinea = herramienta === 'linea';
     const setBoth = (d: Draft) => {
       draftRef.current = d;
       setDraft(d);
     };
-    setBoth({ posX: origin.x, posY: origin.y, ancho: 1, alto: 1 });
+    setBoth({ posX: origin.x, posY: origin.y, ancho: 0, alto: 0, rot: 0 });
 
     const onMove = (ev: PointerEvent) => {
-      const cc = clientToCell(ev.clientX, ev.clientY);
-      setBoth({
-        posX: Math.min(origin.x, cc.x),
-        posY: Math.min(origin.y, cc.y),
-        ancho: Math.abs(cc.x - origin.x) + 1,
-        alto: Math.abs(cc.y - origin.y) + 1,
-      });
+      const p = clientToPoint(ev.clientX, ev.clientY);
+      if (esLinea) {
+        setBoth(lineaARect(origin.x, origin.y, p.x, p.y));
+      } else {
+        setBoth({
+          posX: Math.min(origin.x, p.x),
+          posY: Math.min(origin.y, p.y),
+          ancho: Math.abs(p.x - origin.x),
+          alto: Math.abs(p.y - origin.y),
+          rot: 0,
+        });
+      }
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       const d = draftRef.current;
-      if (d) onCreateElemento({ tipo: herramienta, ...d });
+      // Ignorar trazos demasiado chicos (clicks accidentales)
+      const tamanio = esLinea ? d?.ancho ?? 0 : Math.max(d?.ancho ?? 0, d?.alto ?? 0);
+      if (d && tamanio >= 0.4) {
+        onCreateElemento({
+          tipo: herramienta,
+          posX: d.posX,
+          posY: d.posY,
+          ancho: d.ancho,
+          alto: d.alto,
+          rotacion: d.rot,
+        });
+      }
       setBoth(null);
     };
     window.addEventListener('pointermove', onMove);
@@ -186,12 +216,7 @@ export function PlanoCanvas({
 
   return (
     <div ref={wrapperRef} className="relative w-full overflow-hidden rounded-lg border border-gray-200">
-      <DndContext
-        sensors={sensors}
-        modifiers={[snapToGrid]}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={surfaceRef}
           onPointerDown={onSurfacePointerDown}
@@ -199,9 +224,11 @@ export function PlanoCanvas({
           style={{
             width: COLS * cell,
             height: ROWS * cell,
-            backgroundImage:
-              'linear-gradient(to right, #eef0f3 1px, transparent 1px), linear-gradient(to bottom, #eef0f3 1px, transparent 1px)',
-            backgroundSize: `${cell}px ${cell}px`,
+            // Grilla tenue, sólo como guía mientras se edita
+            backgroundImage: editando
+              ? 'linear-gradient(to right, #f1f5f9 1px, transparent 1px), linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)'
+              : undefined,
+            backgroundSize: editando ? `${cell}px ${cell}px` : undefined,
             cursor: dibujando ? 'crosshair' : 'default',
           }}
         >
@@ -238,7 +265,7 @@ export function PlanoCanvas({
             />
           ))}
 
-          {/* Vista previa mientras se dibuja un elemento */}
+          {/* Vista previa mientras se dibuja */}
           {draft && (
             <div
               className="absolute bg-blue-400/30 border-2 border-dashed border-blue-500 rounded-sm pointer-events-none"
@@ -247,6 +274,7 @@ export function PlanoCanvas({
                 top: draft.posY * cell,
                 width: draft.ancho * cell,
                 height: draft.alto * cell,
+                transform: draft.rot ? `rotate(${draft.rot}deg)` : undefined,
               }}
             />
           )}

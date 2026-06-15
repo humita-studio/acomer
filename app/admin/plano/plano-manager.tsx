@@ -20,6 +20,9 @@ import {
   DoorOpen,
   ClipboardList,
   List as ListIcon,
+  PenLine,
+  Scissors,
+  Combine,
 } from 'lucide-react';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
@@ -32,6 +35,8 @@ import {
   crearElementoPlano,
   eliminarElementoPlano,
   guardarLayoutAction,
+  dividirMesaAction,
+  unirMesaAction,
 } from '@/features/mesas/plano-actions';
 import { liberarMesaAction } from '@/features/mesas/mesas-actions';
 import { PlanoCanvas } from './plano-canvas';
@@ -231,6 +236,7 @@ export function PlanoManager({
     posY: number;
     ancho: number;
     alto: number;
+    rotacion?: number;
   }) => {
     const tipo = rect.tipo === 'barra' ? 'barra' : 'pared';
     const res = await crearElementoPlano({
@@ -240,6 +246,7 @@ export function PlanoManager({
       posY: rect.posY,
       ancho: rect.ancho,
       alto: rect.alto,
+      rotacion: rect.rotacion ?? 0,
     });
     if (res.success && res.elemento) {
       const elemento = res.elemento as ElementoPlanoUI;
@@ -273,6 +280,38 @@ export function PlanoManager({
     if (mesa.ambienteId && mesa.ambienteId !== activeId) setAmbienteActivoId(mesa.ambienteId);
     setSeleccion({ tipo: 'mesa', id: mesa.id });
     setMostrarLista(false);
+  };
+
+  const handleDividir = async (mesa: MesaPlano) => {
+    const def = Math.max(1, Math.floor(mesa.capacidad / 2));
+    const entrada = window.prompt(
+      `Dividir ${mesa.identificador} (${mesa.capacidad} lugares).\n¿Cuántos lugares para la nueva sub-mesa?`,
+      String(def)
+    );
+    if (entrada == null) return;
+    const cap = parseInt(entrada, 10);
+    if (!Number.isFinite(cap) || cap < 1 || cap >= mesa.capacidad) {
+      alert(`Tiene que ser un número entre 1 y ${mesa.capacidad - 1}.`);
+      return;
+    }
+    const res = await dividirMesaAction(mesa.id, cap);
+    if (res.success) {
+      if (res.mesa) setSeleccion({ tipo: 'mesa', id: (res.mesa as { id: string }).id });
+      router.refresh();
+    } else {
+      alert(res.message || 'No se pudo dividir la mesa');
+    }
+  };
+
+  const handleUnir = async (mesa: MesaPlano) => {
+    if (!confirm(`¿Volver a unir ${mesa.identificador} con su mesa madre?`)) return;
+    const res = await unirMesaAction(mesa.id);
+    if (res.success) {
+      setSeleccion(null);
+      router.refresh();
+    } else {
+      alert(res.message || 'No se pudo unir la mesa');
+    }
   };
 
   // ---- Guardado batch de la geometría ----
@@ -431,6 +470,9 @@ export function PlanoManager({
           <ToolButton active={herramienta === 'pared'} onClick={() => setHerramienta('pared')}>
             <Minus size={14} /> Pared
           </ToolButton>
+          <ToolButton active={herramienta === 'linea'} onClick={() => setHerramienta('linea')}>
+            <PenLine size={14} /> Línea
+          </ToolButton>
           <ToolButton active={herramienta === 'barra'} onClick={() => setHerramienta('barra')}>
             <Square size={14} /> Barra
           </ToolButton>
@@ -515,6 +557,8 @@ export function PlanoManager({
                 canTakeOrders={canTakeOrders}
                 liberando={liberandoId === selMesa.id}
                 onLiberar={() => handleLiberar(selMesa)}
+                onDividir={() => handleDividir(selMesa)}
+                onUnir={() => handleUnir(selMesa)}
                 onClose={() => setSeleccion(null)}
               />
             )}
@@ -600,6 +644,8 @@ function OperacionPanel({
   canTakeOrders,
   liberando,
   onLiberar,
+  onDividir,
+  onUnir,
   onClose,
 }: {
   mesa: MesaPlano;
@@ -608,9 +654,12 @@ function OperacionPanel({
   canTakeOrders: boolean;
   liberando: boolean;
   onLiberar: () => void;
+  onDividir: () => void;
+  onUnir: () => void;
   onClose: () => void;
 }) {
   const url = `${origin}/mesa/${mesa.qrToken}`;
+  const esSubMesa = !!mesa.parentMesaId;
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-2">
@@ -651,6 +700,24 @@ function OperacionPanel({
         <p className="text-xs text-gray-500 bg-white border border-gray-200 rounded-md p-2">
           Mesa libre. El cliente abre la sesión al escanear el QR.
         </p>
+      )}
+
+      {/* División de mesas (solo libres) */}
+      {canManage && !mesa.ocupada && esSubMesa && (
+        <button
+          onClick={onUnir}
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-gray-700 border border-gray-300 bg-white hover:bg-gray-100"
+        >
+          <Combine size={15} /> Volver a unir
+        </button>
+      )}
+      {canManage && !mesa.ocupada && !esSubMesa && mesa.capacidad >= 2 && (
+        <button
+          onClick={onDividir}
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100"
+        >
+          <Scissors size={15} /> Dividir mesa
+        </button>
       )}
 
       <div className="pt-2 border-t border-gray-200">

@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/shared/db';
-import { ambientes, elementosPlano, mesas } from '@/shared/db/schema';
+import { ambientes, elementosPlano, mesas, sesionesMesa } from '@/shared/db/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
@@ -13,6 +13,14 @@ function clampInt(value: unknown, min: number, fallback: number) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return fallback;
   return n < min ? min : n;
+}
+
+// Igual que clampInt pero conserva decimales (posiciones libres en el plano).
+// Redondea a 2 decimales para evitar ruido de punto flotante.
+function clampNum(value: unknown, min: number, fallback: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.round(Math.max(n, min) * 100) / 100;
 }
 
 function normalizarRotacion(value: unknown) {
@@ -228,10 +236,10 @@ export async function crearElementoPlano(input: {
         restauranteId: session.restauranteId,
         ambienteId: input.ambienteId,
         tipo,
-        posX: clampInt(input.posX, 0, 0),
-        posY: clampInt(input.posY, 0, 0),
-        ancho: clampInt(input.ancho, 1, 1),
-        alto: clampInt(input.alto, 1, 1),
+        posX: clampNum(input.posX, 0, 0),
+        posY: clampNum(input.posY, 0, 0),
+        ancho: clampNum(input.ancho, 0.1, 1),
+        alto: clampNum(input.alto, 0.1, 1),
         rotacion: normalizarRotacion(input.rotacion),
         etiqueta: input.etiqueta?.trim() || null,
       })
@@ -310,10 +318,10 @@ export async function guardarLayoutAction(payload: {
           .update(mesas)
           .set({
             ambienteId: m.ambienteId ?? null,
-            posX: clampInt(m.posX, 0, 0),
-            posY: clampInt(m.posY, 0, 0),
-            ancho: clampInt(m.ancho, 1, 2),
-            alto: clampInt(m.alto, 1, 2),
+            posX: clampNum(m.posX, 0, 0),
+            posY: clampNum(m.posY, 0, 0),
+            ancho: clampNum(m.ancho, 0.5, 2),
+            alto: clampNum(m.alto, 0.5, 2),
             forma: m.forma === 'redonda' ? 'redonda' : 'cuadrada',
             capacidad: clampInt(m.capacidad, 1, 4),
             rotacion: normalizarRotacion(m.rotacion),
@@ -325,10 +333,10 @@ export async function guardarLayoutAction(payload: {
         await tx
           .update(elementosPlano)
           .set({
-            posX: clampInt(el.posX, 0, 0),
-            posY: clampInt(el.posY, 0, 0),
-            ancho: clampInt(el.ancho, 1, 1),
-            alto: clampInt(el.alto, 1, 1),
+            posX: clampNum(el.posX, 0, 0),
+            posY: clampNum(el.posY, 0, 0),
+            ancho: clampNum(el.ancho, 0.1, 1),
+            alto: clampNum(el.alto, 0.1, 1),
             rotacion: normalizarRotacion(el.rotacion),
             etiqueta: el.etiqueta?.trim() || null,
           })
@@ -342,5 +350,137 @@ export async function guardarLayoutAction(payload: {
   } catch (error) {
     console.error('[guardarLayoutAction]', error);
     return { success: false, message: 'Error al guardar el plano' };
+  }
+}
+
+// ============================================================================
+// División de mesas (sub-mesas temporales)
+// ============================================================================
+
+async function tieneSesionActiva(mesaId: string) {
+  const [activa] = await db
+    .select({ id: sesionesMesa.id })
+    .from(sesionesMesa)
+    .where(and(eq(sesionesMesa.mesaId, mesaId), eq(sesionesMesa.estado, 'Activa')))
+    .limit(1);
+  return !!activa;
+}
+
+/**
+ * Divide una mesa en una sub-mesa temporal con su propia cuenta/QR.
+ * Ej: una mesa de 6 → queda en (6 - capacidadNueva) y se crea una sub-mesa
+ * de `capacidadNueva` lugares. Sólo se permite sobre mesas libres y que no
+ * sean ya una sub-mesa.
+ */
+export async function dividirMesaAction(mesaId: string, capacidadNueva: number) {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageTables')) {
+      return { success: false, message: 'No tenés permiso para gestionar el plano' };
+    }
+
+    const [mesa] = await db
+      .select()
+      .from(mesas)
+      .where(and(eq(mesas.id, mesaId), eq(mesas.restauranteId, session.restauranteId), isNull(mesas.deletedAt)))
+      .limit(1);
+    if (!mesa) return { success: false, message: 'Mesa no encontrada' };
+    if (mesa.parentMesaId) return { success: false, message: 'Esta mesa ya es una sub-mesa' };
+
+    const cap = Math.round(Number(capacidadNueva));
+    if (!Number.isFinite(cap) || cap < 1 || cap >= mesa.capacidad) {
+      return { success: false, message: `La sub-mesa debe tener entre 1 y ${mesa.capacidad - 1} lugares` };
+    }
+
+    if (await tieneSesionActiva(mesaId)) {
+      return { success: false, message: 'No se puede dividir una mesa ocupada' };
+    }
+
+    // Letra del sufijo según sub-mesas existentes (B, C, D, ...)
+    const hijos = await db
+      .select({ id: mesas.id })
+      .from(mesas)
+      .where(and(eq(mesas.parentMesaId, mesaId), isNull(mesas.deletedAt)));
+    const letra = String.fromCharCode(66 + hijos.length);
+
+    const creada = await db.transaction(async (tx) => {
+      await tx
+        .update(mesas)
+        .set({ capacidad: mesa.capacidad - cap })
+        .where(eq(mesas.id, mesaId));
+
+      const [hija] = await tx
+        .insert(mesas)
+        .values({
+          restauranteId: session.restauranteId,
+          identificador: `${mesa.identificador}-${letra}`,
+          ambienteId: mesa.ambienteId,
+          parentMesaId: mesaId,
+          posX: clampNum(mesa.posX + mesa.ancho + 0.3, 0, 0),
+          posY: mesa.posY,
+          ancho: 2,
+          alto: 2,
+          forma: mesa.forma,
+          capacidad: cap,
+          rotacion: 0,
+        })
+        .returning();
+      return hija;
+    });
+
+    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
+    return { success: true, mesa: creada };
+  } catch (error) {
+    console.error('[dividirMesaAction]', error);
+    return { success: false, message: 'Error al dividir la mesa' };
+  }
+}
+
+/**
+ * Vuelve a unir una sub-mesa con su mesa madre: devuelve la capacidad y elimina
+ * la sub-mesa. Sólo si la sub-mesa está libre.
+ */
+export async function unirMesaAction(subMesaId: string) {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageTables')) {
+      return { success: false, message: 'No tenés permiso para gestionar el plano' };
+    }
+
+    const [sub] = await db
+      .select()
+      .from(mesas)
+      .where(and(eq(mesas.id, subMesaId), eq(mesas.restauranteId, session.restauranteId), isNull(mesas.deletedAt)))
+      .limit(1);
+    if (!sub) return { success: false, message: 'Sub-mesa no encontrada' };
+    if (!sub.parentMesaId) return { success: false, message: 'Esta mesa no es una sub-mesa' };
+
+    if (await tieneSesionActiva(subMesaId)) {
+      return { success: false, message: 'No se puede unir una sub-mesa ocupada' };
+    }
+
+    await db.transaction(async (tx) => {
+      // Devolver la capacidad a la madre (si sigue activa)
+      const [madre] = await tx
+        .select({ id: mesas.id, capacidad: mesas.capacidad })
+        .from(mesas)
+        .where(and(eq(mesas.id, sub.parentMesaId!), isNull(mesas.deletedAt)))
+        .limit(1);
+      if (madre) {
+        await tx
+          .update(mesas)
+          .set({ capacidad: madre.capacidad + sub.capacidad })
+          .where(eq(mesas.id, madre.id));
+      }
+      await tx.update(mesas).set({ deletedAt: new Date() }).where(eq(mesas.id, subMesaId));
+    });
+
+    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
+    return { success: true };
+  } catch (error) {
+    console.error('[unirMesaAction]', error);
+    return { success: false, message: 'Error al unir la mesa' };
   }
 }

@@ -6,10 +6,12 @@ import {
   jsonb,
   numeric,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
@@ -215,15 +217,17 @@ export const mesas = pgTable(
     restauranteId: uuid('restaurant_id').notNull(),
     identificador: text('identificador').notNull(),
     qrToken: uuid('qr_token').notNull().defaultRandom().unique(),
-    // Posición y forma dentro del plano del local
+    // Posición y forma dentro del plano del local (coordenadas en celdas, fraccionarias)
     ambienteId: uuid('ambiente_id').references(() => ambientes.id, { onDelete: 'set null' }),
-    posX: integer('pos_x').notNull().default(0),
-    posY: integer('pos_y').notNull().default(0),
-    ancho: integer('ancho').notNull().default(2),
-    alto: integer('alto').notNull().default(2),
+    posX: real('pos_x').notNull().default(0),
+    posY: real('pos_y').notNull().default(0),
+    ancho: real('ancho').notNull().default(2),
+    alto: real('alto').notNull().default(2),
     forma: text('forma').notNull().default('cuadrada'), // 'redonda' | 'cuadrada'
     capacidad: integer('capacidad').notNull().default(4),
     rotacion: integer('rotacion').notNull().default(0), // 0 | 90 | 180 | 270
+    // Cuando la mesa es una sub-mesa temporal (división), apunta a la mesa madre
+    parentMesaId: uuid('parent_mesa_id').references((): AnyPgColumn => mesas.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
@@ -268,10 +272,10 @@ export const elementosPlano = pgTable(
     restauranteId: uuid('restaurant_id').notNull(),
     ambienteId: uuid('ambiente_id').notNull(),
     tipo: text('tipo').notNull().default('pared'), // 'pared' | 'barra' | 'contorno' | 'decoracion'
-    posX: integer('pos_x').notNull().default(0),
-    posY: integer('pos_y').notNull().default(0),
-    ancho: integer('ancho').notNull().default(1),
-    alto: integer('alto').notNull().default(1),
+    posX: real('pos_x').notNull().default(0),
+    posY: real('pos_y').notNull().default(0),
+    ancho: real('ancho').notNull().default(1),
+    alto: real('alto').notNull().default(1),
     rotacion: integer('rotacion').notNull().default(0),
     etiqueta: text('etiqueta'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

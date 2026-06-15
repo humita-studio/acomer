@@ -8,12 +8,15 @@ export const ROWS = 30; // alto lógico del lienzo (celdas)
 export type Forma = 'cuadrada' | 'redonda';
 export type TipoElemento = 'pared' | 'barra' | 'contorno' | 'decoracion';
 export type Modo = 'ver' | 'editar';
-export type Herramienta = 'seleccionar' | 'pared' | 'barra';
+export type Herramienta = 'seleccionar' | 'pared' | 'barra' | 'linea';
+
+export const LINE_THICKNESS = 0.35; // grosor (en celdas) de las paredes dibujadas como línea
 
 export interface MesaPlano {
   id: string;
   identificador: string;
   qrToken: string;
+  parentMesaId: string | null;
   ambienteId: string | null;
   posX: number;
   posY: number;
