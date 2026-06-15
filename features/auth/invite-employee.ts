@@ -3,7 +3,7 @@
 import { db } from '@/shared/db';
 import { perfilesEmpleados } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { createSupabaseAdminClient } from '@/shared/supabase/admin';
 import { getCurrentSession } from '@/features/auth/session';
 import type { RoleType } from '@/features/authorization/roles';
 
@@ -35,11 +35,14 @@ export async function inviteEmployee(
       };
     }
 
-    const supabase = await createSupabaseServerClient();
+    // El cliente admin usa la secret key: las operaciones auth.admin requieren
+    // privilegios elevados que la publishable key no tiene.
+    const supabase = createSupabaseAdminClient();
+    const email = input.email.trim().toLowerCase();
 
     // 1. Buscar o crear el usuario en Supabase Auth
     const { data: signUpData, error: signUpError } = await supabase.auth.admin.createUser({
-      email: input.email,
+      email,
       password: Math.random().toString(36).slice(-12), // Contraseña temporal
       email_confirm: true,
     });
@@ -47,11 +50,14 @@ export async function inviteEmployee(
     let finalUserId: string | undefined = signUpData?.user?.id;
 
     if (signUpError || !signUpData.user) {
-      // Si ya existe, intentamos obtenerlo
-      const { data: userData } = await supabase.auth.admin.listUsers();
-      const existingUser = userData?.users.find((u) => u.email === input.email);
-      
+      // Si ya existe en Auth, lo buscamos para asociarlo a este restaurante.
+      const { data: userData, error: listError } = await supabase.auth.admin.listUsers();
+      const existingUser = userData?.users.find(
+        (u) => u.email?.toLowerCase() === email
+      );
+
       if (!existingUser) {
+        console.error('[inviteEmployee] No se pudo crear el usuario:', signUpError, listError);
         return {
           success: false,
           message: 'Error al crear la cuenta del empleado',

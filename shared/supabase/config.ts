@@ -17,3 +17,19 @@ export function getSupabasePublishableKey() {
 
   return supabasePublishableKey
 }
+
+/**
+ * Secret key de Supabase (formato `sb_secret_...`, reemplaza a la antigua
+ * service_role key). Otorga privilegios administrativos (bypassa RLS y habilita
+ * `auth.admin`). NUNCA debe exponerse al navegador: por eso no lleva el prefijo
+ * NEXT_PUBLIC_ y solo se lee en el servidor.
+ */
+export function getSupabaseSecretKey() {
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY
+
+  if (!supabaseSecretKey) {
+    throw new Error('SUPABASE_SECRET_KEY is required for Supabase admin operations.')
+  }
+
+  return supabaseSecretKey
+}
