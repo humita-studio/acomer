@@ -155,16 +155,38 @@ export function PlanoManager({
   const updateElemento = (id: string, partial: Partial<ElementoPlanoUI>) =>
     patchDraft((d) => ({ ...d, elementos: d.elementos.map((e) => (e.id === id ? { ...e, ...partial } : e)) }));
 
-  // ---- Acciones que persisten al instante ----
+  // ---- Acciones optimistas: la UI se actualiza al instante y reconcilia con
+  // el id real cuando responde el server (o revierte si falla). ----
   const handleAddMesa = async () => {
     const nombre = window.prompt('Identificador de la mesa (ej: Mesa 5):')?.trim();
     if (!nombre) return;
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimista: MesaPlano = {
+      id: tempId,
+      identificador: nombre,
+      qrToken: '',
+      parentMesaId: null,
+      ambienteId: activeId,
+      posX: 1,
+      posY: 1,
+      ancho: 2,
+      alto: 2,
+      forma: 'cuadrada',
+      capacidad: 4,
+      rotacion: 0,
+      ocupada: false,
+    };
+    patchDraft((d) => ({ ...d, mesas: [...d.mesas, optimista] }), false);
+    setSeleccion({ tipo: 'mesa', id: tempId });
+
     const res = await crearMesaEnPlano(activeId, nombre);
     if (res.success && res.mesa) {
-      const mesa = res.mesa as MesaPlano;
-      patchDraft((d) => ({ ...d, mesas: [...d.mesas, mesa] }), false);
-      setSeleccion({ tipo: 'mesa', id: mesa.id });
+      const real = res.mesa as MesaPlano;
+      patchDraft((d) => ({ ...d, mesas: d.mesas.map((m) => (m.id === tempId ? real : m)) }), false);
+      setSeleccion((s) => (s?.tipo === 'mesa' && s.id === tempId ? { tipo: 'mesa', id: real.id } : s));
     } else {
+      patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== tempId) }), false);
+      setSeleccion((s) => (s?.tipo === 'mesa' && s.id === tempId ? null : s));
       alert(res.message || 'No se pudo crear la mesa');
     }
   };
@@ -221,13 +243,15 @@ export function PlanoManager({
   const handleDeleteMesa = async (id: string) => {
     const mesa = mesas.find((m) => m.id === id);
     if (!confirm(`¿Eliminar ${mesa?.identificador ?? 'la mesa'}?`)) return;
-    const res = await eliminarMesaPlano(id);
-    if (!res.success) {
-      alert(res.message || 'No se pudo eliminar');
-      return;
-    }
+    // Optimista: sacar al instante y restaurar si falla
     patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== id) }), false);
     setSeleccion(null);
+    if (id.startsWith('temp-')) return; // todavía no existía en el server
+    const res = await eliminarMesaPlano(id);
+    if (!res.success) {
+      if (mesa) patchDraft((d) => ({ ...d, mesas: [...d.mesas, mesa] }), false);
+      alert(res.message || 'No se pudo eliminar');
+    }
   };
 
   const handleCreateElemento = async (rect: {
@@ -239,6 +263,20 @@ export function PlanoManager({
     rotacion?: number;
   }) => {
     const tipo = rect.tipo === 'barra' ? 'barra' : 'pared';
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimista: ElementoPlanoUI = {
+      id: tempId,
+      ambienteId: activeId,
+      tipo,
+      posX: rect.posX,
+      posY: rect.posY,
+      ancho: rect.ancho,
+      alto: rect.alto,
+      rotacion: rect.rotacion ?? 0,
+      etiqueta: null,
+    };
+    patchDraft((d) => ({ ...d, elementos: [...d.elementos, optimista] }), false);
+
     const res = await crearElementoPlano({
       ambienteId: activeId,
       tipo,
@@ -249,21 +287,25 @@ export function PlanoManager({
       rotacion: rect.rotacion ?? 0,
     });
     if (res.success && res.elemento) {
-      const elemento = res.elemento as ElementoPlanoUI;
-      patchDraft((d) => ({ ...d, elementos: [...d.elementos, elemento] }), false);
+      const real = res.elemento as ElementoPlanoUI;
+      patchDraft((d) => ({ ...d, elementos: d.elementos.map((e) => (e.id === tempId ? real : e)) }), false);
     } else {
+      patchDraft((d) => ({ ...d, elementos: d.elementos.filter((e) => e.id !== tempId) }), false);
       alert(res.message || 'No se pudo crear el elemento');
     }
   };
 
   const handleDeleteElemento = async (id: string) => {
-    const res = await eliminarElementoPlano(id);
-    if (!res.success) {
-      alert(res.message || 'No se pudo eliminar');
-      return;
-    }
+    const elemento = elementos.find((e) => e.id === id);
+    // Optimista: sacar al instante y restaurar si falla
     patchDraft((d) => ({ ...d, elementos: d.elementos.filter((e) => e.id !== id) }), false);
     setSeleccion(null);
+    if (id.startsWith('temp-')) return; // todavía no existía en el server
+    const res = await eliminarElementoPlano(id);
+    if (!res.success) {
+      if (elemento) patchDraft((d) => ({ ...d, elementos: [...d.elementos, elemento] }), false);
+      alert(res.message || 'No se pudo eliminar');
+    }
   };
 
   // ---- Operación (modo ver) ----
@@ -318,8 +360,9 @@ export function PlanoManager({
   const guardar = async () => {
     if (!draft) return;
     setGuardando(true);
+    // Ignorar ids temporales: corresponden a creaciones aún sin confirmar en el server
     const res = await guardarLayoutAction({
-      mesas: draft.mesas.map((m) => ({
+      mesas: draft.mesas.filter((m) => !m.id.startsWith('temp-')).map((m) => ({
         id: m.id,
         ambienteId: m.ambienteId,
         posX: m.posX,
@@ -330,7 +373,7 @@ export function PlanoManager({
         capacidad: m.capacidad,
         rotacion: m.rotacion,
       })),
-      elementos: draft.elementos.map((e) => ({
+      elementos: draft.elementos.filter((e) => !e.id.startsWith('temp-')).map((e) => ({
         id: e.id,
         posX: e.posX,
         posY: e.posY,
