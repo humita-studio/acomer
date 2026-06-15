@@ -4,6 +4,7 @@ import {
   inviteEmployee,
   listEmployees,
   deactivateEmployee,
+  activateEmployee,
 } from '@/features/auth/invite-employee';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -68,6 +69,16 @@ export default function StaffPage() {
 
   const deactivateMutation = useMutation({
     mutationFn: (perfilId: string) => deactivateEmployee(perfilId),
+    onSuccess: (result) => {
+      setMessage(result.message);
+      if (result.success) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.empleados() });
+      }
+    },
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: (perfilId: string) => activateEmployee(perfilId),
     onSuccess: (result) => {
       setMessage(result.message);
       if (result.success) {
@@ -226,16 +237,26 @@ export default function StaffPage() {
                     >
                       {emp.activo ? 'Activo' : 'Inactivo'}
                     </span>
-                    {emp.activo && emp.rol !== 'owner' && (
-                      <button
-                        type="button"
-                        onClick={() => deactivateMutation.mutate(emp.id)}
-                        disabled={deactivateMutation.isPending}
-                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                      >
-                        Desactivar
-                      </button>
-                    )}
+                    {emp.rol !== 'owner' &&
+                      (emp.activo ? (
+                        <button
+                          type="button"
+                          onClick={() => deactivateMutation.mutate(emp.id)}
+                          disabled={deactivateMutation.isPending}
+                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          Desactivar
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => activateMutation.mutate(emp.id)}
+                          disabled={activateMutation.isPending}
+                          className="text-xs text-green-600 hover:underline disabled:opacity-50"
+                        >
+                          Activar
+                        </button>
+                      ))}
                   </div>
                 </li>
               ))}

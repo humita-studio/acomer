@@ -242,6 +242,45 @@ export async function deactivateEmployee(
   }
 }
 
+/**
+ * Reactiva un empleado previamente desactivado.
+ */
+export async function activateEmployee(
+  perfilId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const session = await getCurrentSession();
+
+    if (!session || !['owner', 'admin'].includes(session.role)) {
+      return {
+        success: false,
+        message: 'No tienes permisos para activar empleados',
+      };
+    }
+
+    await db
+      .update(perfilesEmpleados)
+      .set({ activo: true, updatedAt: new Date() })
+      .where(
+        and(
+          eq(perfilesEmpleados.id, perfilId),
+          eq(perfilesEmpleados.restauranteId, session.restauranteId)
+        )
+      );
+
+    return {
+      success: true,
+      message: 'Empleado reactivado',
+    };
+  } catch (error) {
+    console.error('[activateEmployee] Error:', error);
+    return {
+      success: false,
+      message: 'Error al activar el empleado',
+    };
+  }
+}
+
 export interface EmployeeListItem {
   id: string;
   userId: string;
