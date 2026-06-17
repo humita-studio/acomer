@@ -1,9 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { agregarItemsStaffAction } from '@/features/comanda/agregar-items-staff-action';
+import { useQueryClient } from '@tanstack/react-query';
 import { liberarMesaAction } from '@/features/mesas/mesas-actions';
+import { useTicketMesa, useAgregarItemsStaff } from '@/features/comanda/use-ticket-mesa';
+import { queryKeys } from '@/shared/query/keys';
+import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/comanda/components/MenuDigital';
 import type { TicketItem } from '@/features/comanda/obtener-ticket-mesa';
 
@@ -17,13 +20,31 @@ type Props = {
 
 export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos, ticketInicial }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeCategory, setActiveCategory] = useState<string>(categorias[0]?.id || '');
   const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
   const [cantidad, setCantidad] = useState(1);
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
-  const [isAdding, setIsAdding] = useState(false);
   const [isLiberating, setIsLiberating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Estado de servidor del ticket (TanStack Query) con update optimista al agregar
+  const { data: ticket = { items: [], total: 0 } } = useTicketMesa(sesionMesaId, ticketInicial);
+  const agregar = useAgregarItemsStaff(sesionMesaId);
+
+  // Realtime: si el comensal (u otro dispositivo) agrega items, refrescar el ticket
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase.channel(`mesa_${sesionMesaId}`);
+    channel
+      .on('broadcast', { event: 'ticket_actualizado' }, () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.ticketMesa(sesionMesaId) });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sesionMesaId, queryClient]);
 
   const activeProducts = productos.filter((p) => p.categoriaId === activeCategory);
 
@@ -47,20 +68,27 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
     : 0;
   const subtotalModal = selectedProduct ? (selectedProduct.precio + modsTotal) * cantidad : 0;
 
-  const handleAgregar = async () => {
+  const handleAgregar = () => {
     if (!selectedProduct) return;
-    setIsAdding(true);
-    setError(null);
-    const res = await agregarItemsStaffAction(sesionMesaId, [
-      { productoId: selectedProduct.id, cantidad, modificadorIds: selectedModIds },
-    ]);
-    setIsAdding(false);
-    if (res.success) {
-      setSelectedProduct(null);
-      router.refresh();
-    } else {
-      setError(res.message || 'No se pudo agregar el producto');
-    }
+    const modsSeleccionados = selectedProduct.modificadores.filter((m) =>
+      selectedModIds.includes(m.id),
+    );
+    const precioConMods =
+      selectedProduct.precio + modsSeleccionados.reduce((s, m) => s + m.precioExtra, 0);
+    const optimisticItem: TicketItem = {
+      id: `temp-${crypto.randomUUID()}`,
+      nombre: selectedProduct.nombre,
+      cantidad,
+      precioUnitario: selectedProduct.precio,
+      modificadores: modsSeleccionados.map((m) => ({ nombre: m.nombre, precioExtra: m.precioExtra })),
+      subtotal: precioConMods * cantidad,
+    };
+    // Optimista: el item aparece en la cuenta al instante y cerramos el modal.
+    agregar.mutate({
+      items: [{ productoId: selectedProduct.id, cantidad, modificadorIds: selectedModIds }],
+      optimisticItems: [optimisticItem],
+    });
+    setSelectedProduct(null);
   };
 
   const handleLiberar = async () => {
@@ -84,11 +112,11 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
         <div className="bg-white rounded-lg shadow p-5 lg:sticky lg:top-6">
           <h2 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">Cuenta de la mesa</h2>
 
-          {ticketInicial.items.length === 0 ? (
+          {ticket.items.length === 0 ? (
             <p className="text-sm text-gray-500 py-6 text-center">Todavía no hay pedidos en esta mesa.</p>
           ) : (
             <div className="space-y-3">
-              {ticketInicial.items.map((item) => (
+              {ticket.items.map((item) => (
                 <div key={item.id} className="flex justify-between items-start text-sm">
                   <div>
                     <p className="font-medium text-gray-800">
@@ -108,7 +136,7 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
 
           <div className="flex justify-between items-center mt-4 pt-3 border-t font-bold text-gray-800">
             <span>Total</span>
-            <span>${ticketInicial.total.toFixed(2)}</span>
+            <span>${ticket.total.toFixed(2)}</span>
           </div>
 
           <button
@@ -233,15 +261,11 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
             </div>
 
             <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
-              {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-3 text-sm font-medium">{error}</div>
-              )}
               <button
                 onClick={handleAgregar}
-                disabled={isAdding}
                 className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors flex justify-between px-6 items-center disabled:bg-blue-400"
               >
-                <span>{isAdding ? 'Agregando...' : 'Agregar al pedido'}</span>
+                <span>Agregar al pedido</span>
                 <span>${subtotalModal.toFixed(2)}</span>
               </button>
             </div>

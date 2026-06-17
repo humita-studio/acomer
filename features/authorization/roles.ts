@@ -14,6 +14,8 @@ export interface RolePermissions {
   canViewReports: boolean;     // Ver reportes y estadísticas
   canProcessPayments: boolean; // Procesar pagos
   canMarkDelivered: boolean;   // Marcar platos como entregados (mozo)
+  canManageReservas: boolean;  // Gestionar reservas (agenda, confirmar, sentar)
+  canManageDelivery: boolean;  // Gestionar pedidos online (takeaway/delivery)
   canViewKanban: boolean;      // Ver tablero de pedidos (cocina, mozo)
   canAcceptOrders: boolean;    // Aceptar/rechazar pedidos (cocina)
   canCallWaiter: boolean;      // Llamar al mozo desde la comanda B2C
@@ -31,6 +33,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canViewReports: true,
     canProcessPayments: true,
     canMarkDelivered: true,
+    canManageReservas: true,
+    canManageDelivery: true,
     canViewKanban: true,
     canAcceptOrders: true,
     canCallWaiter: true,
@@ -46,6 +50,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canViewReports: true,
     canProcessPayments: true,
     canMarkDelivered: true,
+    canManageReservas: true,
+    canManageDelivery: true,
     canViewKanban: true,
     canAcceptOrders: true,
     canCallWaiter: true,
@@ -61,6 +67,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canViewReports: false,
     canProcessPayments: true,
     canMarkDelivered: false,
+    canManageReservas: false,
+    canManageDelivery: false,
     canViewKanban: false,
     canAcceptOrders: false,
     canCallWaiter: false,
@@ -76,6 +84,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canViewReports: false,
     canProcessPayments: true, // Permitir al mozo procesar cobros en la mesa
     canMarkDelivered: true,
+    canManageReservas: true,
+    canManageDelivery: true,
     canViewKanban: true,
     canAcceptOrders: false,
     canCallWaiter: false,
@@ -91,6 +101,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canViewReports: false,
     canProcessPayments: false,
     canMarkDelivered: false,
+    canManageReservas: false,
+    canManageDelivery: false,
     canViewKanban: true,
     canAcceptOrders: true,
     canCallWaiter: false,
@@ -118,7 +130,16 @@ export function hasPermission(role: RoleType, permission: keyof RolePermissions)
  */
 export function canAccessSection(
   role: RoleType,
-  section: 'menu' | 'staff' | 'tables' | 'reports' | 'kitchen' | 'cashier' | 'settings'
+  section:
+    | 'menu'
+    | 'staff'
+    | 'tables'
+    | 'reports'
+    | 'kitchen'
+    | 'cashier'
+    | 'settings'
+    | 'reservas'
+    | 'delivery'
 ): boolean {
   const permissions = getRolePermissions(role);
 
@@ -138,6 +159,10 @@ export function canAccessSection(
       return permissions.canProcessPayments;
     case 'settings':
       return permissions.canManageSettings;
+    case 'reservas':
+      return permissions.canManageReservas;
+    case 'delivery':
+      return permissions.canManageDelivery;
     default:
       return false;
   }

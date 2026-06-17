@@ -304,7 +304,8 @@ export const sesionesMesa = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull(),
-    mesaId: uuid('mesa_id').notNull(),
+    mesaId: uuid('mesa_id'), // nullable: takeaway/delivery no tienen mesa física
+    tipo: text('tipo').notNull().default('salon'), // salon | takeaway | delivery
     estado: text('estado').notNull().default('Activa'), // Activa | Cerrada
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -319,6 +320,120 @@ export const sesionesMesa = pgTable(
       columns: [table.mesaId],
       foreignColumns: [mesas.id],
       name: 'sesiones_mesa_mesa_id_fk',
+    }).onDelete('cascade'),
+    tipoCheck: check('sesiones_mesa_tipo_check', sql`tipo IN ('salon','takeaway','delivery')`),
+  })
+)
+
+// ============================================================================
+// Entrega (takeaway / delivery) y Reservas
+// ============================================================================
+
+// 1:1 con la sesión cuando es takeaway/delivery. Guarda el contacto en la orden
+// (sin CRM por ahora; el teléfono queda acá).
+export const datosEntrega = pgTable(
+  'datos_entrega',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    sesionMesaId: uuid('sesion_mesa_id').notNull().unique(),
+    nombreContacto: text('nombre_contacto').notNull(),
+    telefono: text('telefono').notNull(),
+    direccion: text('direccion'),
+    referencia: text('referencia'),
+    costoEnvio: numeric('costo_envio', { precision: 10, scale: 2 }).notNull().default('0'),
+    estadoEntrega: text('estado_entrega').notNull().default('Recibido'),
+    horaEstimada: timestamp('hora_estimada', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'datos_entrega_restaurant_id_fk',
+    }).onDelete('cascade'),
+    sesionMesaIdFk: foreignKey({
+      columns: [table.sesionMesaId],
+      foreignColumns: [sesionesMesa.id],
+      name: 'datos_entrega_sesion_mesa_id_fk',
+    }).onDelete('cascade'),
+    estadoCheck: check(
+      'datos_entrega_estado_check',
+      sql`estado_entrega IN ('Recibido','EnPreparacion','Listo','EnCamino','Entregado','Cancelado')`
+    ),
+  })
+)
+
+export const reservas = pgTable(
+  'reservas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    nombreContacto: text('nombre_contacto').notNull(),
+    telefono: text('telefono').notNull(),
+    mesaId: uuid('mesa_id'),
+    ambienteId: uuid('ambiente_id'),
+    inicio: timestamp('inicio', { withTimezone: true }).notNull(),
+    duracionMin: integer('duracion_min').notNull().default(90),
+    cantidadPersonas: integer('cantidad_personas').notNull(),
+    estado: text('estado').notNull().default('Pendiente'), // Pendiente | Confirmada | Sentada | NoShow | Cancelada | Cumplida
+    origen: text('origen').notNull().default('online'), // online | telefono | walkin
+    sesionMesaId: uuid('sesion_mesa_id'),
+    notas: text('notas'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'reservas_restaurant_id_fk',
+    }).onDelete('cascade'),
+    mesaIdFk: foreignKey({
+      columns: [table.mesaId],
+      foreignColumns: [mesas.id],
+      name: 'reservas_mesa_id_fk',
+    }).onDelete('set null'),
+    ambienteIdFk: foreignKey({
+      columns: [table.ambienteId],
+      foreignColumns: [ambientes.id],
+      name: 'reservas_ambiente_id_fk',
+    }).onDelete('set null'),
+    sesionMesaIdFk: foreignKey({
+      columns: [table.sesionMesaId],
+      foreignColumns: [sesionesMesa.id],
+      name: 'reservas_sesion_mesa_id_fk',
+    }).onDelete('set null'),
+    estadoCheck: check(
+      'reservas_estado_check',
+      sql`estado IN ('Pendiente','Confirmada','Sentada','NoShow','Cancelada','Cumplida')`
+    ),
+    origenCheck: check('reservas_origen_check', sql`origen IN ('online','telefono','walkin')`),
+  })
+)
+
+// Configuración de reservas por restaurante (1:1). Define los turnos/horarios
+// habilitados, la duración por defecto y los cupos. Los cupos en null = sin
+// límite. Si no existe fila, se usan los defaults de la app.
+export const reservasConfig = pgTable(
+  'reservas_config',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull().unique(),
+    activo: boolean('activo').notNull().default(true), // reservas online habilitadas
+    turnos: jsonb('turnos').notNull().default(['12:00', '12:30', '13:00', '13:30', '14:00', '20:00', '20:30', '21:00', '21:30', '22:00']), // array de 'HH:MM'
+    duracionMinDefault: integer('duracion_min_default').notNull().default(90),
+    cupoCubiertosPorTurno: integer('cupo_cubiertos_por_turno'), // null = sin límite
+    maxReservasPorDia: integer('max_reservas_por_dia'), // null = sin límite
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'reservas_config_restaurant_id_fk',
     }).onDelete('cascade'),
   })
 )
@@ -609,6 +724,8 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   transaccionesPago: many(transaccionesPago),
   sesionesCaja: many(sesionesCaja),
   movimientosCaja: many(movimientosCaja),
+  datosEntrega: many(datosEntrega),
+  reservas: many(reservas),
 }))
 
 export const perfilesEmpleadosRelations = relations(perfilesEmpleados, ({ one }) => ({
@@ -833,5 +950,35 @@ export const movimientosCajaRelations = relations(movimientosCaja, ({ one }) => 
   sesionCaja: one(sesionesCaja, {
     fields: [movimientosCaja.sesionCajaId],
     references: [sesionesCaja.id],
+  }),
+}))
+
+export const datosEntregaRelations = relations(datosEntrega, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [datosEntrega.restauranteId],
+    references: [restaurantes.id],
+  }),
+  sesionMesa: one(sesionesMesa, {
+    fields: [datosEntrega.sesionMesaId],
+    references: [sesionesMesa.id],
+  }),
+}))
+
+export const reservasRelations = relations(reservas, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [reservas.restauranteId],
+    references: [restaurantes.id],
+  }),
+  mesa: one(mesas, {
+    fields: [reservas.mesaId],
+    references: [mesas.id],
+  }),
+  ambiente: one(ambientes, {
+    fields: [reservas.ambienteId],
+    references: [ambientes.id],
+  }),
+  sesionMesa: one(sesionesMesa, {
+    fields: [reservas.sesionMesaId],
+    references: [sesionesMesa.id],
   }),
 }))

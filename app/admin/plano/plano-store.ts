@@ -28,6 +28,7 @@ type PlanoStore = {
   dirty: boolean;
   guardando: boolean;
   liberandoId: string | null;
+  abriendoId: string | null;
   mostrarLista: boolean;
   avisos: Aviso[];
 
@@ -39,6 +40,7 @@ type PlanoStore = {
   setDirty: (dirty: boolean) => void;
   setGuardando: (guardando: boolean) => void;
   setLiberandoId: (id: string | null) => void;
+  setAbriendoId: (id: string | null) => void;
   setMostrarLista: (v: boolean | ((prev: boolean) => boolean)) => void;
 
   /** Muta la copia de trabajo; por defecto marca cambios sin guardar. */
@@ -64,6 +66,7 @@ const initialState = {
   dirty: false,
   guardando: false,
   liberandoId: null as string | null,
+  abriendoId: null as string | null,
   mostrarLista: false,
   avisos: [] as Aviso[],
 };
@@ -81,6 +84,7 @@ export const usePlanoStore = create<PlanoStore>()((set, get) => ({
   setDirty: (dirty) => set({ dirty }),
   setGuardando: (guardando) => set({ guardando }),
   setLiberandoId: (liberandoId) => set({ liberandoId }),
+  setAbriendoId: (abriendoId) => set({ abriendoId }),
   setMostrarLista: (v) =>
     set((s) => ({ mostrarLista: typeof v === 'function' ? v(s.mostrarLista) : v })),
 

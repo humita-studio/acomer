@@ -1,19 +1,10 @@
 'use server';
 
 import { db } from '@/shared/db';
-import { 
-  pedidos, 
-  comandaItems, 
-  comandaItemModificadores,
-  productos,
-  productosPrecios,
-  modificadores,
-  modificadoresPrecios,
-  itemsBorradorMesa,
-  transaccionesPago
-} from '@/shared/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { itemsBorradorMesa, transaccionesPago } from '@/shared/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { crearPedidoConItems } from './crear-pedido-core';
 
 type ModificadorSnapshot = {
   id: string;
@@ -44,95 +35,16 @@ export async function enviarPedidoAction(
 
     // 2. Process within a transaction
     const resultado = await db.transaction(async (tx) => {
-      let totalPedido = 0;
-      
-      // Create the pedido
-      const nuevoPedido = await tx.insert(pedidos).values({
-        restauranteId: tenantId,
-        sesionMesaId: sesionMesaId,
-        estado: 'Pendiente',
-        notas: notas || null,
-        total: '0',
-      }).returning({ id: pedidos.id });
-      
-      const pedidoId = nuevoPedido[0].id;
-
-      // Process each borrador item
-      for (const item of borradorItems) {
-        // Get product snapshot (nombre)
-        const prodData = await tx.select({ nombre: productos.nombre })
-          .from(productos)
-          .where(eq(productos.id, item.productoId))
-          .limit(1);
-          
-        if (!prodData[0]) throw new Error(`Producto no encontrado: ${item.productoId}`);
-
-        // Get current price
-        const precioData = await tx.select({ precio: productosPrecios.precio })
-          .from(productosPrecios)
-          .where(
-            and(
-              eq(productosPrecios.productoId, item.productoId),
-              isNull(productosPrecios.vigentaHsta)
-            )
-          )
-          .limit(1);
-          
-        const precioProducto = parseFloat(precioData[0]?.precio?.toString() || '0');
-        
-        let subtotalItem = precioProducto * item.cantidad;
-
-        // Insert comanda item
-        const nuevoComandaItem = await tx.insert(comandaItems).values({
-          restauranteId: tenantId,
-          pedidoId: pedidoId,
+      const { pedidoId, totalPedido } = await crearPedidoConItems(tx, {
+        tenantId,
+        sesionMesaId,
+        notas,
+        items: borradorItems.map((item) => ({
           productoId: item.productoId,
-          cantidad: item.cantidad.toString(),
-          nombreProductoSnapshot: prodData[0].nombre,
-          precioUnitarioSnapshot: precioProducto.toString()
-        }).returning({ id: comandaItems.id });
-        
-        const comandaItemId = nuevoComandaItem[0].id;
-
-        // Process modifiers from the borrador JSONB
-        const itemMods = (item.modificadores as ModificadorSnapshot[]) || [];
-        for (const mod of itemMods) {
-          const modData = await tx.select({ nombre: modificadores.nombre })
-            .from(modificadores)
-            .where(eq(modificadores.id, mod.id))
-            .limit(1);
-            
-          if (!modData[0]) continue;
-
-          const modPrecioData = await tx.select({ precioExtra: modificadoresPrecios.precioExtra })
-            .from(modificadoresPrecios)
-            .where(
-              and(
-                eq(modificadoresPrecios.modificadorId, mod.id),
-                isNull(modificadoresPrecios.vigentaHsta)
-              )
-            )
-            .limit(1);
-            
-          const precioMod = parseFloat(modPrecioData[0]?.precioExtra?.toString() || '0');
-          subtotalItem += (precioMod * item.cantidad);
-
-          await tx.insert(comandaItemModificadores).values({
-            restauranteId: tenantId,
-            comandaItemId: comandaItemId,
-            modificadorId: mod.id,
-            nombreModificadorSnapshot: modData[0].nombre,
-            precioExtraSnapshot: precioMod.toString()
-          });
-        }
-
-        totalPedido += subtotalItem;
-      }
-
-      // Update the pedido total
-      await tx.update(pedidos)
-        .set({ total: totalPedido.toString() })
-        .where(eq(pedidos.id, pedidoId));
+          cantidad: item.cantidad,
+          modificadores: ((item.modificadores as ModificadorSnapshot[]) || []).map((m) => ({ id: m.id })),
+        })),
+      });
 
       // Clear the borrador (this triggers Realtime → all devices see empty cart)
       await tx.delete(itemsBorradorMesa)

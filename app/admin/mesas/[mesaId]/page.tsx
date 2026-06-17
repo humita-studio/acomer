@@ -17,6 +17,7 @@ import { hasPermission } from '@/features/authorization/roles';
 import { obtenerTicketMesa } from '@/features/comanda/obtener-ticket-mesa';
 import type { ProductoMenu, CategoriaMenu } from '@/features/comanda/components/MenuDigital';
 import { MesaPedidoManager } from './mesa-pedido-manager';
+import { AbrirMesaButton } from './abrir-mesa-button';
 
 export default async function MesaPedidoPage({
   params,
@@ -113,10 +114,7 @@ export default async function MesaPedidoPage({
       </div>
 
       {!sesion ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-          Esta mesa no tiene una sesión activa. Cuando un comensal escanee el QR se abrirá una
-          y vas a poder cargar pedidos a su cuenta.
-        </div>
+        <AbrirMesaButton mesaId={mesa.id} />
       ) : (
         <MesaPedidoManager
           mesaId={mesa.id}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -39,7 +40,7 @@ import {
   unirMesaAction,
   getPlanoDataAction,
 } from '@/features/mesas/plano-actions';
-import { liberarMesaAction } from '@/features/mesas/mesas-actions';
+import { liberarMesaAction, abrirMesaAction } from '@/features/mesas/mesas-actions';
 import { queryKeys } from '@/shared/query/keys';
 import type { PlanoData } from '@/features/mesas/plano-data';
 import { PlanoCanvas } from './plano-canvas';
@@ -69,6 +70,7 @@ export function PlanoManager({
   const canManage = hasPermission(userRole as RoleType, 'canManageTables');
   const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // Estado de UI del editor (Zustand). Los datos del plano viven en TanStack Query.
   const {
@@ -80,6 +82,7 @@ export function PlanoManager({
     dirty,
     guardando,
     liberandoId,
+    abriendoId,
     mostrarLista,
     avisos,
     setAmbienteActivoId,
@@ -88,6 +91,7 @@ export function PlanoManager({
     setDirty,
     setGuardando,
     setLiberandoId,
+    setAbriendoId,
     setMostrarLista,
     patchDraft,
     pushAviso,
@@ -323,6 +327,19 @@ export function PlanoManager({
     setLiberandoId(null);
     if (res.success) queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     else alert(res.message || 'No se pudo liberar la mesa');
+  };
+
+  // Abre la mesa (ocupa) sin que el cliente escanee y lleva al mozo a cargar el pedido.
+  const handleAbrir = async (mesa: MesaPlano) => {
+    setAbriendoId(mesa.id);
+    const res = await abrirMesaAction(mesa.id);
+    setAbriendoId(null);
+    if (res.success) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
+      router.push(`/admin/mesas/${mesa.id}`);
+    } else {
+      alert(res.message || 'No se pudo abrir la mesa');
+    }
   };
 
   const seleccionarMesa = (mesa: MesaPlano) => {
@@ -597,7 +614,9 @@ export function PlanoManager({
                 canManage={canManage}
                 canTakeOrders={canTakeOrders}
                 liberando={liberandoId === selMesa.id}
+                abriendo={abriendoId === selMesa.id}
                 onLiberar={() => handleLiberar(selMesa)}
+                onAbrir={() => handleAbrir(selMesa)}
                 onDividir={() => handleDividir(selMesa)}
                 onUnir={() => handleUnir(selMesa)}
                 onClose={() => setSeleccion(null)}
@@ -637,6 +656,15 @@ export function PlanoManager({
                     >
                       Pedido
                     </Link>
+                  )}
+                  {!m.ocupada && canTakeOrders && (
+                    <button
+                      onClick={() => handleAbrir(m)}
+                      disabled={abriendoId === m.id}
+                      className="text-xs font-bold text-green-700 hover:text-green-900 disabled:opacity-50 shrink-0"
+                    >
+                      {abriendoId === m.id ? '...' : 'Abrir'}
+                    </button>
                   )}
                   {m.ocupada && canManage && (
                     <button
@@ -684,7 +712,9 @@ function OperacionPanel({
   canManage,
   canTakeOrders,
   liberando,
+  abriendo,
   onLiberar,
+  onAbrir,
   onDividir,
   onUnir,
   onClose,
@@ -694,7 +724,9 @@ function OperacionPanel({
   canManage: boolean;
   canTakeOrders: boolean;
   liberando: boolean;
+  abriendo: boolean;
   onLiberar: () => void;
+  onAbrir: () => void;
   onDividir: () => void;
   onUnir: () => void;
   onClose: () => void;
@@ -737,9 +769,19 @@ function OperacionPanel({
         </button>
       )}
 
+      {!mesa.ocupada && canTakeOrders && (
+        <button
+          onClick={onAbrir}
+          disabled={abriendo}
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-green-700 border border-green-200 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+        >
+          <ClipboardList size={15} /> {abriendo ? 'Abriendo...' : 'Abrir mesa y tomar pedido'}
+        </button>
+      )}
+
       {!mesa.ocupada && (
         <p className="text-xs text-gray-500 bg-white border border-gray-200 rounded-md p-2">
-          Mesa libre. El cliente abre la sesión al escanear el QR.
+          También se abre sola cuando el cliente escanea el QR.
         </p>
       )}
 

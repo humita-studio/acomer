@@ -15,7 +15,6 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
-import { revalidatePath } from 'next/cache';
 
 export type StaffItemInput = {
   productoId: string;
@@ -159,7 +158,6 @@ export async function agregarItemsStaffAction(
       console.warn('[agregarItemsStaffAction] Error notificando realtime:', realtimeError);
     }
 
-    revalidatePath('/admin/mesas');
     return { success: true, ...resultado };
   } catch (error) {
     console.error('[agregarItemsStaffAction]', error);

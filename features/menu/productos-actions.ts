@@ -7,6 +7,30 @@ import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { revalidatePath } from 'next/cache';
 
+/**
+ * Lista los productos del menú con su precio vigente. Estado de servidor que
+ * consume TanStack Query en el admin (siembra `initialData`).
+ */
+export async function obtenerProductosMenu() {
+  const session = await getCurrentSession();
+  if (!session) return [];
+  return db
+    .select({
+      id: productos.id,
+      categoriaId: productos.categoriaId,
+      nombre: productos.nombre,
+      descripcion: productos.descripcion,
+      precio: productosPrecios.precio,
+      permiteAdicionales: productos.permiteAdicionales,
+    })
+    .from(productos)
+    .innerJoin(
+      productosPrecios,
+      and(eq(productos.id, productosPrecios.productoId), isNull(productosPrecios.vigentaHsta))
+    )
+    .where(and(eq(productos.restauranteId, session.restauranteId), isNull(productos.deletedAt)));
+}
+
 export async function crearProducto(data: {
   categoriaId: string;
   nombre: string;
@@ -38,7 +62,6 @@ export async function crearProducto(data: {
       });
     });
 
-    revalidatePath('/admin/menu');
     return { success: true, message: 'Producto creado exitosamente' };
   } catch (error) {
     console.error('[crearProducto]', error);
@@ -103,7 +126,6 @@ export async function modificarPrecioProducto(productoId: string, nuevoPrecio: n
       });
     });
 
-    revalidatePath('/admin/menu');
     return { success: true, message: 'Precio actualizado' };
   } catch (error) {
     console.error('[modificarPrecioProducto]', error);
@@ -129,7 +151,6 @@ export async function eliminarProducto(id: string) {
         )
       );
 
-    revalidatePath('/admin/menu');
     return { success: true, message: 'Producto eliminado' };
   } catch (error) {
     console.error('[eliminarProducto]', error);

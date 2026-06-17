@@ -1,7 +1,7 @@
-import { db } from '@/shared/db';
-import { categorias, productos, productosPrecios } from '@/shared/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
+import { obtenerCategoriasMenu } from '@/features/menu/categorias-actions';
+import { obtenerProductosMenu } from '@/features/menu/productos-actions';
+import { obtenerVariantesMenu } from '@/features/menu/modificadores-actions';
 import { redirect } from 'next/navigation';
 import { MenuManager } from './menu-manager';
 
@@ -9,41 +9,12 @@ export default async function MenuPage() {
     const session = await getCurrentSession();
     if (!session) redirect('/login');
 
-    // Fetch data
-    const categoriasData = await db
-        .select()
-        .from(categorias)
-        .where(
-            and(
-                eq(categorias.restauranteId, session.restauranteId),
-                isNull(categorias.deletedAt)
-            )
-        )
-        .orderBy(categorias.createdAt);
-
-    const productosData = await db
-        .select({
-            id: productos.id,
-            categoriaId: productos.categoriaId,
-            nombre: productos.nombre,
-            descripcion: productos.descripcion,
-            activo: productos.activo,
-            precio: productosPrecios.precio,
-        })
-        .from(productos)
-        .innerJoin(
-            productosPrecios,
-            and(
-                eq(productos.id, productosPrecios.productoId),
-                isNull(productosPrecios.vigentaHsta)
-            )
-        )
-        .where(
-            and(
-                eq(productos.restauranteId, session.restauranteId),
-                isNull(productos.deletedAt)
-            )
-        );
+    // Estado de servidor que siembra la caché de TanStack Query en el cliente
+    const [categoriasData, productosData, variantesData] = await Promise.all([
+        obtenerCategoriasMenu(),
+        obtenerProductosMenu(),
+        obtenerVariantesMenu(),
+    ]);
 
     return (
         <div>
@@ -51,6 +22,7 @@ export default async function MenuPage() {
             <MenuManager
                 categorias={categoriasData}
                 productos={productosData}
+                variantes={variantesData}
                 userRole={session.role}
             />
         </div>

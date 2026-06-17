@@ -2,10 +2,24 @@
 
 import { db } from '@/shared/db';
 import { categorias } from '@/shared/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { revalidatePath } from 'next/cache';
+
+/**
+ * Lista las categorías del menú del restaurante. Estado de servidor que consume
+ * TanStack Query en el admin (siembra `initialData`).
+ */
+export async function obtenerCategoriasMenu() {
+  const session = await getCurrentSession();
+  if (!session) return [];
+  return db
+    .select({ id: categorias.id, nombre: categorias.nombre })
+    .from(categorias)
+    .where(and(eq(categorias.restauranteId, session.restauranteId), isNull(categorias.deletedAt)))
+    .orderBy(categorias.createdAt);
+}
 
 export async function crearCategoria(nombre: string) {
   try {
@@ -19,7 +33,6 @@ export async function crearCategoria(nombre: string) {
       nombre,
     });
 
-    revalidatePath('/admin/menu');
     return { success: true, message: 'Categoría creada exitosamente' };
   } catch (error) {
     console.error('[crearCategoria]', error);
@@ -70,7 +83,6 @@ export async function eliminarCategoria(id: string) {
         )
       );
 
-    revalidatePath('/admin/menu');
     return { success: true, message: 'Categoría eliminada' };
   } catch (error) {
     console.error('[eliminarCategoria]', error);

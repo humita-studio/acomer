@@ -1,19 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import { Minus, Plus } from 'lucide-react';
 import { type Modificador } from '../store';
-import { useAgregarItem } from '../use-borrador';
+import type { CartApi } from '../cart/use-cart';
 import { ProductoMenu } from './MenuDigital';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/ui/dialog';
+import { Button } from '@/shared/ui/button';
 
 type ProductModalProps = {
   product: ProductoMenu;
-  sesionMesaId: string;
-  tenantId: string;
+  cart: CartApi;
   onClose: () => void;
 };
 
-export function ProductModal({ product, sesionMesaId, tenantId, onClose }: ProductModalProps) {
-  const agregar = useAgregarItem(tenantId, sesionMesaId);
+export function ProductModal({ product, cart, onClose }: ProductModalProps) {
   const [cantidad, setCantidad] = useState(1);
   const [selectedMods, setSelectedMods] = useState<Modificador[]>([]);
 
@@ -30,10 +36,10 @@ export function ProductModal({ product, sesionMesaId, tenantId, onClose }: Produ
   const subtotal = (product.precio + modsTotal) * cantidad;
 
   const handleAddToCart = async () => {
-    // onMutate aplica el update optimista al instante; esperamos a que resuelva
-    // (la mutación notifica a otros dispositivos y reconcilia) antes de cerrar.
+    // El driver aplica el update optimista al instante; esperamos a que resuelva
+    // (en server reconcilia y avisa a otros dispositivos) antes de cerrar.
     try {
-      await agregar.mutateAsync({
+      await cart.agregar({
         productoId: product.id,
         nombreProducto: product.nombre,
         precioUnitario: product.precio,
@@ -41,52 +47,50 @@ export function ProductModal({ product, sesionMesaId, tenantId, onClose }: Produ
         modificadores: selectedMods,
       });
     } catch {
-      // Si falla, onError ya revirtió el optimismo; cerramos igual.
+      // Si falla, el driver ya revirtió el optimismo; cerramos igual.
     }
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in">
-      <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-xl animate-in slide-in-from-bottom-10">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <DialogHeader className="border-b p-4 text-left">
+          <DialogTitle className="text-xl">{product.nombre}</DialogTitle>
+        </DialogHeader>
 
-        {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="font-bold text-xl">{product.nombre}</h2>
-          <button onClick={onClose} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* Contenido scrolleable */}
+        <div className="flex-1 space-y-6 overflow-y-auto p-4">
           {product.descripcion && (
-            <p className="text-gray-600">{product.descripcion}</p>
+            <p className="text-muted-foreground">{product.descripcion}</p>
           )}
 
-          <div className="font-medium text-lg">
-            Precio Base: ${product.precio.toFixed(2)}
+          <div className="text-lg font-medium">
+            Precio base: ${product.precio.toFixed(2)}
           </div>
 
           {/* Modificadores */}
           {product.permiteAdicionales && product.modificadores.length > 0 && (
             <div className="space-y-3">
-              <h3 className="font-semibold text-lg border-b pb-2">Adicionales</h3>
+              <h3 className="border-b pb-2 text-lg font-semibold">Adicionales</h3>
               {product.modificadores.map((mod) => {
                 const isSelected = selectedMods.some((m) => m.id === mod.id);
                 return (
-                  <label key={mod.id} className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <label
+                    key={mod.id}
+                    className="flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted"
+                  >
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                        className="size-5 rounded accent-primary"
                         checked={isSelected}
                         onChange={() => toggleModificador(mod)}
                       />
                       <span className="font-medium">{mod.nombre}</span>
                     </div>
                     {mod.precioExtra > 0 && (
-                      <span className="text-gray-600">+${mod.precioExtra.toFixed(2)}</span>
+                      <span className="text-muted-foreground">+${mod.precioExtra.toFixed(2)}</span>
                     )}
                   </label>
                 );
@@ -94,37 +98,43 @@ export function ProductModal({ product, sesionMesaId, tenantId, onClose }: Produ
             </div>
           )}
 
-          {/* Selector de Cantidad */}
-          <div className="flex items-center justify-center gap-6 py-4">
-            <button
+          {/* Selector de cantidad */}
+          <div className="flex items-center justify-center gap-6 py-2">
+            <Button
+              variant="outline"
+              size="icon-lg"
+              className="rounded-full"
               onClick={() => setCantidad(Math.max(1, cantidad - 1))}
-              className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-2xl hover:bg-gray-200"
+              aria-label="Quitar uno"
             >
-              -
-            </button>
-            <span className="text-2xl font-bold w-8 text-center">{cantidad}</span>
-            <button
+              <Minus />
+            </Button>
+            <span className="w-8 text-center text-2xl font-bold tabular-nums">{cantidad}</span>
+            <Button
+              variant="outline"
+              size="icon-lg"
+              className="rounded-full"
               onClick={() => setCantidad(cantidad + 1)}
-              className="w-12 h-12 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-2xl hover:bg-blue-200"
+              aria-label="Agregar uno"
             >
-              +
-            </button>
+              <Plus />
+            </Button>
           </div>
         </div>
 
-        {/* Footer / Add to Cart */}
-        <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
-          <button
+        {/* Footer / Agregar */}
+        <div className="border-t bg-muted/40 p-4">
+          <Button
             onClick={handleAddToCart}
-            disabled={agregar.isPending}
-            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors flex justify-between px-6 items-center shadow-md shadow-blue-200 disabled:bg-blue-400"
+            disabled={cart.agregando}
+            size="lg"
+            className="h-12 w-full justify-between text-base"
           >
-            <span>{agregar.isPending ? 'Agregando...' : 'Agregar al Pedido'}</span>
-            <span>${subtotal.toFixed(2)}</span>
-          </button>
+            <span>{cart.agregando ? 'Agregando...' : 'Agregar al Pedido'}</span>
+            <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+          </Button>
         </div>
-
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

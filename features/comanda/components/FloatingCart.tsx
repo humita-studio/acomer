@@ -1,26 +1,39 @@
 'use client';
 
 import { useState } from 'react';
-import { getCartTotal, type CartItem } from '../store';
+import { CheckCircle2, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { getCartTotal } from '../store';
+import type { CartApi } from '../cart/use-cart';
 import {
-  useBorrador,
-  useEliminarItem,
-  useActualizarCantidad,
-  useEnviarPedido,
-} from '../use-borrador';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/shared/ui/sheet';
+import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
 
 type FloatingCartProps = {
-  tenantId: string;
-  sesionMesaId: string;
-  initialItems: CartItem[];
+  cart: CartApi;
   pedidosConfirmados?: any[];
+  /** Texto del botón de confirmación (ej: "Confirmar Pedido" | "Finalizar pedido"). */
+  confirmLabel: string;
+  /** Acción al confirmar. Devolver { success:false } muestra el error y deja el cart abierto. */
+  onConfirm: () => Promise<{ success: boolean; message?: string } | void>;
+  confirming: boolean;
+  /** Título del drawer (ej: "Resumen de tu Mesa" | "Tu pedido"). */
+  titulo?: string;
 };
 
-export function FloatingCart({ tenantId, sesionMesaId, initialItems, pedidosConfirmados = [] }: FloatingCartProps) {
-  const { data: items = [] } = useBorrador(sesionMesaId, initialItems);
-  const eliminar = useEliminarItem(tenantId, sesionMesaId);
-  const actualizar = useActualizarCantidad(tenantId, sesionMesaId);
-  const enviar = useEnviarPedido(tenantId, sesionMesaId);
+export function FloatingCart({
+  cart,
+  pedidosConfirmados = [],
+  confirmLabel,
+  onConfirm,
+  confirming,
+  titulo = 'Resumen de tu Mesa',
+}: FloatingCartProps) {
+  const items = cart.items;
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,22 +50,20 @@ export function FloatingCart({ tenantId, sesionMesaId, initialItems, pedidosConf
   const totalItemsGeneral = totalItemsBorrador + totalItemsConfirmado;
 
   const handleRemoveItem = (itemId: string) => {
-    eliminar.mutate(itemId);
+    cart.eliminar(itemId);
   };
 
   const handleUpdateQuantity = (itemId: string, currentQuantity: number, delta: number) => {
     const nuevaCantidad = Math.max(1, currentQuantity + delta);
-    actualizar.mutate({ itemId, nuevaCantidad });
+    cart.actualizar(itemId, nuevaCantidad);
   };
 
   const handleSubmit = async () => {
     setError(null);
     try {
-      const res = await enviar.mutateAsync();
-      if (res.success) {
+      const res = await onConfirm();
+      if (!res || res.success) {
         setIsOpen(false);
-        // Pedir ≠ pagar: el pedido va a la cocina; el comensal paga cuando quiera con "Pagar Cuenta"
-        alert('¡Pedido enviado! Podés seguir pidiendo o tocar "Pagar Cuenta" cuando quieras.');
       } else {
         setError(res.message ?? 'Error al enviar');
       }
@@ -65,157 +76,158 @@ export function FloatingCart({ tenantId, sesionMesaId, initialItems, pedidosConf
     <>
       {/* Botón flotante siempre visible cuando hay items pero el cart está cerrado */}
       {!isOpen && (items.length > 0 || pedidosConfirmados.length > 0) && (
-        <div className="fixed bottom-6 left-0 right-0 px-4 z-40 animate-in slide-in-from-bottom-10 fade-in">
-          <div className="max-w-2xl mx-auto">
-            <button
+        <div className="fixed inset-x-0 bottom-6 z-40 px-4 duration-300 animate-in fade-in slide-in-from-bottom-10">
+          <div className="mx-auto max-w-2xl">
+            <Button
               onClick={() => setIsOpen(true)}
-              className="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-2xl shadow-xl shadow-blue-200 flex justify-between items-center hover:bg-blue-700 transition-colors"
+              size="lg"
+              className="h-14 w-full justify-between rounded-2xl px-6 text-base shadow-lg"
             >
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm">
+              <span className="flex items-center gap-3">
+                <span className="flex size-7 items-center justify-center rounded-full bg-primary-foreground/20 text-sm tabular-nums">
                   {totalItemsGeneral}
-                </div>
-                <span>Ver Pedido</span>
-              </div>
-              <span className="text-lg">${granTotal.toFixed(2)}</span>
-            </button>
+                </span>
+                Ver Pedido
+              </span>
+              <span className="text-lg tabular-nums">${granTotal.toFixed(2)}</span>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Cart Drawer */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-2xl h-[90vh] sm:h-auto sm:max-h-[90vh] sm:rounded-2xl rounded-t-2xl flex flex-col shadow-xl animate-in slide-in-from-bottom-10">
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetContent
+          side="bottom"
+          className="mx-auto flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-2xl sm:rounded-t-2xl"
+        >
+          <SheetHeader className="flex-row items-center gap-2 space-y-0 border-b p-4">
+            <SheetTitle className="text-xl">{titulo}</SheetTitle>
+            <Badge variant="secondary" className="rounded-full">
+              {totalItemsGeneral} items
+            </Badge>
+          </SheetHeader>
 
-            {/* Header */}
-            <div className="flex justify-between items-center p-4 border-b">
-              <h2 className="font-bold text-xl flex items-center gap-2">
-                Resumen de tu Mesa
-                <span className="bg-gray-100 text-gray-600 text-sm py-1 px-2 rounded-full font-medium">
-                  {totalItemsGeneral} items
-                </span>
-              </h2>
-              <button onClick={() => setIsOpen(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
-
-            {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-
-              {/* Pedidos Confirmados */}
-              {pedidosConfirmados.length > 0 && (
-                <div>
-                  <h3 className="font-bold text-green-700 mb-3 flex items-center gap-2 border-b pb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                    En preparación
-                  </h3>
-                  <div className="space-y-3 opacity-80">
-                    {pedidosConfirmados.map((item, idx) => (
-                      <div key={idx} className="flex flex-col border-b border-gray-100 pb-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium text-gray-800">{item.cantidad}x {item.nombre}</h4>
-                            {item.modificadores.length > 0 && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                + {item.modificadores.map((m: any) => m.nombre).join(', ')}
-                              </p>
-                            )}
-                          </div>
-                          <span className="font-semibold text-gray-700">${item.subtotal.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Borrador / Nuevos Items */}
-              {items.length > 0 && (
-                <div>
-                  <h3 className="font-bold text-blue-700 mb-3 flex items-center gap-2 border-b pb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-                    Por confirmar
-                  </h3>
-                  <div className="space-y-4">
-                    {items.map((item) => (
-                      <div key={item.id} className="flex flex-col border-b pb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-semibold">{item.nombre}</h4>
-                            {item.modificadores.length > 0 && (
-                              <p className="text-sm text-gray-500 mt-1">
-                                + {item.modificadores.map(m => m.nombre).join(', ')}
-                              </p>
-                            )}
-                            <p className="text-blue-600 font-medium mt-1">
-                              ${((item.precioUnitario + item.modificadores.reduce((s,m)=>s+m.precioExtra,0)) * item.cantidad).toFixed(2)}
+          {/* Cart Items */}
+          <div className="flex-1 space-y-6 overflow-y-auto p-4">
+            {/* Pedidos Confirmados */}
+            {pedidosConfirmados.length > 0 && (
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 border-b pb-2 font-semibold text-green-600 dark:text-green-500">
+                  <CheckCircle2 className="size-4" />
+                  En preparación
+                </h3>
+                <div className="space-y-3 opacity-80">
+                  {pedidosConfirmados.map((item, idx) => (
+                    <div key={idx} className="flex flex-col border-b border-border/60 pb-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-medium">{item.cantidad}x {item.nombre}</h4>
+                          {item.modificadores.length > 0 && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              + {item.modificadores.map((m: any) => m.nombre).join(', ')}
                             </p>
-                          </div>
-
-                          <div className="flex items-center gap-3 bg-gray-50 p-1 rounded-full border">
-                            <button
-                              onClick={() => handleUpdateQuantity(item.id, item.cantidad, -1)}
-                              className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm"
-                            >
-                              -
-                            </button>
-                            <span className="font-medium w-4 text-center">{item.cantidad}</span>
-                            <button
-                              onClick={() => handleUpdateQuantity(item.id, item.cantidad, 1)}
-                              className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm"
-                            >
-                              +
-                            </button>
-                          </div>
+                          )}
                         </div>
-
-                        <button
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="text-red-500 text-sm font-medium self-start mt-2 hover:underline"
-                        >
-                          Eliminar
-                        </button>
+                        <span className="font-semibold tabular-nums">${item.subtotal.toFixed(2)}</span>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            {items.length > 0 && (
-              <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
-                {error && (
-                  <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm font-medium">
-                    {error}
-                  </div>
-                )}
-                <div className="flex justify-between items-center mb-4 text-lg font-bold">
-                  <span>A Enviar Ahora</span>
-                  <span>${totalBorrador.toFixed(2)}</span>
-                </div>
-                <button
-                  onClick={handleSubmit}
-                  disabled={enviar.isPending}
-                  className="w-full bg-blue-600 disabled:bg-blue-400 text-white font-bold py-4 rounded-xl transition-colors shadow-md shadow-blue-200"
-                >
-                  {enviar.isPending ? 'Enviando...' : 'Confirmar Pedido'}
-                </button>
               </div>
             )}
 
-            {items.length === 0 && pedidosConfirmados.length > 0 && (
-               <div className="p-4 border-t bg-gray-50 rounded-b-2xl text-center text-sm text-gray-500">
-                  Todo tu pedido ya fue enviado a cocina.
-               </div>
+            {/* Borrador / Nuevos Items */}
+            {items.length > 0 && (
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 border-b pb-2 font-semibold">
+                  <ShoppingCart className="size-4" />
+                  Por confirmar
+                </h3>
+                <div className="space-y-4">
+                  {items.map((item) => (
+                    <div key={item.id} className="flex flex-col border-b pb-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold">{item.nombre}</h4>
+                          {item.modificadores.length > 0 && (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              + {item.modificadores.map(m => m.nombre).join(', ')}
+                            </p>
+                          )}
+                          <p className="mt-1 font-medium tabular-nums">
+                            ${((item.precioUnitario + item.modificadores.reduce((s,m)=>s+m.precioExtra,0)) * item.cantidad).toFixed(2)}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1 rounded-full border bg-muted/50 p-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="rounded-full"
+                            onClick={() => handleUpdateQuantity(item.id, item.cantidad, -1)}
+                            aria-label="Quitar uno"
+                          >
+                            <Minus />
+                          </Button>
+                          <span className="w-4 text-center font-medium tabular-nums">{item.cantidad}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="rounded-full"
+                            onClick={() => handleUpdateQuantity(item.id, item.cantidad, 1)}
+                            aria-label="Agregar uno"
+                          >
+                            <Plus />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="link"
+                        size="xs"
+                        className="mt-2 h-auto self-start p-0 text-destructive"
+                        onClick={() => handleRemoveItem(item.id)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
-
           </div>
-        </div>
-      )}
 
+          {/* Footer */}
+          {items.length > 0 && (
+            <div className="border-t bg-muted/40 p-4">
+              {error && (
+                <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                  {error}
+                </div>
+              )}
+              <div className="mb-4 flex items-center justify-between text-lg font-bold">
+                <span>A enviar ahora</span>
+                <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
+              </div>
+              <Button
+                onClick={handleSubmit}
+                disabled={confirming}
+                size="lg"
+                className="h-12 w-full text-base"
+              >
+                {confirming ? 'Enviando...' : confirmLabel}
+              </Button>
+            </div>
+          )}
+
+          {items.length === 0 && pedidosConfirmados.length > 0 && (
+            <div className="border-t bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+              Todo tu pedido ya fue enviado a cocina.
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

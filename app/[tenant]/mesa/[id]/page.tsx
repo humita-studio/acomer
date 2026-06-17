@@ -12,6 +12,7 @@ import {
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { getOrCreateSesionMesa } from '@/features/comanda/sesion-mesa-actions';
 import { MenuDigital, ProductoMenu, CategoriaMenu } from '@/features/comanda/components/MenuDigital';
+import { SelectorSubMesa } from '@/features/comanda/components/SelectorSubMesa';
 import { RealtimeMesaSync } from '@/features/comanda/components/RealtimeMesaSync';
 import type { CartItem } from '@/features/comanda/store';
 import { getMetodosPago } from '@/features/pagos/get-metodos-pago';
@@ -46,14 +47,32 @@ export default async function ComandaPage({
     }
   }
 
-  // 2. Obtener/Crear sesión de mesa
-  const sessionResult = await getOrCreateSesionMesa(tenant, qrToken);
-  if (!sessionResult.success || !sessionResult.sesionId || !sessionResult.tenantId) {
+  // 2. Obtener/Crear sesión de mesa (o pedir elegir sector si la mesa está dividida)
+  const cuenta = typeof sp?.cuenta === 'string' ? sp.cuenta : undefined;
+  const sessionResult = await getOrCreateSesionMesa(tenant, qrToken, cuenta);
+
+  if (!sessionResult.success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center">
-        <div className="bg-white p-8 rounded-2xl shadow-sm">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">Error</h1>
-          <p className="text-gray-600">{sessionResult.message}</p>
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 text-center">
+        <div className="bg-card p-8 rounded-2xl border shadow-sm">
+          <h1 className="text-2xl font-bold text-destructive mb-2">Error</h1>
+          <p className="text-muted-foreground">{sessionResult.message}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mesa dividida: el comensal elige su sector desde el mismo QR impreso.
+  if ('requiereSeleccion' in sessionResult && sessionResult.requiereSeleccion) {
+    return <SelectorSubMesa qrToken={qrToken} opciones={sessionResult.opciones} />;
+  }
+
+  if (!sessionResult.sesionId || !sessionResult.tenantId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 text-center">
+        <div className="bg-card p-8 rounded-2xl border shadow-sm">
+          <h1 className="text-2xl font-bold text-destructive mb-2">Error</h1>
+          <p className="text-muted-foreground">No se pudo abrir la mesa.</p>
         </div>
       </div>
     );
@@ -163,16 +182,16 @@ export default async function ComandaPage({
   const metodosPago = await getMetodosPago(tenantId);
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-muted/30">
       {/* Realtime listener invisible — invalida el borrador y avisa a otros dispositivos */}
       <RealtimeMesaSync
         sesionMesaId={sesionId}
         tenantId={tenantId}
       />
 
-      <header className="bg-white p-4 border-b text-center sticky top-0 z-20 shadow-sm">
-        <h1 className="font-bold text-xl text-gray-800">Mesa {mesaIdentificador}</h1>
-        <p className="text-sm text-gray-500">Sesión Compartida • Todos ven el mismo pedido</p>
+      <header className="bg-background p-4 border-b text-center sticky top-0 z-20 shadow-sm">
+        <h1 className="font-bold text-xl">Mesa {mesaIdentificador}</h1>
+        <p className="text-sm text-muted-foreground">Sesión Compartida • Todos ven el mismo pedido</p>
       </header>
 
       <MenuDigital
