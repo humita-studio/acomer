@@ -61,7 +61,7 @@ export default async function ConfiguracionPage() {
                             )}
 
                             <div className="pt-4 flex flex-col gap-3">
-                                <SubmitButton className="w-full bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-md transition-colors">
+                                <SubmitButton className="w-full">
                                     Guardar Preferencia
                                 </SubmitButton>
                             </div>

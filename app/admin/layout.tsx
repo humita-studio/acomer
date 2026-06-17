@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/features/auth/session';
-import { LogoutButton } from './logout-button';
-import { SidebarNav } from './sidebar-nav';
+import { AppSidebar } from './app-sidebar';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/shared/ui/sidebar';
+import { Separator } from '@/shared/ui/separator';
+import { ModeToggle } from '@/shared/ui/mode-toggle';
+import type { RoleType } from '@/features/authorization/roles';
 
 export default async function AdminLayout({
   children,
@@ -22,29 +25,25 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white shadow-md relative">
-        <div className="p-6 border-b">
-          <h1 className="text-2xl font-bold text-gray-800">{session.nombreRestaurante}</h1>
-          <p className="text-sm text-gray-500 mt-1 capitalize">Panel de {session.role}</p>
-        </div>
-
-        <nav className="p-4">
-          <SidebarNav role={session.role as any} />
-        </nav>
-
-        {/* User Menu */}
-        <div className="absolute bottom-0 w-64 p-4 border-t bg-gray-50">
-          <p className="text-sm text-gray-600 truncate">{session.user.email}</p>
-          <LogoutButton />
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">{children}</div>
-      </main>
-    </div>
+    <SidebarProvider>
+      <AppSidebar
+        role={session.role as RoleType}
+        nombreRestaurante={session.nombreRestaurante}
+        email={session.user.email}
+      />
+      <SidebarInset>
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 !h-4" />
+          <h1 className="text-sm font-medium text-muted-foreground">
+            {session.nombreRestaurante}
+          </h1>
+          <div className="ml-auto">
+            <ModeToggle />
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto p-6">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

@@ -2,11 +2,14 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Armchair, DollarSign, ShoppingCart } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { formatPeso } from '@/shared/lib/format';
 import { getDashboardMetricsAction, type DashboardMetrics } from '@/features/dashboard/dashboard-actions';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Progress } from '@/shared/ui/progress';
 
 export function DashboardMetrics({
   initialData,
@@ -51,55 +54,69 @@ export function DashboardMetrics({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {/* Ocupación en vivo */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-semibold">🪑 Ocupación</h2>
-          <span className="text-2xl font-black text-blue-600">{ocupacion.porcentaje}%</span>
-        </div>
-        <p className="text-gray-600 mb-3">
-          {ocupacion.mesasOcupadas} de {ocupacion.totalMesas} mesas ocupadas
-        </p>
-        <div className="w-full bg-gray-100 rounded-full h-2.5">
-          <div
-            className="bg-blue-600 h-2.5 rounded-full transition-all"
-            style={{ width: `${ocupacion.porcentaje}%` }}
-          />
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base font-medium text-muted-foreground">
+            <Armchair className="size-4" />
+            Ocupación
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-3xl font-bold tabular-nums">{ocupacion.porcentaje}%</span>
+            <span className="text-sm text-muted-foreground">
+              {ocupacion.mesasOcupadas} de {ocupacion.totalMesas} mesas
+            </span>
+          </div>
+          <Progress value={ocupacion.porcentaje} />
+        </CardContent>
+      </Card>
 
       {/* Ventas de hoy (sensible: sólo roles con permiso de reportes) */}
       {puedeVerVentas && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-2">💵 Ventas de hoy</h2>
-          <p className="text-3xl font-black text-gray-900">{formatPeso(ventasHoy.total)}</p>
-          <div className="mt-3 flex justify-between text-sm text-gray-500">
-            <span>{ventasHoy.cantidadCobros} cobros</span>
-            <span>Ticket prom. {formatPeso(ventasHoy.ticketPromedio)}</span>
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base font-medium text-muted-foreground">
+              <DollarSign className="size-4" />
+              Ventas de hoy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-3xl font-bold tabular-nums">{formatPeso(ventasHoy.total)}</p>
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>{ventasHoy.cantidadCobros} cobros</span>
+              <span>Ticket prom. {formatPeso(ventasHoy.ticketPromedio)}</span>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Pedidos activos */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">🛒 Pedidos activos</h2>
-          <span className="text-2xl font-black text-gray-900">{pedidosActivos.total}</span>
-        </div>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">⏳ Pendientes</span>
-            <span className="font-bold">{pedidosActivos.pendiente}</span>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base font-medium text-muted-foreground">
+            <ShoppingCart className="size-4" />
+            Pedidos activos
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <span className="text-3xl font-bold tabular-nums">{pedidosActivos.total}</span>
+          <div className="space-y-2 pt-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Pendientes</span>
+              <span className="font-semibold tabular-nums">{pedidosActivos.pendiente}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">En preparación</span>
+              <span className="font-semibold tabular-nums">{pedidosActivos.enPreparacion}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Listos</span>
+              <span className="font-semibold tabular-nums">{pedidosActivos.listo}</span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">👨‍🍳 En preparación</span>
-            <span className="font-bold">{pedidosActivos.enPreparacion}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">✅ Listos</span>
-            <span className="font-bold">{pedidosActivos.listo}</span>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

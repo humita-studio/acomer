@@ -1,18 +1,26 @@
 'use client';
 
 import { useFormStatus } from 'react-dom';
-import React from 'react';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/shared/ui/button';
 
-type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+type Props = React.ComponentProps<typeof Button> & {
   pendingText?: string;
 };
 
-export function SubmitButton({ children, pendingText = 'Cargando...', ...props }: Props) {
+export function SubmitButton({ children, pendingText = 'Cargando...', disabled, ...props }: Props) {
   const { pending } = useFormStatus();
 
   return (
-    <button {...props} disabled={pending || props.disabled}>
-      {pending ? pendingText : children}
-    </button>
+    <Button type="submit" disabled={pending || disabled} {...props}>
+      {pending ? (
+        <>
+          <Loader2 className="animate-spin" />
+          {pendingText}
+        </>
+      ) : (
+        children
+      )}
+    </Button>
   );
 }

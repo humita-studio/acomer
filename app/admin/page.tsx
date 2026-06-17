@@ -10,8 +10,13 @@ export default async function AdminPage() {
     : null;
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Bienvenido al Panel de Control</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Bienvenido al Panel de Control</h1>
+        <p className="text-sm text-muted-foreground">
+          {session?.nombreRestaurante} · <span className="capitalize">{session?.role}</span>
+        </p>
+      </div>
 
       {session && metrics && (
         <DashboardMetrics
@@ -20,16 +25,6 @@ export default async function AdminPage() {
           role={session.role}
         />
       )}
-
-      {/* Info */}
-      <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <p className="text-gray-700">
-          <strong>Restaurante:</strong> {session?.nombreRestaurante}
-        </p>
-        <p className="text-gray-700">
-          <strong>Tu rol:</strong> {session?.role}
-        </p>
-      </div>
     </div>
   );
 }
