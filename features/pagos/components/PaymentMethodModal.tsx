@@ -11,6 +11,8 @@ type PaymentMethodModalProps = {
   sesionMesaId: string;
   tenantId: string;
   metodosPago: MetodoPago[];
+  // Pedido de retiro/envío: el pago presencial es "al recibir/retirar", no "en la mesa".
+  externo?: boolean;
 };
 
 export function PaymentMethodModal({
@@ -19,6 +21,7 @@ export function PaymentMethodModal({
   sesionMesaId,
   tenantId,
   metodosPago,
+  externo = false,
 }: PaymentMethodModalProps) {
   const [processing, setProcessing] = useState<string | null>(null);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -135,7 +138,11 @@ export function PaymentMethodModal({
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900">{metodo.nombre}</h3>
                   <p className="text-sm text-gray-500">
-                    {metodo.tipo === 'digital' ? 'Pago online' : 'Pago en la mesa'}
+                    {metodo.tipo === 'digital'
+                      ? 'Pago online'
+                      : externo
+                        ? 'Pagás al recibir / retirar'
+                        : 'Pago en la mesa'}
                   </p>
                 </div>
                 {isProcessing ? (

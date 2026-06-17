@@ -48,7 +48,14 @@ type MenuViewProps = {
     pedidosConfirmados?: any[];
     showMozo?: boolean;
     // Datos de pago de la sesión; null = sin botón de pago (ej: menú-primero).
-    pago?: { sesionMesaId: string; metodosPago: MetodoPago[] } | null;
+    // externo: pedido de retiro/envío (ajusta el copy del pago presencial).
+    // autoAbrir: abrir el modal de pago apenas monta (viene del checkout externo).
+    pago?: {
+        sesionMesaId: string;
+        metodosPago: MetodoPago[];
+        externo?: boolean;
+        autoAbrir?: boolean;
+    } | null;
     confirmLabel: string;
     onConfirm: () => Promise<{ success: boolean; message?: string } | void>;
     confirming: boolean;
@@ -72,7 +79,7 @@ export function MenuView({
     const [activeCategory, setActiveCategory] = useState<string>(categorias[0]?.id || '');
     const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
     const [isCalling, setIsCalling] = useState(false);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(pago?.autoAbrir ?? false);
 
     const activeProducts = productos.filter((p) => p.categoriaId === activeCategory);
     const showQuickActions = showMozo || !!pago;
@@ -187,6 +194,7 @@ export function MenuView({
                         sesionMesaId={pago.sesionMesaId}
                         tenantId={tenantId}
                         metodosPago={pago.metodosPago}
+                        externo={pago.externo}
                     />
                 )}
             </div>
@@ -210,6 +218,8 @@ type MenuDigitalProps = {
     pedidosConfirmados?: any[];
     // 'mesa' (salón, con QR) | 'externo' (takeaway/delivery, sin mesa física)
     modo?: 'mesa' | 'externo';
+    // Abrir el pago al montar (viene del checkout externo con pagar=1).
+    autoAbrirPago?: boolean;
 };
 
 export function MenuDigital({
@@ -222,6 +232,7 @@ export function MenuDigital({
     initialItems,
     pedidosConfirmados = [],
     modo = 'mesa',
+    autoAbrirPago = false,
 }: MenuDigitalProps) {
     const cart = useServerCart(tenantId, sesionMesaId, initialItems);
     const enviar = useEnviarPedido(tenantId, sesionMesaId);
@@ -245,7 +256,12 @@ export function MenuDigital({
             cart={cart}
             pedidosConfirmados={pedidosConfirmados}
             showMozo={modo === 'mesa'}
-            pago={{ sesionMesaId, metodosPago }}
+            pago={{
+                sesionMesaId,
+                metodosPago,
+                externo: modo === 'externo',
+                autoAbrir: autoAbrirPago,
+            }}
             confirmLabel="Confirmar Pedido"
             onConfirm={onConfirm}
             confirming={enviar.isPending}

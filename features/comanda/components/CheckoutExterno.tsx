@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getCartTotal, type CartItem } from '../store';
 import { crearPedidoExternoAction } from '../pedido-externo-actions';
 import { useLocalCartStore } from '../cart/local-cart';
+import type { ModoPedido } from '../delivery-config';
 
 type Tipo = 'takeaway' | 'delivery';
 
@@ -13,15 +14,19 @@ export function CheckoutExterno({
   onClose,
   tenantSlug,
   cartItems,
+  modos,
 }: {
   open: boolean;
   onClose: () => void;
   tenantSlug: string;
   cartItems: CartItem[];
+  // Modalidades habilitadas por el local; si hay una sola no se muestra selector.
+  modos: ModoPedido[];
 }) {
   const router = useRouter();
   const limpiar = useLocalCartStore((s) => s.limpiar);
-  const [tipo, setTipo] = useState<Tipo>('takeaway');
+  const opciones: Tipo[] = modos.length > 0 ? modos : ['takeaway', 'delivery'];
+  const [tipo, setTipo] = useState<Tipo>(opciones[0]);
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
   const [direccion, setDireccion] = useState('');
@@ -61,7 +66,9 @@ export function CheckoutExterno({
         limpiar();
         // El tenant viene del subdominio (proxy reescribe a /[tenant]/...), por
         // eso la URL no lleva el slug — igual que /mesa/<id>.
-        router.push(`/pedir?sesion=${res.sesionId}`);
+        // pagar=1 → la pantalla de /pedir abre el pago automáticamente, así el
+        // cliente paga (o elige pagar al recibir) antes de seguir cargando.
+        router.push(`/pedir?sesion=${res.sesionId}&pagar=1`);
       } else {
         setError(res.message ?? 'No se pudo confirmar el pedido');
         setEnviando(false);
@@ -90,31 +97,41 @@ export function CheckoutExterno({
           </button>
         </div>
 
-        {/* Selector de tipo */}
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setTipo('takeaway')}
-            className={`py-3 rounded-xl font-semibold border transition-colors ${
-              tipo === 'takeaway'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
-            }`}
-          >
-            Retiro en local
-          </button>
-          <button
-            type="button"
-            onClick={() => setTipo('delivery')}
-            className={`py-3 rounded-xl font-semibold border transition-colors ${
-              tipo === 'delivery'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
-            }`}
-          >
-            Envío a domicilio
-          </button>
-        </div>
+        {/* Selector de tipo: sólo modalidades habilitadas. Una sola → sin selector. */}
+        {opciones.length > 1 ? (
+          <div className="grid grid-cols-2 gap-3">
+            {opciones.includes('takeaway') && (
+              <button
+                type="button"
+                onClick={() => setTipo('takeaway')}
+                className={`py-3 rounded-xl font-semibold border transition-colors ${
+                  tipo === 'takeaway'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                Retiro en local
+              </button>
+            )}
+            {opciones.includes('delivery') && (
+              <button
+                type="button"
+                onClick={() => setTipo('delivery')}
+                className={`py-3 rounded-xl font-semibold border transition-colors ${
+                  tipo === 'delivery'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                Envío a domicilio
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl bg-blue-50 text-blue-700 font-semibold py-3 text-center">
+            {opciones[0] === 'delivery' ? 'Envío a domicilio' : 'Retiro en local'}
+          </div>
+        )}
 
         <div className="space-y-3">
           <div>

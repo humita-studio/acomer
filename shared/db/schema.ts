@@ -438,6 +438,34 @@ export const reservasConfig = pgTable(
   })
 )
 
+// Configuración de pedidos online (takeaway/delivery) 1:1 con el restaurante:
+// qué modalidades ofrece y hasta cuándo el cliente puede sumar productos a un
+// pedido ya confirmado. Si no hay fila, la app usa sus defaults.
+export const deliveryConfig = pgTable(
+  'delivery_config',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull().unique(),
+    activo: boolean('activo').notNull().default(true), // pedidos online habilitados
+    modo: text('modo').notNull().default('ambos'), // ambos | takeaway | delivery
+    agregadosHasta: text('agregados_hasta').notNull().default('preparacion'), // no | preparacion | listo
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'delivery_config_restaurant_id_fk',
+    }).onDelete('cascade'),
+    modoCheck: check('delivery_config_modo_check', sql`modo IN ('ambos','takeaway','delivery')`),
+    agregadosCheck: check(
+      'delivery_config_agregados_check',
+      sql`agregados_hasta IN ('no','preparacion','listo')`,
+    ),
+  })
+)
+
 // ============================================================================
 // Borrador de Comanda Compartida (Items en carrito antes de confirmar)
 // ============================================================================

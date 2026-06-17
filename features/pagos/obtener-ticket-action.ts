@@ -26,6 +26,9 @@ export type TicketData = {
         estado: string;
         fecha: Date;
     };
+    sesionMesaId: string;
+    // salon | takeaway | delivery — para decidir si mostrar seguimiento de entrega.
+    tipo: string;
     mesaIdentificador: string;
     items: TicketItem[];
     totalPagado?: number;
@@ -117,6 +120,8 @@ export async function obtenerTicketAction(transactionId: string): Promise<{ succ
                     estado: tx.estado,
                     fecha: tx.createdAt,
                 },
+                sesionMesaId: tx.sesionMesaId,
+                tipo: tx.sesionMesa?.tipo ?? 'salon',
                 mesaIdentificador: tx.sesionMesa?.mesaId || 'Mesa',
                 items,
                 totalPagado,

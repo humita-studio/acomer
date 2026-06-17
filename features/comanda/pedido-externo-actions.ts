@@ -9,6 +9,8 @@ import { hasPermission } from '@/features/authorization/roles';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { crearPedidoConItems, type PedidoItemInput } from './crear-pedido-core';
+import { obtenerDeliveryConfig } from './delivery-config-actions';
+import { modosPermitidos } from './delivery-config';
 
 type TipoExterno = 'takeaway' | 'delivery';
 
@@ -66,6 +68,16 @@ export async function crearPedidoExternoAction(
     if (tipo !== 'takeaway' && tipo !== 'delivery') {
       return { success: false, message: 'Tipo de pedido inválido' };
     }
+
+    // Respetar la config del local: pedidos online habilitados y modalidad ofrecida.
+    const config = await obtenerDeliveryConfig(tenantId);
+    if (!config.activo) {
+      return { success: false, message: 'El local no está tomando pedidos online en este momento' };
+    }
+    if (!modosPermitidos(config).includes(tipo)) {
+      return { success: false, message: 'Esa modalidad de pedido no está disponible' };
+    }
+
     if (!contacto.nombreContacto?.trim() || !contacto.telefono?.trim()) {
       return { success: false, message: 'Nombre y teléfono son obligatorios' };
     }
@@ -118,7 +130,18 @@ export async function crearPedidoExternoAction(
   }
 }
 
-/** Tablero de admin: pedidos de retiro/envío con su estado de entrega. */
+/** Item agregado de un pedido externo, para mostrar "qué pidió" en el tablero. */
+export type OrdenExternaItem = {
+  nombre: string;
+  cantidad: number;
+  modificadores: string[];
+};
+
+/**
+ * Tablero de admin: pedidos de retiro/envío con su estado de entrega, el detalle
+ * de lo pedido (items + total) y si está pagado, para que el staff decida si
+ * preparar — sin tener que entrar a cada pedido para ver qué se pidió.
+ */
 export async function getOrdenesExternasAction() {
   try {
     const session = await getCurrentSession();
@@ -126,7 +149,7 @@ export async function getOrdenesExternasAction() {
       return { success: false, message: 'No autorizado', ordenes: [] as const };
     }
 
-    const ordenes = await db
+    const base = await db
       .select({
         sesionMesaId: sesionesMesa.id,
         tipo: sesionesMesa.tipo,
@@ -144,6 +167,66 @@ export async function getOrdenesExternasAction() {
       .innerJoin(sesionesMesa, eq(datosEntrega.sesionMesaId, sesionesMesa.id))
       .where(eq(datosEntrega.restauranteId, session.restauranteId))
       .orderBy(desc(sesionesMesa.createdAt));
+
+    const sesionIds = base.map((o) => o.sesionMesaId);
+    if (sesionIds.length === 0) {
+      return { success: true, ordenes: [] };
+    }
+
+    // Detalle de lo pedido (pedidos no cancelados + items + modificadores) y los
+    // pagos aprobados, en lotes (no N+1) para todas las sesiones del tablero.
+    const [pedidosData, pagosAprobados] = await Promise.all([
+      db.query.pedidos.findMany({
+        where: (t, { and, ne, inArray }) =>
+          and(inArray(t.sesionMesaId, sesionIds), ne(t.estado, 'Cancelado')),
+        with: { items: { with: { modificadores: true } } },
+      }),
+      db.query.transaccionesPago.findMany({
+        where: (t, { and, eq, inArray }) =>
+          and(inArray(t.sesionMesaId, sesionIds), eq(t.estado, 'Aprobado')),
+      }),
+    ]);
+
+    // Items agregados + total por sesión.
+    const itemsPorSesion = new Map<string, OrdenExternaItem[]>();
+    const totalPorSesion = new Map<string, number>();
+    for (const pedido of pedidosData) {
+      const sid = pedido.sesionMesaId;
+      const lista = itemsPorSesion.get(sid) ?? [];
+      for (const item of pedido.items) {
+        const mods = item.modificadores ?? [];
+        const precioMods = mods.reduce((acc, m) => acc + (Number(m.precioExtraSnapshot) || 0), 0);
+        const precioUnitario = Number(item.precioUnitarioSnapshot || 0) + precioMods;
+        const cantidad = Number(item.cantidad);
+        lista.push({
+          nombre: item.nombreProductoSnapshot || 'Producto',
+          cantidad,
+          modificadores: mods.map((m) => m.nombreModificadorSnapshot),
+        });
+        totalPorSesion.set(sid, (totalPorSesion.get(sid) ?? 0) + cantidad * precioUnitario);
+      }
+      itemsPorSesion.set(sid, lista);
+    }
+
+    const pagadoPorSesion = new Map<string, number>();
+    for (const tx of pagosAprobados) {
+      pagadoPorSesion.set(
+        tx.sesionMesaId,
+        (pagadoPorSesion.get(tx.sesionMesaId) ?? 0) + Number(tx.monto),
+      );
+    }
+
+    const ordenes = base.map((o) => {
+      const total = totalPorSesion.get(o.sesionMesaId) ?? 0;
+      const pagado = pagadoPorSesion.get(o.sesionMesaId) ?? 0;
+      return {
+        ...o,
+        items: itemsPorSesion.get(o.sesionMesaId) ?? [],
+        total,
+        // Pagado cuando hay pagos aprobados que cubren el total (> 0).
+        estadoPago: total > 0 && pagado >= total ? ('Pagado' as const) : ('Pendiente' as const),
+      };
+    });
 
     return { success: true, ordenes };
   } catch (error) {
@@ -194,6 +277,19 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
       sesionMesaId,
       estadoEntrega: nuevoEstado,
     });
+
+    // Avisar al cliente que está siguiendo su pedido (canal de su sesión), para
+    // que la pantalla de seguimiento avance el estado sin recargar.
+    try {
+      const supabase = await createSupabaseServerClient();
+      await supabase.channel(`mesa_${sesionMesaId}`).send({
+        type: 'broadcast',
+        event: 'estado_entrega_actualizado',
+        payload: { estadoEntrega: nuevoEstado },
+      });
+    } catch (e) {
+      console.warn('[cambiarEstadoEntregaAction] realtime seguimiento', e);
+    }
 
     revalidatePath('/admin/pedidos-online');
     return { success: true, message: 'Estado actualizado' };

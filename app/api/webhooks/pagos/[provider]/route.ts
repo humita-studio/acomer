@@ -124,8 +124,18 @@ export async function POST(
           await db.update(pedidos).set({ estado: 'Pagado' }).where(eq(pedidos.id, p.id));
         }
 
-        // Close the table session
-        await db.update(sesionesMesa).set({ estado: 'Cerrada' }).where(eq(sesionesMesa.id, tx.sesionMesaId));
+        // Cerrar la sesión SOLO en salón. En takeaway/delivery la sesión queda
+        // abierta tras el pago para que el cliente pueda seguir agregando (hasta
+        // el corte que define el local); se cierra al entregar/cancelar.
+        const [ses] = await db
+          .select({ tipo: sesionesMesa.tipo })
+          .from(sesionesMesa)
+          .where(eq(sesionesMesa.id, tx.sesionMesaId))
+          .limit(1);
+        const esExterno = ses?.tipo === 'takeaway' || ses?.tipo === 'delivery';
+        if (!esExterno) {
+          await db.update(sesionesMesa).set({ estado: 'Cerrada' }).where(eq(sesionesMesa.id, tx.sesionMesaId));
+        }
 
         // Emit Realtime event to notify the frontend
         const channel = supabase.channel(`mesa_${tx.sesionMesaId}`);

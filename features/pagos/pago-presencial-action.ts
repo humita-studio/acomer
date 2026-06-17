@@ -112,10 +112,22 @@ export async function pedirCuentaPresencialAction(
     }
 
     const metodoLabel = metodoPago === 'efectivo' ? 'efectivo' : 'tarjeta';
+    const totalFmt = totalCalculado.toFixed(2);
+
+    // El mensaje depende de dónde se cobra: en salón se acerca un mozo; en
+    // takeaway/delivery se paga al retirar/recibir (no hay mesa).
+    let message: string;
+    if (sesion.tipo === 'delivery') {
+      message = `¡Pedido confirmado! Pagás $${totalFmt} en ${metodoLabel} al recibir tu pedido.`;
+    } else if (sesion.tipo === 'takeaway') {
+      message = `¡Pedido confirmado! Pagás $${totalFmt} en ${metodoLabel} al retirarlo en el local.`;
+    } else {
+      message = `Cuenta solicitada. Un mozo se acercará para cobrar con ${metodoLabel}. Total: $${totalFmt}`;
+    }
 
     return {
       success: true,
-      message: `Cuenta solicitada. Un mozo se acercará para cobrar con ${metodoLabel}. Total: $${totalCalculado.toFixed(2)}`,
+      message,
       transactionId,
     };
   } catch (error: any) {

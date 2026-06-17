@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { MenuView, type CategoriaMenu, type ProductoMenu } from './MenuDigital';
 import { CheckoutExterno } from './CheckoutExterno';
 import { useLocalCart } from '../cart/local-cart';
+import type { ModoPedido } from '../delivery-config';
 
 /**
  * Flujo externo "menú primero": la carta se ve sin identificarse, el carrito es
@@ -14,11 +15,14 @@ export function MenuExterno({
   tenantId,
   categorias,
   productos,
+  modos,
 }: {
   tenantSlug: string;
   tenantId: string;
   categorias: CategoriaMenu[];
   productos: ProductoMenu[];
+  // Modalidades habilitadas por el local (takeaway/delivery).
+  modos: ModoPedido[];
 }) {
   const cart = useLocalCart(tenantId);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -47,6 +51,7 @@ export function MenuExterno({
         onClose={() => setCheckoutOpen(false)}
         tenantSlug={tenantSlug}
         cartItems={cart.items}
+        modos={modos}
       />
     </>
   );
