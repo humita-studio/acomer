@@ -28,6 +28,13 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
   const [isLiberating, setIsLiberating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Ítem libre: algo que no está en la carta (nombre + precio a mano).
+  const [freeOpen, setFreeOpen] = useState(false);
+  const [freeNombre, setFreeNombre] = useState('');
+  const [freePrecio, setFreePrecio] = useState('');
+  const [freeCantidad, setFreeCantidad] = useState(1);
+  const [freeError, setFreeError] = useState<string | null>(null);
+
   // Estado de servidor del ticket (TanStack Query) con update optimista al agregar
   const { data: ticket = { items: [], total: 0 } } = useTicketMesa(sesionMesaId, ticketInicial);
   const agregar = useAgregarItemsStaff(sesionMesaId);
@@ -90,6 +97,42 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
     });
     setSelectedProduct(null);
   };
+
+  const openFree = () => {
+    setFreeNombre('');
+    setFreePrecio('');
+    setFreeCantidad(1);
+    setFreeError(null);
+    setFreeOpen(true);
+  };
+
+  const handleAgregarLibre = () => {
+    const nombre = freeNombre.trim();
+    const precio = parseFloat(freePrecio.replace(',', '.'));
+    if (!nombre) {
+      setFreeError('Poné un nombre');
+      return;
+    }
+    if (!Number.isFinite(precio) || precio <= 0) {
+      setFreeError('El precio tiene que ser mayor a 0');
+      return;
+    }
+    const optimisticItem: TicketItem = {
+      id: `temp-${crypto.randomUUID()}`,
+      nombre,
+      cantidad: freeCantidad,
+      precioUnitario: precio,
+      modificadores: [],
+      subtotal: precio * freeCantidad,
+    };
+    agregar.mutate({
+      items: [{ productoId: null, cantidad: freeCantidad, nombreLibre: nombre, precioLibre: precio }],
+      optimisticItems: [optimisticItem],
+    });
+    setFreeOpen(false);
+  };
+
+  const freeSubtotal = (parseFloat(freePrecio.replace(',', '.')) || 0) * freeCantidad;
 
   const handleLiberar = async () => {
     if (!confirm('¿Liberar la mesa? Se cerrará la sesión actual.')) return;
@@ -156,7 +199,15 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
       {/* Selector de productos */}
       <section className="lg:col-span-2">
         <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="font-bold text-lg text-gray-800 mb-4">Agregar al pedido</h2>
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <h2 className="font-bold text-lg text-gray-800">Agregar al pedido</h2>
+            <button
+              onClick={openFree}
+              className="shrink-0 text-sm font-semibold text-blue-600 border border-dashed border-blue-300 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              + Ítem libre
+            </button>
+          </div>
 
           {categorias.length === 0 ? (
             <p className="text-sm text-gray-500">No hay productos cargados en el menú.</p>
@@ -267,6 +318,80 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
               >
                 <span>Agregar al pedido</span>
                 <span>${subtotalModal.toFixed(2)}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de ítem libre */}
+      {freeOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col shadow-xl">
+            <div className="flex justify-between items-center p-4 border-b">
+              <div>
+                <h2 className="font-bold text-xl">Ítem libre</h2>
+                <p className="text-sm text-gray-500">Algo que no está en la carta</p>
+              </div>
+              <button onClick={() => setFreeOpen(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                <input
+                  value={freeNombre}
+                  onChange={(e) => setFreeNombre(e.target.value)}
+                  autoFocus
+                  placeholder="Ej. Torta de la abuela"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Precio</label>
+                  <input
+                    value={freePrecio}
+                    onChange={(e) => setFreePrecio(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Cantidad</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFreeCantidad(Math.max(1, freeCantidad - 1))}
+                      className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg text-xl hover:bg-gray-200"
+                    >
+                      -
+                    </button>
+                    <span className="w-8 text-center font-bold">{freeCantidad}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFreeCantidad(freeCantidad + 1)}
+                      className="w-10 h-10 flex items-center justify-center bg-blue-100 text-blue-600 rounded-lg text-xl hover:bg-blue-200"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Se suma solo a esta venta. No se guarda en la carta.</p>
+              {freeError && <p className="text-sm text-red-600 font-medium">{freeError}</p>}
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
+              <button
+                onClick={handleAgregarLibre}
+                className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors flex justify-between px-6 items-center"
+              >
+                <span>Agregar al pedido</span>
+                <span>${freeSubtotal.toFixed(2)}</span>
               </button>
             </div>
           </div>

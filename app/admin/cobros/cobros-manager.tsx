@@ -123,9 +123,17 @@ export function CobrosManager({
                                 </p>
                             </div>
 
-                            <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center mb-6">
-                                <span className="text-gray-500 font-medium">Total a cobrar</span>
-                                <span className="text-2xl font-black text-gray-900">${Number(tx.monto).toFixed(2)}</span>
+                            <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                                {Number(tx.descuento) > 0 && (
+                                    <div className="flex justify-between items-center text-sm mb-2 text-emerald-700">
+                                        <span className="font-medium">Descuento aplicado</span>
+                                        <span className="font-semibold">− ${Number(tx.descuento).toFixed(2)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-500 font-medium">Total a cobrar</span>
+                                    <span className="text-2xl font-black text-gray-900">${Number(tx.monto).toFixed(2)}</span>
+                                </div>
                             </div>
 
                             <div className="flex gap-3">

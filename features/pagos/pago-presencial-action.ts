@@ -4,6 +4,8 @@ import { db } from '@/shared/db';
 import { transaccionesPago, pedidos, sesionesMesa } from '@/shared/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { calcularCobroConPromos } from '@/features/promociones/cobro-promos-actions';
+import type { PromoCanal } from '@/features/promociones/promociones';
 
 type PagoPresencialResult = {
   success: boolean;
@@ -19,7 +21,9 @@ type PagoPresencialResult = {
 export async function pedirCuentaPresencialAction(
   sesionMesaId: string,
   tenantId: string,
-  metodoPago: 'efectivo' | 'tarjeta_fisica'
+  metodoPago: 'efectivo' | 'tarjeta_fisica',
+  /** Promos que el cajero quitó manualmente (descuento removible). */
+  omitirPromoIds?: string[]
 ): Promise<PagoPresencialResult> {
   try {
     // 1. Validar la sesión
@@ -58,7 +62,26 @@ export async function pedirCuentaPresencialAction(
       return { success: false, message: 'La mesa ya se encuentra pagada.' };
     }
 
-    const totalCalculado = saldoPendiente;
+    // Promociones automáticas: descuento según método/canal (removible con omitirPromoIds).
+    // Si falla (p.ej. la migración de promos no se aplicó todavía) se cobra sin descuento.
+    let descuento = 0;
+    let promocionId: string | null = null;
+    try {
+      const metodoPromo = metodoPago === 'efectivo' ? 'efectivo' : 'tarjeta';
+      const canal: PromoCanal =
+        sesion.tipo === 'delivery' ? 'delivery' : sesion.tipo === 'takeaway' ? 'takeaway' : 'salon';
+      const promoRes = await calcularCobroConPromos(sesionMesaId, tenantId, {
+        metodoPago: metodoPromo,
+        canal,
+        omitirIds: omitirPromoIds,
+      });
+      descuento = Math.min(promoRes.descuento, saldoPendiente);
+      // La columna promocion_id es única: solo la guardamos si se aplicó una sola promo.
+      promocionId = promoRes.aplicadas.length === 1 ? promoRes.aplicadas[0].id : null;
+    } catch (promoError) {
+      console.warn('[pedirCuentaPresencialAction] promos no aplicadas:', promoError);
+    }
+    const totalCalculado = Math.max(0, saldoPendiente - descuento);
 
     // 3. Revisar si ya existe una transacción pendiente
     const existingTx = await db.query.transaccionesPago.findFirst({
@@ -69,15 +92,19 @@ export async function pedirCuentaPresencialAction(
     });
 
     let transactionId;
-    
+
     if (existingTx) {
       transactionId = existingTx.id;
-      // Actualizamos el método por si eligió uno distinto esta vez
-      if (existingTx.proveedor !== metodoPago) {
-        await db.update(transaccionesPago)
-          .set({ proveedor: metodoPago, metadata: { metodo: metodoPago } })
-          .where(eq(transaccionesPago.id, existingTx.id));
-      }
+      // Recalcular método y total (el descuento depende del método elegido).
+      await db.update(transaccionesPago)
+        .set({
+          proveedor: metodoPago,
+          monto: totalCalculado.toString(),
+          descuento: descuento.toString(),
+          promocionId,
+          metadata: { metodo: metodoPago },
+        })
+        .where(eq(transaccionesPago.id, existingTx.id));
     } else {
       // Crear transacción en DB
       const nuevaTx = await db.insert(transaccionesPago).values({
@@ -85,6 +112,8 @@ export async function pedirCuentaPresencialAction(
         sesionMesaId: sesionMesaId,
         proveedor: metodoPago,
         monto: totalCalculado.toString(),
+        descuento: descuento.toString(),
+        promocionId,
         estado: 'Pendiente',
         metadata: { metodo: metodoPago },
       }).returning({ id: transaccionesPago.id });

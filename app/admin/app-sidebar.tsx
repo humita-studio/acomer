@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Settings,
+  TicketPercent,
   UtensilsCrossed,
   Users,
   Wallet,
@@ -52,6 +53,7 @@ type NavLink = {
 const LINKS: NavLink[] = [
   { href: '/admin', label: 'Dashboard', section: 'dashboard', icon: LayoutDashboard },
   { href: '/admin/menu', label: 'Menú', section: 'menu', icon: UtensilsCrossed },
+  { href: '/admin/promociones', label: 'Promociones', section: 'menu', icon: TicketPercent },
   { href: '/admin/staff', label: 'Empleados', section: 'staff', icon: Users },
   { href: '/admin/plano', label: 'Mesas', section: 'tables', icon: Armchair },
   { href: '/admin/reservas', label: 'Reservas', section: 'reservas', icon: CalendarDays },

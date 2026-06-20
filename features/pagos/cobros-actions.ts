@@ -7,6 +7,7 @@ import { eq, and, desc, inArray } from 'drizzle-orm';
 export type TransaccionCobro = {
     id: string;
     monto: string;
+    descuento: string;
     proveedor: string;
     estado: string;
     fecha: Date;
@@ -31,6 +32,7 @@ export async function getTransaccionesPendientesAction(tenantId: string): Promis
         return txs.map(tx => ({
             id: tx.id,
             monto: tx.monto,
+            descuento: tx.descuento ?? '0',
             proveedor: tx.proveedor,
             estado: tx.estado,
             fecha: tx.createdAt,

@@ -538,7 +538,9 @@ export const comandaItems = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull(),
     pedidoId: uuid('pedido_id').notNull(),
-    productoId: uuid('producto_id').notNull(),
+    // Nullable: un "ítem libre" (algo que no está en la carta) no referencia un
+    // producto. El nombre y el precio quedan en los snapshots de abajo.
+    productoId: uuid('producto_id'),
     cantidad: numeric('cantidad', { precision: 5, scale: 0 }).notNull().default('1'),
     nombreProductoSnapshot: text('nombre_producto_snapshot').notNull(),
     precioUnitarioSnapshot: numeric('precio_unitario_snapshot', { precision: 10, scale: 2 }).notNull(),
@@ -594,6 +596,47 @@ export const comandaItemModificadores = pgTable(
 )
 
 // ============================================================================
+// Promociones (descuentos y combos)
+// ============================================================================
+
+// Una promoción del restaurante. Ver drizzle/0011_promociones.sql para el
+// detalle de cada campo (tipo, alcance, target_ids, condiciones).
+export const promociones = pgTable(
+  'promociones',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    nombre: text('nombre').notNull(),
+    tipo: text('tipo').notNull(), // porcentaje | monto_fijo | 2x1 | combo
+    valor: numeric('valor', { precision: 10, scale: 2 }).notNull().default('0'),
+    alcance: text('alcance').notNull().default('pedido'), // pedido | categoria | producto
+    targetIds: jsonb('target_ids').notNull().default([]),
+    condiciones: jsonb('condiciones').notNull().default({}),
+    vigenteDesde: timestamp('vigente_desde', { withTimezone: true }),
+    vigenteHasta: timestamp('vigente_hasta', { withTimezone: true }),
+    activa: boolean('activa').notNull().default(true),
+    prioridad: integer('prioridad').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'promociones_restaurant_id_fk',
+    }).onDelete('cascade'),
+    tipoCheck: check(
+      'promociones_tipo_check',
+      sql`tipo IN ('porcentaje','monto_fijo','2x1','combo')`,
+    ),
+    alcanceCheck: check(
+      'promociones_alcance_check',
+      sql`alcance IN ('pedido','categoria','producto')`,
+    ),
+  }),
+)
+
+// ============================================================================
 // Pagos e Integraciones
 // ============================================================================
 
@@ -624,7 +667,9 @@ export const transaccionesPago = pgTable(
     restauranteId: uuid('restaurant_id').notNull(),
     sesionMesaId: uuid('sesion_mesa_id').notNull(),
     proveedor: text('proveedor').notNull(),
-    monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
+    monto: numeric('monto', { precision: 10, scale: 2 }).notNull(), // total YA con descuento
+    descuento: numeric('descuento', { precision: 10, scale: 2 }).notNull().default('0'),
+    promocionId: uuid('promocion_id'), // promo aplicada (null si manual o borrada)
     estado: text('estado').notNull().default('Pendiente'), // Pendiente | Aprobado | Rechazado | Cancelado
     referenciaExterna: text('referencia_externa'), // ID del pago/preferencia en MP
     metadata: jsonb('metadata').default({}),
@@ -642,6 +687,11 @@ export const transaccionesPago = pgTable(
       foreignColumns: [sesionesMesa.id],
       name: 'transacciones_pago_sesion_mesa_id_fk',
     }).onDelete('cascade'),
+    promocionIdFk: foreignKey({
+      columns: [table.promocionId],
+      foreignColumns: [promociones.id],
+      name: 'transacciones_pago_promocion_id_fk',
+    }).onDelete('set null'),
   })
 )
 

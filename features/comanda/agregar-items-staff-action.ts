@@ -17,10 +17,19 @@ import { hasPermission } from '@/features/authorization/roles';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 
 export type StaffItemInput = {
-  productoId: string;
+  /** `null` para un ítem libre (algo que no está en la carta). */
+  productoId: string | null;
   cantidad: number;
-  modificadorIds: string[];
+  modificadorIds?: string[];
+  /** Solo para ítems libres: nombre y precio cargados a mano. */
+  nombreLibre?: string;
+  precioLibre?: number;
 };
+
+/** Un ítem libre no referencia un producto: trae nombre + precio propios. */
+function esItemLibre(i: StaffItemInput): boolean {
+  return !i.productoId && typeof i.nombreLibre === 'string' && i.nombreLibre.trim().length > 0;
+}
 
 /**
  * El mozo (o admin/owner) carga productos al ticket de una mesa desde el panel.
@@ -41,7 +50,9 @@ export async function agregarItemsStaffAction(
     }
     const tenantId = session.restauranteId;
 
-    const itemsValidos = items.filter((i) => i.productoId && i.cantidad > 0);
+    const itemsValidos = items.filter(
+      (i) => i.cantidad > 0 && (i.productoId || (esItemLibre(i) && Number(i.precioLibre) > 0)),
+    );
     if (!itemsValidos.length) {
       return { success: false, message: 'No hay productos para agregar' };
     }
@@ -61,19 +72,40 @@ export async function agregarItemsStaffAction(
       const pedidoId = nuevoPedido[0].id;
 
       for (const item of itemsValidos) {
+        // Ítem libre: no hay producto de la carta. Se inserta con productoId
+        // null y los snapshots de nombre/precio cargados a mano. No admite
+        // modificadores.
+        if (esItemLibre(item)) {
+          const precioLibre = Number(item.precioLibre) || 0;
+          const nombreLibre = item.nombreLibre!.trim().slice(0, 120);
+          await tx.insert(comandaItems).values({
+            restauranteId: tenantId,
+            pedidoId,
+            productoId: null,
+            cantidad: item.cantidad.toString(),
+            nombreProductoSnapshot: nombreLibre,
+            precioUnitarioSnapshot: precioLibre.toString(),
+          });
+          totalPedido += precioLibre * item.cantidad;
+          continue;
+        }
+
+        // A esta altura no es ítem libre, así que productoId está presente.
+        const productoId = item.productoId as string;
+
         // Snapshot del nombre del producto (validando que sea del tenant)
         const prodData = await tx
           .select({ nombre: productos.nombre })
           .from(productos)
-          .where(and(eq(productos.id, item.productoId), eq(productos.restauranteId, tenantId)))
+          .where(and(eq(productos.id, productoId), eq(productos.restauranteId, tenantId)))
           .limit(1);
-        if (!prodData[0]) throw new Error(`Producto no encontrado: ${item.productoId}`);
+        if (!prodData[0]) throw new Error(`Producto no encontrado: ${productoId}`);
 
         // Precio vigente
         const precioData = await tx
           .select({ precio: productosPrecios.precio })
           .from(productosPrecios)
-          .where(and(eq(productosPrecios.productoId, item.productoId), isNull(productosPrecios.vigentaHsta)))
+          .where(and(eq(productosPrecios.productoId, productoId), isNull(productosPrecios.vigentaHsta)))
           .limit(1);
         const precioProducto = parseFloat(precioData[0]?.precio?.toString() || '0');
 
@@ -84,7 +116,7 @@ export async function agregarItemsStaffAction(
           .values({
             restauranteId: tenantId,
             pedidoId,
-            productoId: item.productoId,
+            productoId: productoId,
             cantidad: item.cantidad.toString(),
             nombreProductoSnapshot: prodData[0].nombre,
             precioUnitarioSnapshot: precioProducto.toString(),
