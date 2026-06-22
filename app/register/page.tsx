@@ -11,7 +11,9 @@ export default async function RegisterPage() {
   // Dominio base para mostrar/armar el subdominio del local (ej. "acomer.com.ar"
   // o "localhost:3000" en dev). El registro vive en el dominio principal.
   const host = (await headers()).get('host') || '';
-  const dominioBase = host.replace(/^app\./, '') || 'acomer.com.ar';
+  // Sacamos `app.` y `www.` para que el subdominio del tenant cuelgue del dominio
+  // raíz (slug.sonodos.com), no de www (slug.www.sonodos.com).
+  const dominioBase = host.replace(/^(app|www)\./, '') || 'acomer.com.ar';
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
