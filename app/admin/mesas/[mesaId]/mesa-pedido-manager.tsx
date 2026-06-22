@@ -7,8 +7,8 @@ import { liberarMesaAction } from '@/features/mesas/mesas-actions';
 import { useTicketMesa, useAgregarItemsStaff } from '@/features/comanda/use-ticket-mesa';
 import { queryKeys } from '@/shared/query/keys';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
-import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/comanda/components/MenuDigital';
-import type { TicketItem } from '@/features/comanda/obtener-ticket-mesa';
+import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/carta/types';
+import type { TicketItem } from '@/features/pedidos/obtenerTicketMesa';
 
 type Props = {
   mesaId: string;
@@ -25,6 +25,7 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
   const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
   const [cantidad, setCantidad] = useState(1);
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
+  const [selectedVarianteId, setSelectedVarianteId] = useState<string | null>(null);
   const [isLiberating, setIsLiberating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +60,11 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
     setSelectedProduct(prod);
     setCantidad(1);
     setSelectedModIds([]);
+    setSelectedVarianteId(
+      prod.variantes.length > 0
+        ? (prod.variantes.find((v) => v.esDefault) ?? prod.variantes[0]).id
+        : null,
+    );
     setError(null);
   };
 
@@ -68,31 +74,43 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
     );
   };
 
+  const varianteSel = selectedProduct?.variantes.find((v) => v.id === selectedVarianteId) ?? null;
+  const precioBaseModal = varianteSel ? varianteSel.precio : selectedProduct?.precio ?? 0;
   const modsTotal = selectedProduct
     ? selectedProduct.modificadores
         .filter((m) => selectedModIds.includes(m.id))
         .reduce((sum, m) => sum + m.precioExtra, 0)
     : 0;
-  const subtotalModal = selectedProduct ? (selectedProduct.precio + modsTotal) * cantidad : 0;
+  const subtotalModal = selectedProduct ? (precioBaseModal + modsTotal) * cantidad : 0;
 
   const handleAgregar = () => {
     if (!selectedProduct) return;
     const modsSeleccionados = selectedProduct.modificadores.filter((m) =>
       selectedModIds.includes(m.id),
     );
-    const precioConMods =
-      selectedProduct.precio + modsSeleccionados.reduce((s, m) => s + m.precioExtra, 0);
+    const precioBase = varianteSel ? varianteSel.precio : selectedProduct.precio;
+    const precioConMods = precioBase + modsSeleccionados.reduce((s, m) => s + m.precioExtra, 0);
+    const nombreItem = varianteSel
+      ? `${selectedProduct.nombre} ${varianteSel.nombre}`
+      : selectedProduct.nombre;
     const optimisticItem: TicketItem = {
       id: `temp-${crypto.randomUUID()}`,
-      nombre: selectedProduct.nombre,
+      nombre: nombreItem,
       cantidad,
-      precioUnitario: selectedProduct.precio,
+      precioUnitario: precioBase,
       modificadores: modsSeleccionados.map((m) => ({ nombre: m.nombre, precioExtra: m.precioExtra })),
       subtotal: precioConMods * cantidad,
     };
     // Optimista: el item aparece en la cuenta al instante y cerramos el modal.
     agregar.mutate({
-      items: [{ productoId: selectedProduct.id, cantidad, modificadorIds: selectedModIds }],
+      items: [
+        {
+          productoId: selectedProduct.id,
+          varianteId: varianteSel?.id ?? null,
+          cantidad,
+          modificadorIds: selectedModIds,
+        },
+      ],
       optimisticItems: [optimisticItem],
     });
     setSelectedProduct(null);
@@ -243,7 +261,10 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
                     >
                       <div>
                         <h3 className="font-semibold text-gray-800">{prod.nombre}</h3>
-                        <p className="font-bold text-blue-600 mt-1">${prod.precio.toFixed(2)}</p>
+                        <p className="font-bold text-blue-600 mt-1">
+                          {prod.variantes.length > 0 && <span className="font-normal text-gray-500">desde </span>}
+                          ${prod.precio.toFixed(2)}
+                        </p>
                       </div>
                       <span className="bg-blue-50 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center shrink-0 ml-3 text-xl">
                         +
@@ -269,7 +290,31 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-5">
-              <div className="font-medium text-gray-700">Precio base: ${selectedProduct.precio.toFixed(2)}</div>
+              {selectedProduct.variantes.length > 0 ? (
+                <div className="space-y-2">
+                  <h3 className="font-semibold border-b pb-2">Elegí una opción</h3>
+                  {selectedProduct.variantes.map((v) => (
+                    <label
+                      key={v.id}
+                      className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="variante-staff"
+                          className="w-5 h-5 text-blue-600 focus:ring-blue-500"
+                          checked={selectedVarianteId === v.id}
+                          onChange={() => setSelectedVarianteId(v.id)}
+                        />
+                        <span className="font-medium">{v.nombre}</span>
+                      </div>
+                      <span className="text-gray-600">${v.precio.toFixed(2)}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="font-medium text-gray-700">Precio base: ${selectedProduct.precio.toFixed(2)}</div>
+              )}
 
               {selectedProduct.permiteAdicionales && selectedProduct.modificadores.length > 0 && (
                 <div className="space-y-2">

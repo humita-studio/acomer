@@ -1,7 +1,7 @@
 import { db } from '@/shared/db';
 import { sesionesMesa, datosEntrega } from '@/shared/db/schema';
 import { eq } from 'drizzle-orm';
-import { obtenerTicketMesa, type TicketItem } from './obtener-ticket-mesa';
+import { obtenerTicketMesa, type TicketItem } from '@/features/pedidos/obtenerTicketMesa';
 
 export type SeguimientoPedido = {
   sesionMesaId: string;

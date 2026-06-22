@@ -4,6 +4,8 @@ import { db } from '@/shared/db';
 import { pedidos, transaccionesPago, sesionesMesa, restaurantes } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getPaymentProvider } from './core/payment-factory';
+import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
+import type { PromoCanal } from '@/features/promociones/promociones';
 
 export async function pedirCuentaAction(sesionMesaId: string, tenantId: string, currentUrl: string) {
   try {
@@ -44,7 +46,25 @@ export async function pedirCuentaAction(sesionMesaId: string, tenantId: string, 
       return { success: false, message: 'La mesa ya se encuentra pagada.' };
     }
 
-    const totalCalculado = saldoPendiente;
+    // Promos automáticas (pago con Mercado Pago). Si falla (p.ej. la migración de
+    // promos no corrió) se cobra sin descuento.
+    let descuento = 0;
+    let promocionId: string | null = null;
+    let promocionesAplicadas: { id: string; nombre: string; tipo: string; descuento: number }[] = [];
+    try {
+      const canal: PromoCanal =
+        sesion.tipo === 'delivery' ? 'delivery' : sesion.tipo === 'takeaway' ? 'takeaway' : 'salon';
+      const promoRes = await calcularCobroConPromos(sesionMesaId, tenantId, {
+        metodoPago: 'mercado_pago',
+        canal,
+      });
+      descuento = Math.min(promoRes.descuento, saldoPendiente);
+      promocionId = promoRes.aplicadas.length === 1 ? promoRes.aplicadas[0].id : null;
+      promocionesAplicadas = promoRes.aplicadas;
+    } catch (promoError) {
+      console.warn('[pedirCuentaAction] promos no aplicadas:', promoError);
+    }
+    const totalCalculado = Math.max(0, saldoPendiente - descuento);
 
     // 3. Crear registro de transacción pendiente en DB
     const nuevaTx = await db.insert(transaccionesPago).values({
@@ -52,6 +72,9 @@ export async function pedirCuentaAction(sesionMesaId: string, tenantId: string, 
       sesionMesaId: sesionMesaId,
       proveedor: 'indefinido_por_ahora', // Se actualizará en breve
       monto: totalCalculado.toString(),
+      descuento: descuento.toString(),
+      promocionId,
+      promocionesAplicadas,
       estado: 'Pendiente',
     }).returning({ id: transaccionesPago.id });
 
@@ -102,8 +125,11 @@ export async function pedirCuentaAction(sesionMesaId: string, tenantId: string, 
       paymentUrl: intentResult.paymentUrl 
     };
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[pedirCuentaAction]', error);
-    return { success: false, message: error.message || 'Error interno del servidor' };
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Error interno del servidor',
+    };
   }
 }

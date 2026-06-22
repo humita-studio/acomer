@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { perfilesEmpleados, restaurantes } from '@/shared/db/schema';
 import { eq } from 'drizzle-orm';
@@ -23,7 +24,7 @@ export interface AuthSession {
  * Obtiene la sesión actual del usuario y su perfil de empleado.
  * Retorna null si no hay sesión o no existe perfil de empleado.
  */
-export async function getCurrentSession(): Promise<AuthSession | null> {
+export const getCurrentSession = cache(async (): Promise<AuthSession | null> => {
   try {
     const supabase = await createSupabaseServerClient();
     
@@ -71,7 +72,7 @@ export async function getCurrentSession(): Promise<AuthSession | null> {
     console.error('[getCurrentSession] Error:', error);
     return null;
   }
-}
+});
 
 /**
  * Obtiene solo el usuario autenticado, sin incluir el perfil.

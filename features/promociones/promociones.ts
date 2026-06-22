@@ -68,6 +68,24 @@ export const PROMO_CANAL_LABEL: Record<PromoCanal, string> = {
   takeaway: 'Takeaway',
 };
 
+/** Días de la semana para los chips del formulario (0=Dom). */
+export const PROMO_DIAS: { label: string; value: number }[] = [
+  { label: 'L', value: 1 },
+  { label: 'M', value: 2 },
+  { label: 'X', value: 3 },
+  { label: 'J', value: 4 },
+  { label: 'V', value: 5 },
+  { label: 'S', value: 6 },
+  { label: 'D', value: 0 },
+];
+
+/** Métodos de pago para los chips de condiciones. */
+export const PROMO_METODOS: { label: string; value: PromoMetodoPago }[] = [
+  { label: 'Efectivo', value: 'efectivo' },
+  { label: 'Tarjeta', value: 'tarjeta' },
+  { label: 'Mercado Pago', value: 'mercado_pago' },
+];
+
 /** Etiqueta corta del tipo+valor para mostrar en listas (ej. "−10%", "2x1"). */
 export function promoTipoBadge(tipo: PromoTipo, valor: number): string {
   switch (tipo) {

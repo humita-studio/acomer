@@ -13,6 +13,7 @@ export type ModificadorBorrador = {
 export type ItemBorrador = {
   id: string;
   productoId: string;
+  varianteId: string | null;
   nombreProducto: string;
   precioUnitario: number;
   cantidad: number;
@@ -29,6 +30,7 @@ export async function obtenerBorrador(sesionMesaId: string): Promise<ItemBorrado
   return items.map((item) => ({
     id: item.id,
     productoId: item.productoId,
+    varianteId: item.varianteId,
     nombreProducto: item.nombreProducto,
     precioUnitario: parseFloat(item.precioUnitario?.toString() || '0'),
     cantidad: item.cantidad,
@@ -41,6 +43,7 @@ export async function agregarItemBorrador(
   tenantId: string,
   item: {
     productoId: string;
+    varianteId?: string | null;
     nombreProducto: string;
     precioUnitario: number;
     cantidad: number;
@@ -48,6 +51,7 @@ export async function agregarItemBorrador(
   }
 ) {
   try {
+    const varianteId = item.varianteId ?? null;
     const existentes = await db
       .select()
       .from(itemsBorradorMesa)
@@ -60,12 +64,15 @@ export async function agregarItemBorrador(
       );
 
     const sameItem = existentes.find(e => {
+      // Misma variante (presentación) y mismo set de modificadores.
+      if ((e.varianteId ?? null) !== varianteId) return false;
+
       const dbMods = (e.modificadores as ModificadorBorrador[]) || [];
       if (dbMods.length !== item.modificadores.length) return false;
-      
+
       const dbModIds = [...dbMods].map(m => m.id).sort();
       const newModIds = [...item.modificadores].map(m => m.id).sort();
-      
+
       return dbModIds.every((id, idx) => id === newModIds[idx]);
     });
 
@@ -81,6 +88,7 @@ export async function agregarItemBorrador(
       restauranteId: tenantId,
       sesionMesaId,
       productoId: item.productoId,
+      varianteId,
       nombreProducto: item.nombreProducto,
       precioUnitario: item.precioUnitario.toString(),
       cantidad: item.cantidad,

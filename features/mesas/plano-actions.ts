@@ -77,7 +77,7 @@ export async function crearAmbiente(nombre: string) {
       })
       .returning();
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     return { success: true, ambiente: creado };
   } catch (error) {
     console.error('[crearAmbiente]', error);
@@ -100,7 +100,7 @@ export async function renombrarAmbiente(id: string, nombre: string) {
       .set({ nombre: limpio })
       .where(and(eq(ambientes.id, id), eq(ambientes.restauranteId, session.restauranteId)));
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     return { success: true };
   } catch (error) {
     console.error('[renombrarAmbiente]', error);
@@ -144,7 +144,7 @@ export async function eliminarAmbiente(id: string) {
         .where(and(eq(ambientes.id, id), eq(ambientes.restauranteId, session.restauranteId)));
     });
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     return { success: true };
   } catch (error) {
     console.error('[eliminarAmbiente]', error);
@@ -190,7 +190,7 @@ export async function crearMesaEnPlano(ambienteId: string, identificador: string
       })
       .returning();
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     revalidatePath('/admin/mesas');
     return { success: true, mesa: creada };
   } catch (error) {
@@ -211,7 +211,7 @@ export async function eliminarMesaPlano(mesaId: string) {
       .set({ deletedAt: new Date() })
       .where(and(eq(mesas.id, mesaId), eq(mesas.restauranteId, session.restauranteId)));
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     revalidatePath('/admin/mesas');
     return { success: true };
   } catch (error) {
@@ -264,7 +264,7 @@ export async function crearElementoPlano(input: {
       })
       .returning();
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     return { success: true, elemento: creado };
   } catch (error) {
     console.error('[crearElementoPlano]', error);
@@ -284,7 +284,7 @@ export async function eliminarElementoPlano(id: string) {
       .set({ deletedAt: new Date() })
       .where(and(eq(elementosPlano.id, id), eq(elementosPlano.restauranteId, session.restauranteId)));
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     return { success: true };
   } catch (error) {
     console.error('[eliminarElementoPlano]', error);
@@ -363,7 +363,7 @@ export async function guardarLayoutAction(payload: {
       }
     });
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     revalidatePath('/admin/mesas');
     return { success: true };
   } catch (error) {
@@ -447,7 +447,7 @@ export async function dividirMesaAction(mesaId: string, capacidadNueva: number) 
       return hija;
     });
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     revalidatePath('/admin/mesas');
     return { success: true, mesa: creada };
   } catch (error) {
@@ -495,7 +495,7 @@ export async function unirMesaAction(subMesaId: string) {
       await tx.update(mesas).set({ deletedAt: new Date() }).where(eq(mesas.id, subMesaId));
     });
 
-    revalidatePath('/admin/plano');
+    revalidatePath('/admin/mesas');
     revalidatePath('/admin/mesas');
     return { success: true };
   } catch (error) {

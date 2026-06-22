@@ -3,7 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { queryKeys } from '@/shared/query/keys';
-import { useComandaStore, type CartItem, type Modificador } from './store';
+import { useComandaStore } from './store';
+import type { CartItem, Modificador, AgregarItemVars } from '@/features/carta/cart';
 import {
   obtenerBorrador,
   agregarItemBorrador,
@@ -17,6 +18,7 @@ function toCartItem(i: ItemBorrador): CartItem {
   return {
     id: i.id,
     productoId: i.productoId,
+    varianteId: i.varianteId,
     nombre: i.nombreProducto,
     precioUnitario: i.precioUnitario,
     cantidad: i.cantidad,
@@ -48,14 +50,6 @@ export function useBorrador(sesionMesaId: string, initialItems?: CartItem[]) {
   });
 }
 
-export type AgregarItemVars = {
-  productoId: string;
-  nombreProducto: string;
-  precioUnitario: number;
-  cantidad: number;
-  modificadores: Modificador[];
-};
-
 export function useAgregarItem(tenantId: string, sesionMesaId: string) {
   const queryClient = useQueryClient();
   const key = queryKeys.borrador(sesionMesaId);
@@ -66,7 +60,10 @@ export function useAgregarItem(tenantId: string, sesionMesaId: string) {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<CartItem[]>(key) ?? [];
       const same = previous.find(
-        (e) => e.productoId === vars.productoId && sameMods(e.modificadores, vars.modificadores)
+        (e) =>
+          e.productoId === vars.productoId &&
+          (e.varianteId ?? null) === (vars.varianteId ?? null) &&
+          sameMods(e.modificadores, vars.modificadores)
       );
       const next = same
         ? previous.map((e) =>
@@ -77,6 +74,7 @@ export function useAgregarItem(tenantId: string, sesionMesaId: string) {
             {
               id: `temp-${crypto.randomUUID()}`,
               productoId: vars.productoId,
+              varianteId: vars.varianteId ?? null,
               nombre: vars.nombreProducto,
               precioUnitario: vars.precioUnitario,
               cantidad: vars.cantidad,

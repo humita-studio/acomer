@@ -11,7 +11,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 
-export type VarianteMenu = {
+export type AdicionalMenu = {
   productoId: string;
   id: string;
   nombre: string;
@@ -19,10 +19,10 @@ export type VarianteMenu = {
 };
 
 /**
- * Lista todas las variantes (adicionales) del menú del restaurante, agrupables
- * por plato. Estado de servidor que consume TanStack Query en el admin.
+ * Lista todos los adicionales (extras aditivos) del menú del restaurante,
+ * agrupables por plato. Estado de servidor que consume TanStack Query en el admin.
  */
-export async function obtenerVariantesMenu(): Promise<VarianteMenu[]> {
+export async function obtenerAdicionalesMenu(): Promise<AdicionalMenu[]> {
   const session = await getCurrentSession();
   if (!session) return [];
 
@@ -49,11 +49,11 @@ export async function obtenerVariantesMenu(): Promise<VarianteMenu[]> {
 }
 
 /**
- * Agrega una variante (adicional) propia de un plato.
+ * Agrega un adicional (extra aditivo) propio de un plato.
  * Crea el modificador + su precio y lo vincula al producto en una sola operación.
- * Al agregar la primera, el plato pasa a permitir adicionales.
+ * Al agregar el primero, el plato pasa a permitir adicionales.
  */
-export async function agregarVarianteAPlato(
+export async function agregarAdicionalAPlato(
   productoId: string,
   data: { nombre: string; precioExtra: number }
 ) {
@@ -65,7 +65,7 @@ export async function agregarVarianteAPlato(
 
     const nombre = data.nombre?.trim();
     if (!nombre) {
-      return { success: false, message: 'El nombre de la variante es obligatorio' };
+      return { success: false, message: 'El nombre del adicional es obligatorio' };
     }
 
     // Validar que el producto pertenece al restaurante de la sesión
@@ -103,17 +103,17 @@ export async function agregarVarianteAPlato(
         .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
     });
 
-    return { success: true, message: 'Variante agregada' };
+    return { success: true, message: 'Adicional agregado' };
   } catch (error) {
-    console.error('[agregarVarianteAPlato]', error);
-    return { success: false, message: 'Error al agregar la variante' };
+    console.error('[agregarAdicionalAPlato]', error);
+    return { success: false, message: 'Error al agregar el adicional' };
   }
 }
 
 /**
- * Cambia el precio extra de una variante (ledger append-only).
+ * Cambia el precio extra de un adicional (ledger append-only).
  */
-export async function editarPrecioVariante(modificadorId: string, nuevoPrecio: number) {
+export async function editarPrecioAdicional(modificadorId: string, nuevoPrecio: number) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManagePrices')) {
@@ -128,7 +128,7 @@ export async function editarPrecioVariante(modificadorId: string, nuevoPrecio: n
       );
 
     if (!modificador) {
-      return { success: false, message: 'Variante no encontrada' };
+      return { success: false, message: 'Adicional no encontrado' };
     }
 
     await db.transaction(async (tx) => {
@@ -154,16 +154,16 @@ export async function editarPrecioVariante(modificadorId: string, nuevoPrecio: n
 
     return { success: true, message: 'Precio actualizado' };
   } catch (error) {
-    console.error('[editarPrecioVariante]', error);
+    console.error('[editarPrecioAdicional]', error);
     return { success: false, message: 'Error al actualizar el precio' };
   }
 }
 
 /**
- * Elimina una variante de un plato: la desvincula y la da de baja.
- * Si el plato se queda sin variantes, deja de permitir adicionales.
+ * Elimina un adicional de un plato: lo desvincula y lo da de baja.
+ * Si el plato se queda sin adicionales, deja de permitir adicionales.
  */
-export async function eliminarVarianteDePlato(productoId: string, modificadorId: string) {
+export async function eliminarAdicionalDePlato(productoId: string, modificadorId: string) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageMenu')) {
@@ -189,7 +189,7 @@ export async function eliminarVarianteDePlato(productoId: string, modificadorId:
           )
         );
 
-      // La variante es propia del plato: darla de baja
+      // El adicional es propio del plato: darlo de baja
       await tx
         .update(modificadores)
         .set({ deletedAt: new Date(), disponible: false })
@@ -210,9 +210,9 @@ export async function eliminarVarianteDePlato(productoId: string, modificadorId:
       }
     });
 
-    return { success: true, message: 'Variante eliminada' };
+    return { success: true, message: 'Adicional eliminado' };
   } catch (error) {
-    console.error('[eliminarVarianteDePlato]', error);
-    return { success: false, message: 'Error al eliminar la variante' };
+    console.error('[eliminarAdicionalDePlato]', error);
+    return { success: false, message: 'Error al eliminar el adicional' };
   }
 }

@@ -4,8 +4,8 @@ import { categorias, productos } from '@/shared/db/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
-import { listarPromocionesAction } from '@/features/promociones/promociones-actions';
-import { PromocionesManager } from './promociones-manager';
+import { listarPromocionesAction } from '@/features/promociones/promocionesActions';
+import { PromocionesManager } from '@/features/promociones/components/PromocionesManager';
 
 export default async function PromocionesPage() {
   const session = await getCurrentSession();

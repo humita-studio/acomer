@@ -75,8 +75,11 @@ export async function obtenerTicketAction(transactionId: string): Promise<{ succ
 
                 const existing = ticketItemsMap.get(key);
 
-                const precioTotalMods = (item.modificadores as any[] || []).reduce((acc: number, mod: any) => acc + (Number(mod.precioExtraSnapshot) || 0), 0);
-                const precioUnitarioBase = Number((item as any).precioUnitarioSnapshot || (item as any).precioUnitario || 0);
+                const precioTotalMods = item.modificadores.reduce(
+                    (acc, mod) => acc + (Number(mod.precioExtraSnapshot) || 0),
+                    0,
+                );
+                const precioUnitarioBase = Number(item.precioUnitarioSnapshot) || 0;
                 const precioItemConMods = precioUnitarioBase + precioTotalMods;
 
                 const itemCantidad = Number(item.cantidad);
@@ -87,10 +90,13 @@ export async function obtenerTicketAction(transactionId: string): Promise<{ succ
                 } else {
                     ticketItemsMap.set(key, {
                         id: item.id,
-                        nombre: (item as any).nombreProductoSnapshot || (item as any).nombreProducto || 'Producto sin nombre',
+                        nombre: item.nombreProductoSnapshot || 'Producto sin nombre',
                         cantidad: itemCantidad,
                         precioUnitario: precioUnitarioBase,
-                        modificadores: (item.modificadores as any[] || []).map(m => ({ nombre: m.nombreModificadorSnapshot, precioExtra: Number(m.precioExtraSnapshot || 0) })),
+                        modificadores: item.modificadores.map((m) => ({
+                            nombre: m.nombreModificadorSnapshot,
+                            precioExtra: Number(m.precioExtraSnapshot) || 0,
+                        })),
                         subtotal: itemCantidad * precioItemConMods
                     });
                 }
@@ -129,7 +135,7 @@ export async function obtenerTicketAction(transactionId: string): Promise<{ succ
             }
         };
 
-    } catch (error: any) {
+    } catch (error) {
         console.error('[obtenerTicketAction]', error);
         return { success: false, message: 'Error interno al obtener el ticket.' };
     }

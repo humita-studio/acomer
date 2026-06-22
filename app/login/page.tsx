@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -90,9 +91,9 @@ export default function LoginPage() {
 
         <p className="text-center text-gray-600 text-sm mt-6">
           ¿No tienes cuenta?{' '}
-          <a href="/register" className="text-blue-600 hover:underline">
+          <Link href="/register" className="text-blue-600 hover:underline">
             Regístrate aquí
-          </a>
+          </Link>
         </p>
       </div>
     </div>

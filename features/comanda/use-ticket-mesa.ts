@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/shared/query/keys';
 import { obtenerTicketMesaAction } from './ticket-mesa-actions';
 import { agregarItemsStaffAction, type StaffItemInput } from './agregar-items-staff-action';
-import type { TicketItem } from './obtener-ticket-mesa';
+import type { TicketItem } from '@/features/pedidos/obtenerTicketMesa';
 
 export type TicketData = { items: TicketItem[]; total: number };
 

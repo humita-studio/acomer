@@ -2,7 +2,7 @@
 
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
-import { obtenerTicketMesa, type TicketItem } from './obtener-ticket-mesa';
+import { obtenerTicketMesa, type TicketItem } from '@/features/pedidos/obtenerTicketMesa';
 
 /**
  * Wrapper server-action de `obtenerTicketMesa` para consumirlo como `queryFn`

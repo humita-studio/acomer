@@ -10,7 +10,7 @@ import {
   DELIVERY_CONFIG_DEFAULT,
   type DeliveryConfig,
   type AgregadosHasta,
-} from './delivery-config';
+} from './deliveryConfig';
 
 const MODOS = ['ambos', 'takeaway', 'delivery'] as const;
 const AGREGADOS = ['no', 'preparacion', 'listo'] as const;

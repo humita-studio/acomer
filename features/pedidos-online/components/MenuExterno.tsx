@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { MenuView, type CategoriaMenu, type ProductoMenu } from './MenuDigital';
+import { MenuView } from '@/features/carta/components/MenuView';
+import type { CategoriaMenu, ProductoMenu } from '@/features/carta/types';
+import { useLocalCart } from '@/features/carta/useLocalCart';
 import { CheckoutExterno } from './CheckoutExterno';
-import { useLocalCart } from '../cart/local-cart';
-import type { ModoPedido } from '../delivery-config';
+import type { ModoPedido } from '../deliveryConfig';
 
 /**
  * Flujo externo "menú primero": la carta se ve sin identificarse, el carrito es
@@ -30,14 +31,10 @@ export function MenuExterno({
   return (
     <>
       <MenuView
-        tenantId={tenantId}
-        mesaIdentificador="Tu pedido"
         categorias={categorias}
         productos={productos}
         cart={cart}
         pedidosConfirmados={[]}
-        showMozo={false}
-        pago={null}
         confirmLabel="Finalizar pedido"
         onConfirm={async () => {
           setCheckoutOpen(true);

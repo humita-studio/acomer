@@ -1,6 +1,7 @@
+import { cache } from 'react';
 import { db } from '@/shared/db';
 import { restaurantes } from '@/shared/db/schema';
-import { eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 /**
  * Extrae el restaurant_id a partir del slug del subdominio.
@@ -9,7 +10,7 @@ import { eq, isNull } from 'drizzle-orm';
  * @param slug - El slug del restaurante extraído del hostname
  * @returns El restaurant_id o null si no existe el restaurante
  */
-export async function getTenantBySlug(slug: string): Promise<string | null> {
+export const getTenantBySlug = cache(async (slug: string): Promise<string | null> => {
   try {
     const tenant = await db
       .select({ id: restaurantes.id })
@@ -22,7 +23,7 @@ export async function getTenantBySlug(slug: string): Promise<string | null> {
     console.error(`[getTenantBySlug] Error fetching tenant for slug "${slug}":`, error);
     return null;
   }
-}
+});
 
 /**
  * Obtiene los detalles completos del restaurante.

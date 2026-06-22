@@ -1,21 +1,13 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { db } from '@/shared/db';
-import {
-  mesas,
-  sesionesMesa,
-  categorias,
-  productos,
-  modificadores,
-  productosPrecios,
-  modificadoresPrecios,
-  productoModificadoresDisponibles,
-} from '@/shared/db/schema';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { mesas, sesionesMesa } from '@/shared/db/schema';
+import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
-import { obtenerTicketMesa } from '@/features/comanda/obtener-ticket-mesa';
-import type { ProductoMenu, CategoriaMenu } from '@/features/comanda/components/MenuDigital';
+import { obtenerTicketMesa } from '@/features/pedidos/obtenerTicketMesa';
+import { obtenerCarta } from '@/features/carta/obtenerCarta';
+import type { CategoriaMenu } from '@/features/carta/types';
 import { MesaPedidoManager } from './mesa-pedido-manager';
 import { AbrirMesaButton } from './abrir-mesa-button';
 
@@ -52,57 +44,8 @@ export default async function MesaPedidoPage({
   // 3. Ticket acumulado (si hay sesión)
   const ticket = sesion ? await obtenerTicketMesa(sesion.id) : { items: [], total: 0 };
 
-  // 4. Catálogo activo (mismas queries que la carta del comensal)
-  const cats = await db
-    .select({ id: categorias.id, nombre: categorias.nombre })
-    .from(categorias)
-    .where(and(eq(categorias.restauranteId, tenantId), eq(categorias.activo, true), isNull(categorias.deletedAt)))
-    .orderBy(asc(categorias.createdAt));
-
-  const prods = await db
-    .select({
-      id: productos.id,
-      categoriaId: productos.categoriaId,
-      nombre: productos.nombre,
-      descripcion: productos.descripcion,
-      permiteAdicionales: productos.permiteAdicionales,
-      precio: productosPrecios.precio,
-    })
-    .from(productos)
-    .innerJoin(
-      productosPrecios,
-      and(eq(productos.id, productosPrecios.productoId), isNull(productosPrecios.vigentaHsta)),
-    )
-    .where(and(eq(productos.restauranteId, tenantId), eq(productos.activo, true), isNull(productos.deletedAt)));
-
-  const modsDisponibles = await db
-    .select({
-      productoId: productoModificadoresDisponibles.productoId,
-      id: modificadores.id,
-      nombre: modificadores.nombre,
-      precioExtra: modificadoresPrecios.precioExtra,
-    })
-    .from(productoModificadoresDisponibles)
-    .innerJoin(modificadores, eq(productoModificadoresDisponibles.modificadorId, modificadores.id))
-    .innerJoin(
-      modificadoresPrecios,
-      and(eq(modificadores.id, modificadoresPrecios.modificadorId), isNull(modificadoresPrecios.vigentaHsta)),
-    )
-    .where(and(eq(modificadores.restauranteId, tenantId), eq(modificadores.disponible, true), isNull(modificadores.deletedAt)));
-
-  const menuProductos: ProductoMenu[] = prods.map((p) => ({
-    id: p.id,
-    categoriaId: p.categoriaId,
-    nombre: p.nombre,
-    descripcion: p.descripcion,
-    precio: parseFloat(p.precio?.toString() || '0'),
-    permiteAdicionales: p.permiteAdicionales,
-    modificadores: p.permiteAdicionales
-      ? modsDisponibles
-          .filter((m) => m.productoId === p.id)
-          .map((m) => ({ id: m.id, nombre: m.nombre, precioExtra: parseFloat(m.precioExtra?.toString() || '0') }))
-      : [],
-  }));
+  // 4. Catálogo activo (categorías + productos con adicionales y variantes)
+  const { categorias: cats, productos: menuProductos } = await obtenerCarta(tenantId);
 
   return (
     <div>

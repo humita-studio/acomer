@@ -138,6 +138,67 @@ export const productosPrecios = pgTable(
 )
 
 // ============================================================================
+// Variantes (presentaciones de un plato: elección única, precio fijo)
+// ============================================================================
+
+// Un producto es "de precio único" (productos_precios) O "con variantes". Si tiene
+// al menos una variante activa, el precio vive acá (no en productos_precios) y la
+// elección es única y requerida al pedir. P. ej. Milanesa → Simple / Napolitana /
+// A caballo / Doble caballo.
+export const productoVariantes = pgTable(
+  'producto_variantes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    productoId: uuid('producto_id').notNull(),
+    nombre: text('nombre').notNull(),
+    orden: integer('orden').notNull().default(0),
+    esDefault: boolean('es_default').notNull().default(false),
+    activo: boolean('activo').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'producto_variantes_restaurant_id_fk',
+    }).onDelete('cascade'),
+    productoIdFk: foreignKey({
+      columns: [table.productoId],
+      foreignColumns: [productos.id],
+      name: 'producto_variantes_producto_id_fk',
+    }).onDelete('cascade'),
+  })
+)
+
+// Precio absoluto de cada variante (ledger append-only, igual que productos_precios).
+export const productoVariantesPrecios = pgTable(
+  'producto_variantes_precios',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    varianteId: uuid('variante_id').notNull(),
+    precio: numeric('precio', { precision: 10, scale: 2 }).notNull(),
+    vigenteSde: timestamp('vigente_desde', { withTimezone: true }).defaultNow(),
+    vigentaHsta: timestamp('vigente_hasta', { withTimezone: true }),
+    creadoPor: uuid('creado_por'),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'producto_variantes_precios_restaurant_id_fk',
+    }).onDelete('cascade'),
+    varianteIdFk: foreignKey({
+      columns: [table.varianteId],
+      foreignColumns: [productoVariantes.id],
+      name: 'producto_variantes_precios_variante_id_fk',
+    }).onDelete('cascade'),
+  })
+)
+
+// ============================================================================
 // Modificadores (Ingredientes Extras)
 // ============================================================================
 
@@ -305,7 +366,7 @@ export const sesionesMesa = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull(),
     mesaId: uuid('mesa_id'), // nullable: takeaway/delivery no tienen mesa física
-    tipo: text('tipo').notNull().default('salon'), // salon | takeaway | delivery
+    tipo: text('tipo').notNull().default('salon'), // salon | takeaway | delivery | mostrador
     estado: text('estado').notNull().default('Activa'), // Activa | Cerrada
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -321,7 +382,7 @@ export const sesionesMesa = pgTable(
       foreignColumns: [mesas.id],
       name: 'sesiones_mesa_mesa_id_fk',
     }).onDelete('cascade'),
-    tipoCheck: check('sesiones_mesa_tipo_check', sql`tipo IN ('salon','takeaway','delivery')`),
+    tipoCheck: check('sesiones_mesa_tipo_check', sql`tipo IN ('salon','takeaway','delivery','mostrador')`),
   })
 )
 
@@ -422,8 +483,13 @@ export const reservasConfig = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull().unique(),
     activo: boolean('activo').notNull().default(true), // reservas online habilitadas
-    turnos: jsonb('turnos').notNull().default(['12:00', '12:30', '13:00', '13:30', '14:00', '20:00', '20:30', '21:00', '21:30', '22:00']), // array de 'HH:MM'
+    // array de turnos con nombre y rango: { nombre, desde, hasta, activo }
+    turnos: jsonb('turnos').notNull().default([
+      { nombre: 'Almuerzo', desde: '12:00', hasta: '15:30', activo: true },
+      { nombre: 'Cena', desde: '20:00', hasta: '00:00', activo: true },
+    ]),
     duracionMinDefault: integer('duracion_min_default').notNull().default(90),
+    anticipacionMinMin: integer('anticipacion_min_min').notNull().default(120), // min de anticipación; 0 = sin mínimo
     cupoCubiertosPorTurno: integer('cupo_cubiertos_por_turno'), // null = sin límite
     maxReservasPorDia: integer('max_reservas_por_dia'), // null = sin límite
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -466,6 +532,50 @@ export const deliveryConfig = pgTable(
   })
 )
 
+// Configuración de la landing pública del local (home del tenant): descripción,
+// dirección, horarios de atención por día, qué acciones se ofrecen, color de
+// marca y redes. 1:1 con el restaurante; si no hay fila, la app usa sus defaults
+// (ver features/landing/landingConfig.ts).
+export const landingConfig = pgTable(
+  'landing_config',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull().unique(),
+    descripcion: text('descripcion').notNull().default(''), // tagline ("Cocina de barrio · Parrilla")
+    direccion: text('direccion').notNull().default(''),
+    // 7 días indexados por getDay() (0=Dom … 6=Sáb): { cerrado, desde, hasta }.
+    horarios: jsonb('horarios').notNull().default([
+      { cerrado: false, desde: '12:00', hasta: '00:00' },
+      { cerrado: false, desde: '12:00', hasta: '00:00' },
+      { cerrado: false, desde: '12:00', hasta: '00:00' },
+      { cerrado: false, desde: '12:00', hasta: '00:00' },
+      { cerrado: false, desde: '12:00', hasta: '00:00' },
+      { cerrado: false, desde: '12:00', hasta: '00:00' },
+      { cerrado: false, desde: '12:00', hasta: '00:00' },
+    ]),
+    // Qué tarjetas se muestran: { verCarta, pedirOnline, reservar, qr }.
+    acciones: jsonb('acciones')
+      .notNull()
+      .default({ verCarta: true, pedirOnline: true, reservar: true, qr: true }),
+    colorMarca: text('color_marca').notNull().default('terracota'), // terracota | ambar | verde
+    // Contacto/redes: { whatsapp, instagram, telefono }.
+    redes: jsonb('redes').notNull().default({ whatsapp: '', instagram: '', telefono: '' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'landing_config_restaurant_id_fk',
+    }).onDelete('cascade'),
+    colorMarcaCheck: check(
+      'landing_config_color_marca_check',
+      sql`color_marca IN ('terracota','ambar','verde')`,
+    ),
+  })
+)
+
 // ============================================================================
 // Borrador de Comanda Compartida (Items en carrito antes de confirmar)
 // ============================================================================
@@ -477,6 +587,8 @@ export const itemsBorradorMesa = pgTable(
     restauranteId: uuid('restaurant_id').notNull(),
     sesionMesaId: uuid('sesion_mesa_id').notNull(),
     productoId: uuid('producto_id').notNull(),
+    // Variante elegida (presentación del plato). Null si el producto no tiene variantes.
+    varianteId: uuid('variante_id'),
     nombreProducto: text('nombre_producto').notNull(),
     precioUnitario: numeric('precio_unitario', { precision: 10, scale: 2 }).notNull(),
     cantidad: integer('cantidad').notNull().default(1),
@@ -499,6 +611,11 @@ export const itemsBorradorMesa = pgTable(
       foreignColumns: [productos.id],
       name: 'items_borrador_mesa_producto_id_fk',
     }).onDelete('cascade'),
+    varianteIdFk: foreignKey({
+      columns: [table.varianteId],
+      foreignColumns: [productoVariantes.id],
+      name: 'items_borrador_mesa_variante_id_fk',
+    }).onDelete('set null'),
   })
 )
 
@@ -541,6 +658,9 @@ export const comandaItems = pgTable(
     // Nullable: un "ítem libre" (algo que no está en la carta) no referencia un
     // producto. El nombre y el precio quedan en los snapshots de abajo.
     productoId: uuid('producto_id'),
+    // Variante elegida (presentación). Su nombre/precio ya van en los snapshots;
+    // se guarda el id para reportes por variante. Null si el producto no tiene variantes.
+    varianteId: uuid('variante_id'),
     cantidad: numeric('cantidad', { precision: 5, scale: 0 }).notNull().default('1'),
     nombreProductoSnapshot: text('nombre_producto_snapshot').notNull(),
     precioUnitarioSnapshot: numeric('precio_unitario_snapshot', { precision: 10, scale: 2 }).notNull(),
@@ -563,6 +683,11 @@ export const comandaItems = pgTable(
       foreignColumns: [productos.id],
       name: 'comanda_items_producto_id_fk',
     }).onDelete('cascade'),
+    varianteIdFk: foreignKey({
+      columns: [table.varianteId],
+      foreignColumns: [productoVariantes.id],
+      name: 'comanda_items_variante_id_fk',
+    }).onDelete('set null'),
   })
 )
 
@@ -669,7 +794,13 @@ export const transaccionesPago = pgTable(
     proveedor: text('proveedor').notNull(),
     monto: numeric('monto', { precision: 10, scale: 2 }).notNull(), // total YA con descuento
     descuento: numeric('descuento', { precision: 10, scale: 2 }).notNull().default('0'),
-    promocionId: uuid('promocion_id'), // promo aplicada (null si manual o borrada)
+    promocionId: uuid('promocion_id'), // promo aplicada (null si manual, borrada o si aplicaron 2+)
+    // Snapshot de TODAS las promos aplicadas en el cobro: sobrevive aunque después
+    // se edite/borre la promo y soporta varias a la vez (promocion_id sólo guarda una).
+    promocionesAplicadas: jsonb('promociones_aplicadas')
+      .$type<{ id: string; nombre: string; tipo: string; descuento: number }[]>()
+      .notNull()
+      .default([]),
     estado: text('estado').notNull().default('Pendiente'), // Pendiente | Aprobado | Rechazado | Cancelado
     referenciaExterna: text('referencia_externa'), // ID del pago/preferencia en MP
     metadata: jsonb('metadata').default({}),
@@ -831,6 +962,7 @@ export const productosRelations = relations(productos, ({ one, many }) => ({
     references: [categorias.id],
   }),
   precios: many(productosPrecios),
+  variantes: many(productoVariantes),
   modificadores: many(productoModificadoresDisponibles),
   comandaItems: many(comandaItems),
 }))
@@ -843,6 +975,29 @@ export const productosPreciosRelations = relations(productosPrecios, ({ one }) =
   producto: one(productos, {
     fields: [productosPrecios.productoId],
     references: [productos.id],
+  }),
+}))
+
+export const productoVariantesRelations = relations(productoVariantes, ({ one, many }) => ({
+  restaurante: one(restaurantes, {
+    fields: [productoVariantes.restauranteId],
+    references: [restaurantes.id],
+  }),
+  producto: one(productos, {
+    fields: [productoVariantes.productoId],
+    references: [productos.id],
+  }),
+  precios: many(productoVariantesPrecios),
+}))
+
+export const productoVariantesPreciosRelations = relations(productoVariantesPrecios, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [productoVariantesPrecios.restauranteId],
+    references: [restaurantes.id],
+  }),
+  variante: one(productoVariantes, {
+    fields: [productoVariantesPrecios.varianteId],
+    references: [productoVariantes.id],
   }),
 }))
 
@@ -939,6 +1094,10 @@ export const itemsBorradorMesaRelations = relations(itemsBorradorMesa, ({ one })
     fields: [itemsBorradorMesa.productoId],
     references: [productos.id],
   }),
+  variante: one(productoVariantes, {
+    fields: [itemsBorradorMesa.varianteId],
+    references: [productoVariantes.id],
+  }),
 }))
 
 export const pedidosRelations = relations(pedidos, ({ one, many }) => ({
@@ -965,6 +1124,10 @@ export const comandaItemsRelations = relations(comandaItems, ({ one, many }) => 
   producto: one(productos, {
     fields: [comandaItems.productoId],
     references: [productos.id],
+  }),
+  variante: one(productoVariantes, {
+    fields: [comandaItems.varianteId],
+    references: [productoVariantes.id],
   }),
   modificadores: many(comandaItemModificadores),
 }))
@@ -997,6 +1160,13 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
 export const configuracionPagosRelations = relations(configuracionPagos, ({ one }) => ({
   restaurante: one(restaurantes, {
     fields: [configuracionPagos.restauranteId],
+    references: [restaurantes.id],
+  }),
+}))
+
+export const landingConfigRelations = relations(landingConfig, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [landingConfig.restauranteId],
     references: [restaurantes.id],
   }),
 }))

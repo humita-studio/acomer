@@ -8,9 +8,9 @@ import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { crearPedidoConItems, type PedidoItemInput } from './crear-pedido-core';
-import { obtenerDeliveryConfig } from './delivery-config-actions';
-import { modosPermitidos } from './delivery-config';
+import { crearPedidoConItems, type PedidoItemInput } from '@/features/pedidos/crearPedidoCore';
+import { obtenerDeliveryConfig } from './deliveryConfigActions';
+import { modosPermitidos } from './deliveryConfig';
 
 type TipoExterno = 'takeaway' | 'delivery';
 
@@ -113,6 +113,7 @@ export async function crearPedidoExternoAction(
         sesionMesaId: sesion.id,
         items: itemsLimpios.map((i) => ({
           productoId: i.productoId,
+          varianteId: i.varianteId,
           cantidad: i.cantidad,
           modificadores: (i.modificadores ?? []).map((m) => ({ id: m.id })),
         })),

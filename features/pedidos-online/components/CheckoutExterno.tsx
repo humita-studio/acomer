@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCartTotal, type CartItem } from '../store';
-import { crearPedidoExternoAction } from '../pedido-externo-actions';
-import { useLocalCartStore } from '../cart/local-cart';
-import type { ModoPedido } from '../delivery-config';
+import { getCartTotal, type CartItem } from '@/features/carta/cart';
+import { crearPedidoExternoAction } from '../pedidoExternoActions';
+import { useLocalCartStore } from '@/features/carta/useLocalCart';
+import type { ModoPedido } from '../deliveryConfig';
 
 type Tipo = 'takeaway' | 'delivery';
 
@@ -58,6 +58,7 @@ export function CheckoutExterno({
         },
         cartItems.map((i) => ({
           productoId: i.productoId,
+          varianteId: i.varianteId,
           cantidad: i.cantidad,
           modificadores: i.modificadores.map((m) => ({ id: m.id })),
         })),

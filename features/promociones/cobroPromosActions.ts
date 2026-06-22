@@ -1,15 +1,22 @@
 'use server';
 
 import { db } from '@/shared/db';
-import { promociones, productos } from '@/shared/db/schema';
-import { and, eq } from 'drizzle-orm';
+import {
+  promociones,
+  productos,
+  productosPrecios,
+  productoVariantesPrecios,
+  modificadoresPrecios,
+} from '@/shared/db/schema';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { esItemLibre, type StaffItemInput } from '@/features/pedidos/crearPedidoCore';
 import {
   aplicarPromociones,
   type PromoItem,
   type ResultadoPromos,
-} from './aplicar-promociones';
+} from './aplicarPromociones';
 import type { Promocion, PromoCanal, PromoCondiciones, PromoMetodoPago } from './promociones';
 
 /** Mapea el tipo de sesión al canal de promo. */
@@ -78,6 +85,123 @@ async function obtenerItemsParaPromos(sesionMesaId: string): Promise<PromoItem[]
       subtotal: (precioUnitario + precioMods) * cantidad,
     } satisfies PromoItem;
   });
+}
+
+/**
+ * Arma los PromoItem desde un carrito local (StaffItemInput), resolviendo precio
+ * base y categoría vigentes desde la DB — los mismos snapshots que persiste
+ * `crearPedidoConItemsStaff`, así el subtotal del preview coincide con el total
+ * cobrado. Lo usan el preview y el cobro de la venta de mostrador (ítems que aún
+ * no están persistidos, a diferencia de `obtenerItemsParaPromos`).
+ */
+async function construirPromoItemsStaff(
+  tenantId: string,
+  items: StaffItemInput[],
+): Promise<PromoItem[]> {
+  const productoIds = Array.from(
+    new Set(items.map((i) => i.productoId).filter((x): x is string => !!x)),
+  );
+  const varianteIds = Array.from(
+    new Set(items.map((i) => i.varianteId).filter((x): x is string => !!x)),
+  );
+  const modIds = Array.from(new Set(items.flatMap((i) => i.modificadorIds ?? [])));
+
+  const [prodRows, precioRows, variantePrecioRows, modPrecioRows] = await Promise.all([
+    productoIds.length
+      ? db
+          .select({ id: productos.id, categoriaId: productos.categoriaId })
+          .from(productos)
+          .where(and(eq(productos.restauranteId, tenantId), inArray(productos.id, productoIds)))
+      : Promise.resolve([] as { id: string; categoriaId: string }[]),
+    productoIds.length
+      ? db
+          .select({ productoId: productosPrecios.productoId, precio: productosPrecios.precio })
+          .from(productosPrecios)
+          .where(
+            and(inArray(productosPrecios.productoId, productoIds), isNull(productosPrecios.vigentaHsta)),
+          )
+      : Promise.resolve([] as { productoId: string; precio: string }[]),
+    varianteIds.length
+      ? db
+          .select({ varianteId: productoVariantesPrecios.varianteId, precio: productoVariantesPrecios.precio })
+          .from(productoVariantesPrecios)
+          .where(
+            and(
+              inArray(productoVariantesPrecios.varianteId, varianteIds),
+              isNull(productoVariantesPrecios.vigentaHsta),
+            ),
+          )
+      : Promise.resolve([] as { varianteId: string; precio: string }[]),
+    modIds.length
+      ? db
+          .select({
+            modificadorId: modificadoresPrecios.modificadorId,
+            precioExtra: modificadoresPrecios.precioExtra,
+          })
+          .from(modificadoresPrecios)
+          .where(
+            and(inArray(modificadoresPrecios.modificadorId, modIds), isNull(modificadoresPrecios.vigentaHsta)),
+          )
+      : Promise.resolve([] as { modificadorId: string; precioExtra: string }[]),
+  ]);
+
+  const catPorProducto = new Map(prodRows.map((p) => [p.id, p.categoriaId]));
+  const precioPorProducto = new Map(precioRows.map((p) => [p.productoId, Number(p.precio) || 0]));
+  const precioPorVariante = new Map(
+    variantePrecioRows.map((v) => [v.varianteId, Number(v.precio) || 0]),
+  );
+  const precioPorMod = new Map(modPrecioRows.map((m) => [m.modificadorId, Number(m.precioExtra) || 0]));
+
+  return items.map((item) => {
+    const cantidad = Number(item.cantidad) || 0;
+    if (esItemLibre(item)) {
+      const precio = Number(item.precioLibre) || 0;
+      return {
+        productoId: null,
+        categoriaId: null,
+        cantidad,
+        precioUnitario: precio,
+        subtotal: precio * cantidad,
+      } satisfies PromoItem;
+    }
+    const productoId = item.productoId as string;
+    // Si la línea tiene variante, su precio (absoluto) manda sobre el base.
+    const precioBase = item.varianteId
+      ? precioPorVariante.get(item.varianteId) ?? 0
+      : precioPorProducto.get(productoId) ?? 0;
+    const precioMods = (item.modificadorIds ?? []).reduce(
+      (acc, id) => acc + (precioPorMod.get(id) ?? 0),
+      0,
+    );
+    return {
+      productoId,
+      categoriaId: catPorProducto.get(productoId) ?? null,
+      cantidad,
+      precioUnitario: precioBase,
+      subtotal: (precioBase + precioMods) * cantidad,
+    } satisfies PromoItem;
+  });
+}
+
+/**
+ * Como `calcularCobroConPromos` pero para un carrito local todavía sin persistir
+ * (venta de mostrador). Resuelve precios desde la DB y corre el motor.
+ */
+export async function calcularPromosStaff(
+  tenantId: string,
+  items: StaffItemInput[],
+  opts: { metodoPago?: PromoMetodoPago | null; canal?: PromoCanal; omitirIds?: string[] },
+): Promise<ResultadoPromos & { aplicadasIds: string[] }> {
+  const [promoItems, promos] = await Promise.all([
+    construirPromoItemsStaff(tenantId, items),
+    obtenerPromosActivas(tenantId),
+  ]);
+  const res = aplicarPromociones(promoItems, promos, {
+    metodoPago: opts.metodoPago ?? null,
+    canal: opts.canal ?? null,
+    omitirIds: opts.omitirIds,
+  });
+  return { ...res, aplicadasIds: res.aplicadas.map((a) => a.id) };
 }
 
 /**

@@ -80,7 +80,6 @@ export async function liberarMesaAction(mesaId: string) {
     await broadcastOcupacion(session.restauranteId, mesaId, false);
 
     revalidatePath('/admin/mesas');
-    revalidatePath('/admin/plano');
     return { success: true, message: 'Mesa liberada correctamente' };
   } catch (error) {
     console.error('[liberarMesaAction]', error);
@@ -120,7 +119,6 @@ export async function abrirMesaAction(mesaId: string) {
     const { sesionId } = await abrirOReusarSesion(session.restauranteId, mesa);
 
     revalidatePath('/admin/mesas');
-    revalidatePath('/admin/plano');
     return { success: true, sesionId };
   } catch (error) {
     console.error('[abrirMesaAction]', error);

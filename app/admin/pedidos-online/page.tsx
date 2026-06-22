@@ -1,34 +1,35 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
-import { getOrdenesExternasAction } from '@/features/comanda/pedido-externo-actions';
-import { PedidosOnlineManager } from './pedidos-online-manager';
+import { getOrdenesExternasAction } from '@/features/pedidos-online/pedidoExternoActions';
+import { getDeliveryConfigAction } from '@/features/pedidos-online/deliveryConfigActions';
+import { PedidosOnlineManager } from '@/features/pedidos-online/components/PedidosOnlineManager';
 
 export default async function PedidosOnlinePage() {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
   if (!canAccessSection(session.role, 'delivery')) redirect('/unauthorized');
 
-  const res = await getOrdenesExternasAction();
-  const ordenes = res.success ? res.ordenes : [];
+  const [ordenesRes, configRes] = await Promise.all([
+    getOrdenesExternasAction(),
+    getDeliveryConfigAction(),
+  ]);
+  const ordenes = ordenesRes.success ? ordenesRes.ordenes : [];
 
   return (
     <div>
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Pedidos online</h1>
-          <p className="text-gray-500">Retiros y envíos. Avanzá el estado de cada pedido hasta entregarlo.</p>
-        </div>
-        <Link
-          href="/admin/pedidos-online/configuracion"
-          className="shrink-0 text-sm font-medium text-blue-600 hover:underline whitespace-nowrap"
-        >
-          Configuración
-        </Link>
+      <div className="mb-6">
+        <h1 className="font-heading text-3xl font-bold tracking-tight">Pedidos online</h1>
+        <p className="text-muted-foreground">
+          Retiros y envíos. Avanzá el estado de cada pedido hasta entregarlo.
+        </p>
       </div>
 
-      <PedidosOnlineManager tenantId={session.restauranteId} initialOrdenes={ordenes as never} />
+      <PedidosOnlineManager
+        tenantId={session.restauranteId}
+        initialOrdenes={ordenes as never}
+        initialConfig={configRes.config}
+      />
     </div>
   );
 }

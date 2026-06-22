@@ -4,7 +4,7 @@ import { db } from '@/shared/db';
 import { transaccionesPago, pedidos, sesionesMesa } from '@/shared/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
-import { calcularCobroConPromos } from '@/features/promociones/cobro-promos-actions';
+import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
 import type { PromoCanal } from '@/features/promociones/promociones';
 
 type PagoPresencialResult = {
@@ -66,6 +66,7 @@ export async function pedirCuentaPresencialAction(
     // Si falla (p.ej. la migración de promos no se aplicó todavía) se cobra sin descuento.
     let descuento = 0;
     let promocionId: string | null = null;
+    let promocionesAplicadas: { id: string; nombre: string; tipo: string; descuento: number }[] = [];
     try {
       const metodoPromo = metodoPago === 'efectivo' ? 'efectivo' : 'tarjeta';
       const canal: PromoCanal =
@@ -76,8 +77,10 @@ export async function pedirCuentaPresencialAction(
         omitirIds: omitirPromoIds,
       });
       descuento = Math.min(promoRes.descuento, saldoPendiente);
-      // La columna promocion_id es única: solo la guardamos si se aplicó una sola promo.
+      // promocion_id sólo guarda UNA promo; con varias queda null y el detalle vive
+      // en promociones_aplicadas (snapshot completo).
       promocionId = promoRes.aplicadas.length === 1 ? promoRes.aplicadas[0].id : null;
+      promocionesAplicadas = promoRes.aplicadas;
     } catch (promoError) {
       console.warn('[pedirCuentaPresencialAction] promos no aplicadas:', promoError);
     }
@@ -102,6 +105,7 @@ export async function pedirCuentaPresencialAction(
           monto: totalCalculado.toString(),
           descuento: descuento.toString(),
           promocionId,
+          promocionesAplicadas,
           metadata: { metodo: metodoPago },
         })
         .where(eq(transaccionesPago.id, existingTx.id));
@@ -114,6 +118,7 @@ export async function pedirCuentaPresencialAction(
         monto: totalCalculado.toString(),
         descuento: descuento.toString(),
         promocionId,
+        promocionesAplicadas,
         estado: 'Pendiente',
         metadata: { metodo: metodoPago },
       }).returning({ id: transaccionesPago.id });
@@ -159,8 +164,11 @@ export async function pedirCuentaPresencialAction(
       message,
       transactionId,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('[pedirCuentaPresencialAction]', error);
-    return { success: false, message: error.message || 'Error interno del servidor' };
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Error interno del servidor',
+    };
   }
 }

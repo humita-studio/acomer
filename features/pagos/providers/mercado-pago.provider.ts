@@ -37,7 +37,7 @@ export class MercadoPagoProvider implements PaymentProvider {
 
       const isLocalhostSubdomain = metadata.successUrl.startsWith('http://') && metadata.successUrl.includes('localhost') && !metadata.successUrl.startsWith('http://localhost');
       
-      const body: any = {
+      const body = {
         items,
         back_urls: {
           success: metadata.successUrl,
@@ -46,11 +46,9 @@ export class MercadoPagoProvider implements PaymentProvider {
         },
         external_reference: transactionId, // Fundamental: conectamos MP con nuestra DB
         notification_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/webhooks/pagos/mercado_pago?tenantId=${this.tenantId}`,
+        // auto_return solo con back_urls públicas válidas (MP lo rechaza en localhost).
+        ...(isLocalhostSubdomain ? {} : { auto_return: 'approved' as const }),
       };
-
-      if (!isLocalhostSubdomain) {
-        body.auto_return = 'approved';
-      }
 
       console.log('--- MP PREFERENCE BODY ---');
       console.log(JSON.stringify(body, null, 2));
@@ -63,11 +61,11 @@ export class MercadoPagoProvider implements PaymentProvider {
         paymentUrl: result.init_point, // URL para redirigir al comensal
         externalReference: result.id,  // ID de la preferencia
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating MP Preference:', error);
       return {
         success: false,
-        error: error.message || 'Error al comunicarse con Mercado Pago',
+        error: error instanceof Error ? error.message : 'Error al comunicarse con Mercado Pago',
       };
     }
   }
@@ -103,9 +101,10 @@ export class MercadoPagoProvider implements PaymentProvider {
         referenciaExterna: paymentData.external_reference || '',
         metadata: paymentData,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error verifying MP Payment:', error);
-      throw new Error(`Error validando pago en Mercado Pago: ${error.message}`);
+      const detalle = error instanceof Error ? error.message : String(error);
+      throw new Error(`Error validando pago en Mercado Pago: ${detalle}`);
     }
   }
 }

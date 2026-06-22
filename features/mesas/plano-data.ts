@@ -39,7 +39,7 @@ export type PlanoData = {
 /**
  * Lee el plano completo (ambientes + mesas con ocupación + elementos) ya mapeado
  * a la forma que usa el editor. Fuente única usada por el Server Component
- * (/admin/plano) para `initialData` y por el action de lectura para refetch en
+ * (/admin/mesas) para `initialData` y por el action de lectura para refetch en
  * cliente (TanStack Query).
  */
 export async function getPlanoData(restauranteId: string): Promise<PlanoData> {
@@ -99,7 +99,7 @@ export async function getPlanoData(restauranteId: string): Promise<PlanoData> {
 
 /**
  * Garantiza que el restaurante tenga al menos un ambiente y que ninguna mesa
- * quede sin asignar. Idempotente: se llama desde el loader de /admin/plano.
+ * quede sin asignar. Idempotente: se llama desde el loader de /admin/mesas.
  *
  * - Si no hay ningún ambiente, crea "Salón" (orden 0).
  * - Toda mesa con ambiente_id NULL se asigna al ambiente por defecto

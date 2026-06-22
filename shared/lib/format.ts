@@ -40,3 +40,19 @@ export function formatHora(fecha: Date | string | number): string {
 export function formatFechaHora(fecha: Date | string | number): string {
   return `${formatFecha(fecha)} ${formatHora(fecha)}`;
 }
+
+/** Formatea una fecha corta con mes abreviado, ej: "17 jun". */
+export function formatFechaCorta(fecha: Date | string | number): string {
+  return new Date(fecha)
+    .toLocaleDateString('es-AR', { timeZone: TZ, day: 'numeric', month: 'short' })
+    .replace('.', '');
+}
+
+/** Formatea una fecha con mes en texto, ej: "16 de junio". */
+export function formatFechaLarga(fecha: Date | string | number): string {
+  return new Date(fecha).toLocaleDateString('es-AR', {
+    timeZone: TZ,
+    day: 'numeric',
+    month: 'long',
+  });
+}

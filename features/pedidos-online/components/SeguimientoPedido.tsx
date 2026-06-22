@@ -7,7 +7,7 @@ import { Check, Clock, CookingPot, Bike, PackageCheck, Receipt, XCircle, Plus } 
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { PaymentMethodModal } from '@/features/pagos/components/PaymentMethodModal';
 import type { MetodoPago } from '@/features/pagos/get-metodos-pago';
-import type { SeguimientoPedido as SeguimientoData } from '../obtener-seguimiento';
+import type { SeguimientoPedido as SeguimientoData } from '../obtenerSeguimiento';
 
 type Props = {
   pedido: SeguimientoData;

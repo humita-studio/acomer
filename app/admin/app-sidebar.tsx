@@ -9,7 +9,7 @@ import {
   Bike,
   CalendarDays,
   ChevronsUpDown,
-  LayoutDashboard,
+  LayoutGrid,
   LogOut,
   Settings,
   TicketPercent,
@@ -25,6 +25,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -50,18 +51,39 @@ type NavLink = {
   icon: LucideIcon;
 };
 
-const LINKS: NavLink[] = [
-  { href: '/admin', label: 'Dashboard', section: 'dashboard', icon: LayoutDashboard },
-  { href: '/admin/menu', label: 'Menú', section: 'menu', icon: UtensilsCrossed },
-  { href: '/admin/promociones', label: 'Promociones', section: 'menu', icon: TicketPercent },
-  { href: '/admin/staff', label: 'Empleados', section: 'staff', icon: Users },
-  { href: '/admin/plano', label: 'Mesas', section: 'tables', icon: Armchair },
-  { href: '/admin/reservas', label: 'Reservas', section: 'reservas', icon: CalendarDays },
-  { href: '/admin/pedidos-online', label: 'Pedidos online', section: 'delivery', icon: Bike },
-  { href: '/admin/reportes', label: 'Reportes', section: 'reports', icon: BarChart3 },
-  { href: '/admin/caja', label: 'Caja', section: 'cashier', icon: Wallet },
-  { href: '/admin/cobros', label: 'Cobros', section: 'cashier', icon: Banknote },
-  { href: '/admin/configuracion', label: 'Configuración', section: 'settings', icon: Settings },
+type NavGroup = {
+  label: string;
+  links: NavLink[];
+};
+
+// Navegación agrupada según el rediseño: Principal / Operación / Gestión.
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Principal',
+    links: [
+      { href: '/admin', label: 'Dashboard', section: 'dashboard', icon: LayoutGrid },
+      { href: '/admin/menu', label: 'Menú', section: 'menu', icon: UtensilsCrossed },
+      { href: '/admin/mesas', label: 'Mesas', section: 'tables', icon: Armchair },
+    ],
+  },
+  {
+    label: 'Operación',
+    links: [
+      { href: '/admin/caja', label: 'Caja', section: 'cashier', icon: Wallet },
+      { href: '/admin/cobros', label: 'Cobros', section: 'cashier', icon: Banknote },
+      { href: '/admin/pedidos-online', label: 'Pedidos online', section: 'delivery', icon: Bike },
+      { href: '/admin/reservas', label: 'Reservas', section: 'reservas', icon: CalendarDays },
+    ],
+  },
+  {
+    label: 'Gestión',
+    links: [
+      { href: '/admin/reportes', label: 'Reportes', section: 'reports', icon: BarChart3 },
+      { href: '/admin/staff', label: 'Empleados', section: 'staff', icon: Users },
+      { href: '/admin/promociones', label: 'Promociones', section: 'menu', icon: TicketPercent },
+      { href: '/admin/configuracion', label: 'Configuración', section: 'settings', icon: Settings },
+    ],
+  },
 ];
 
 export function AppSidebar({
@@ -87,15 +109,22 @@ export function AppSidebar({
 
   const inicial = (nombreRestaurante?.trim()?.[0] ?? '?').toUpperCase();
 
+  const canSee = (link: NavLink) =>
+    link.section === 'dashboard' ||
+    canAccessSection(role, link.section as Exclude<Section, 'dashboard'>);
+
+  const isLinkActive = (href: string) =>
+    pathname === href || (href !== '/admin' && !!pathname?.startsWith(href));
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1 py-1.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-            {inicial}
-          </div>
+        <div className="flex items-center gap-2.5 px-1 py-1.5">
+          <span className="size-2.5 shrink-0 rounded-full bg-primary" aria-hidden />
           <div className="grid flex-1 leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate text-sm font-semibold">{nombreRestaurante}</span>
+            <span className="truncate font-display text-lg font-semibold tracking-tight">
+              {nombreRestaurante}
+            </span>
             <span className="truncate text-xs text-muted-foreground capitalize">
               Panel de {role}
             </span>
@@ -104,37 +133,37 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {LINKS.map((link) => {
-                if (
-                  link.section !== 'dashboard' &&
-                  !canAccessSection(role, link.section as Exclude<Section, 'dashboard'>)
-                ) {
-                  return null;
-                }
+        {NAV_GROUPS.map((group) => {
+          const visibles = group.links.filter(canSee);
+          if (visibles.length === 0) return null;
 
-                const isActive =
-                  pathname === link.href ||
-                  (link.href !== '/admin' && pathname?.startsWith(link.href));
-
-                const Icon = link.icon;
-
-                return (
-                  <SidebarMenuItem key={link.href}>
-                    <SidebarMenuButton asChild isActive={!!isActive} tooltip={link.label}>
-                      <Link href={link.href}>
-                        <Icon />
-                        <span>{link.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+          return (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibles.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <SidebarMenuItem key={link.href}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isLinkActive(link.href)}
+                          tooltip={link.label}
+                        >
+                          <Link href={link.href}>
+                            <Icon />
+                            <span>{link.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          );
+        })}
       </SidebarContent>
 
       <SidebarFooter>

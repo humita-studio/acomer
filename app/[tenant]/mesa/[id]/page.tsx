@@ -1,24 +1,17 @@
-import { notFound } from 'next/navigation';
 import { db } from '@/shared/db';
-import { 
-  categorias, 
-  productos, 
-  modificadores, 
-  productosPrecios,
-  modificadoresPrecios,
-  productoModificadoresDisponibles,
-  itemsBorradorMesa
-} from '@/shared/db/schema';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { itemsBorradorMesa } from '@/shared/db/schema';
+import { eq, asc } from 'drizzle-orm';
 import { getOrCreateSesionMesa } from '@/features/comanda/sesion-mesa-actions';
-import { MenuDigital, ProductoMenu, CategoriaMenu } from '@/features/comanda/components/MenuDigital';
+import { obtenerCarta } from '@/features/carta/obtenerCarta';
+import { MenuDigital } from '@/features/comanda/components/MenuDigital';
+import type { CategoriaMenu } from '@/features/carta/types';
 import { SelectorSubMesa } from '@/features/comanda/components/SelectorSubMesa';
 import { RealtimeMesaSync } from '@/features/comanda/components/RealtimeMesaSync';
-import type { CartItem } from '@/features/comanda/store';
+import type { CartItem } from '@/features/carta/cart';
 import { getMetodosPago } from '@/features/pagos/get-metodos-pago';
 import { obtenerTicketAction } from '@/features/pagos/obtener-ticket-action';
 import { ResumenPago } from '@/features/pagos/components/ResumenPago';
-import { obtenerTicketMesa } from '@/features/comanda/obtener-ticket-mesa';
+import { obtenerTicketMesa } from '@/features/pedidos/obtenerTicketMesa';
 
 type ModificadorSnapshot = {
   id: string;
@@ -80,67 +73,8 @@ export default async function ComandaPage({
 
   const { tenantId, sesionId, mesaIdentificador } = sessionResult;
 
-  // 3. Cargar Catálogo Activo
-  // Categorías
-  const cats = await db.select({ id: categorias.id, nombre: categorias.nombre })
-    .from(categorias)
-    .where(
-      and(
-        eq(categorias.restauranteId, tenantId),
-        eq(categorias.activo, true),
-        isNull(categorias.deletedAt)
-      )
-    )
-    .orderBy(asc(categorias.createdAt));
-
-  // Productos con precios vigentes
-  const prods = await db.select({
-      id: productos.id,
-      categoriaId: productos.categoriaId,
-      nombre: productos.nombre,
-      descripcion: productos.descripcion,
-      permiteAdicionales: productos.permiteAdicionales,
-      precio: productosPrecios.precio,
-    })
-    .from(productos)
-    .innerJoin(
-      productosPrecios, 
-      and(
-        eq(productos.id, productosPrecios.productoId),
-        isNull(productosPrecios.vigentaHsta)
-      )
-    )
-    .where(
-      and(
-        eq(productos.restauranteId, tenantId),
-        eq(productos.activo, true),
-        isNull(productos.deletedAt)
-      )
-    );
-
-  // Modificadores con precios vigentes
-  const modsDisponibles = await db.select({
-      productoId: productoModificadoresDisponibles.productoId,
-      id: modificadores.id,
-      nombre: modificadores.nombre,
-      precioExtra: modificadoresPrecios.precioExtra,
-    })
-    .from(productoModificadoresDisponibles)
-    .innerJoin(modificadores, eq(productoModificadoresDisponibles.modificadorId, modificadores.id))
-    .innerJoin(
-      modificadoresPrecios, 
-      and(
-        eq(modificadores.id, modificadoresPrecios.modificadorId),
-        isNull(modificadoresPrecios.vigentaHsta)
-      )
-    )
-    .where(
-      and(
-        eq(modificadores.restauranteId, tenantId),
-        eq(modificadores.disponible, true),
-        isNull(modificadores.deletedAt)
-      )
-    );
+  // 3. Cargar catálogo activo (categorías + productos con adicionales y variantes)
+  const { categorias: cats, productos: menuProductos } = await obtenerCarta(tenantId);
 
   // 4. Cargar borrador existente (items compartidos que ya están en el carrito)
   const borradorData = await db
@@ -152,6 +86,7 @@ export default async function ComandaPage({
   const initialCartItems: CartItem[] = borradorData.map((item) => ({
     id: item.id,
     productoId: item.productoId,
+    varianteId: item.varianteId,
     nombre: item.nombreProducto,
     precioUnitario: parseFloat(item.precioUnitario?.toString() || '0'),
     cantidad: item.cantidad,
@@ -160,23 +95,6 @@ export default async function ComandaPage({
 
   // 4b. Cargar el ticket acumulado de la mesa (pedidos confirmados)
   const { items: pedidosConfirmados } = await obtenerTicketMesa(sesionId);
-
-  // Mapear DB a la estructura de la UI
-  const menuProductos: ProductoMenu[] = prods.map(p => ({
-    id: p.id,
-    categoriaId: p.categoriaId,
-    nombre: p.nombre,
-    descripcion: p.descripcion,
-    precio: parseFloat(p.precio?.toString() || '0'),
-    permiteAdicionales: p.permiteAdicionales,
-    modificadores: p.permiteAdicionales ? modsDisponibles
-      .filter(m => m.productoId === p.id)
-      .map(m => ({
-        id: m.id,
-        nombre: m.nombre,
-        precioExtra: parseFloat(m.precioExtra?.toString() || '0')
-      })) : []
-  }));
 
   // 5. Obtener Métodos de Pago Disponibles
   const metodosPago = await getMetodosPago(tenantId);

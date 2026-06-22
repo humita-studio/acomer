@@ -1,56 +1,21 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { QRCodeSVG } from 'qrcode.react';
-import {
-  Pencil,
-  Eye,
-  Plus,
-  Save,
-  Trash2,
-  RotateCw,
-  Square,
-  Circle,
-  MousePointer2,
-  Minus,
-  Users,
-  QrCode,
-  DoorOpen,
-  ClipboardList,
-  List as ListIcon,
-  PenLine,
-  Scissors,
-  Combine,
-} from 'lucide-react';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
-import {
-  crearAmbiente,
-  renombrarAmbiente,
-  eliminarAmbiente,
-  crearMesaEnPlano,
-  eliminarMesaPlano,
-  crearElementoPlano,
-  eliminarElementoPlano,
-  guardarLayoutAction,
-  dividirMesaAction,
-  unirMesaAction,
-  getPlanoDataAction,
-} from '@/features/mesas/plano-actions';
-import { liberarMesaAction, abrirMesaAction } from '@/features/mesas/mesas-actions';
 import { queryKeys } from '@/shared/query/keys';
 import type { PlanoData } from '@/features/mesas/plano-data';
+import { getPlanoDataAction } from '@/features/mesas/plano-actions';
 import { PlanoCanvas } from './plano-canvas';
+import { PlanoToolbar } from './plano-toolbar';
+import { MesaLista } from './mesa-lista';
+import { MesaPanel } from './mesa-panel';
+import { ElementoPanel } from './elemento-panel';
+import { OperacionPanel } from './operacion-panel';
 import { usePlanoStore } from './plano-store';
-import {
-  type AmbienteUI,
-  type ElementoPlanoUI,
-  type Herramienta,
-  type MesaPlano,
-} from './plano-types';
+import { usePlanoAcciones } from './use-plano-acciones';
+import { type MesaPlano } from './plano-types';
 
 export function PlanoManager({
   ambientes: initialAmbientes,
@@ -70,7 +35,6 @@ export function PlanoManager({
   const canManage = hasPermission(userRole as RoleType, 'canManageTables');
   const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
   const queryClient = useQueryClient();
-  const router = useRouter();
 
   // Estado de UI del editor (Zustand). Los datos del plano viven en TanStack Query.
   const {
@@ -88,12 +52,7 @@ export function PlanoManager({
     setAmbienteActivoId,
     setHerramienta,
     setSeleccion,
-    setDirty,
-    setGuardando,
-    setLiberandoId,
-    setAbriendoId,
     setMostrarLista,
-    patchDraft,
     pushAviso,
     removeAviso,
     iniciarEdicion,
@@ -157,266 +116,11 @@ export function PlanoManager({
   const selElemento =
     seleccion?.tipo === 'elemento' ? elementos.find((e) => e.id === seleccion.id) ?? null : null;
   const ambienteActivo = ambientes.find((a) => a.id === activeId) ?? null;
-  const ambNombre = (id: string | null) => ambientes.find((a) => a.id === id)?.nombre ?? '—';
 
-  // ---- Mutaciones de la copia de trabajo (patchDraft viene del store) ----
-  const updateMesa = (id: string, partial: Partial<MesaPlano>) =>
-    patchDraft((d) => ({ ...d, mesas: d.mesas.map((m) => (m.id === id ? { ...m, ...partial } : m)) }));
+  // Acciones (CRUD optimista + operación), separadas en su propio hook.
+  const acciones = usePlanoAcciones({ activeId, ambientes, mesas, elementos, draft, tenantId });
 
-  const updateElemento = (id: string, partial: Partial<ElementoPlanoUI>) =>
-    patchDraft((d) => ({ ...d, elementos: d.elementos.map((e) => (e.id === id ? { ...e, ...partial } : e)) }));
-
-  // ---- Acciones optimistas: la UI se actualiza al instante y reconcilia con
-  // el id real cuando responde el server (o revierte si falla). ----
-  const handleAddMesa = async () => {
-    const nombre = window.prompt('Identificador de la mesa (ej: Mesa 5):')?.trim();
-    if (!nombre) return;
-    const tempId = `temp-${crypto.randomUUID()}`;
-    const optimista: MesaPlano = {
-      id: tempId,
-      identificador: nombre,
-      qrToken: '',
-      parentMesaId: null,
-      ambienteId: activeId,
-      posX: 1,
-      posY: 1,
-      ancho: 2,
-      alto: 2,
-      forma: 'cuadrada',
-      capacidad: 4,
-      rotacion: 0,
-      ocupada: false,
-    };
-    patchDraft((d) => ({ ...d, mesas: [...d.mesas, optimista] }), false);
-    setSeleccion({ tipo: 'mesa', id: tempId });
-
-    const res = await crearMesaEnPlano(activeId, nombre);
-    if (res.success && res.mesa) {
-      const real = res.mesa as MesaPlano;
-      patchDraft((d) => ({ ...d, mesas: d.mesas.map((m) => (m.id === tempId ? real : m)) }), false);
-      setSeleccion((s) => (s?.tipo === 'mesa' && s.id === tempId ? { tipo: 'mesa', id: real.id } : s));
-    } else {
-      patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== tempId) }), false);
-      setSeleccion((s) => (s?.tipo === 'mesa' && s.id === tempId ? null : s));
-      alert(res.message || 'No se pudo crear la mesa');
-    }
-  };
-
-  const handleAddAmbiente = async () => {
-    const nombre = window.prompt('Nombre del ambiente (ej: Patio):')?.trim();
-    if (!nombre) return;
-    const res = await crearAmbiente(nombre);
-    if (res.success && res.ambiente) {
-      const amb = res.ambiente as AmbienteUI;
-      patchDraft((d) => ({ ...d, ambientes: [...d.ambientes, amb] }), false);
-      setAmbienteActivoId(amb.id);
-    } else {
-      alert(res.message || 'No se pudo crear el ambiente');
-    }
-  };
-
-  const handleRenameAmbiente = async (amb: AmbienteUI) => {
-    const nombre = window.prompt('Nuevo nombre del ambiente:', amb.nombre)?.trim();
-    if (!nombre || nombre === amb.nombre) return;
-    patchDraft(
-      (d) => ({ ...d, ambientes: d.ambientes.map((a) => (a.id === amb.id ? { ...a, nombre } : a)) }),
-      false
-    );
-    const res = await renombrarAmbiente(amb.id, nombre);
-    if (!res.success) alert(res.message || 'No se pudo renombrar');
-  };
-
-  const handleDeleteAmbiente = async (amb: AmbienteUI) => {
-    if (ambientes.length <= 1) {
-      alert('Tiene que quedar al menos un ambiente');
-      return;
-    }
-    if (!confirm(`¿Eliminar el ambiente "${amb.nombre}"? Sus mesas quedarán sin asignar.`)) return;
-    const res = await eliminarAmbiente(amb.id);
-    if (!res.success) {
-      alert(res.message || 'No se pudo eliminar');
-      return;
-    }
-    const restantes = ambientes.filter((a) => a.id !== amb.id);
-    const destino = restantes[0]?.id ?? null;
-    patchDraft(
-      (d) => ({
-        ...d,
-        ambientes: restantes,
-        mesas: d.mesas.map((m) => (m.ambienteId === amb.id ? { ...m, ambienteId: destino } : m)),
-        elementos: d.elementos.filter((e) => e.ambienteId !== amb.id),
-      }),
-      false
-    );
-    if (activeId === amb.id) setAmbienteActivoId(destino ?? '');
-  };
-
-  const handleDeleteMesa = async (id: string) => {
-    const mesa = mesas.find((m) => m.id === id);
-    if (!confirm(`¿Eliminar ${mesa?.identificador ?? 'la mesa'}?`)) return;
-    // Optimista: sacar al instante y restaurar si falla
-    patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== id) }), false);
-    setSeleccion(null);
-    if (id.startsWith('temp-')) return; // todavía no existía en el server
-    const res = await eliminarMesaPlano(id);
-    if (!res.success) {
-      if (mesa) patchDraft((d) => ({ ...d, mesas: [...d.mesas, mesa] }), false);
-      alert(res.message || 'No se pudo eliminar');
-    }
-  };
-
-  const handleCreateElemento = async (rect: {
-    tipo: Herramienta;
-    posX: number;
-    posY: number;
-    ancho: number;
-    alto: number;
-    rotacion?: number;
-  }) => {
-    const tipo = rect.tipo === 'barra' ? 'barra' : 'pared';
-    const tempId = `temp-${crypto.randomUUID()}`;
-    const optimista: ElementoPlanoUI = {
-      id: tempId,
-      ambienteId: activeId,
-      tipo,
-      posX: rect.posX,
-      posY: rect.posY,
-      ancho: rect.ancho,
-      alto: rect.alto,
-      rotacion: rect.rotacion ?? 0,
-      etiqueta: null,
-    };
-    patchDraft((d) => ({ ...d, elementos: [...d.elementos, optimista] }), false);
-
-    const res = await crearElementoPlano({
-      ambienteId: activeId,
-      tipo,
-      posX: rect.posX,
-      posY: rect.posY,
-      ancho: rect.ancho,
-      alto: rect.alto,
-      rotacion: rect.rotacion ?? 0,
-    });
-    if (res.success && res.elemento) {
-      const real = res.elemento as ElementoPlanoUI;
-      patchDraft((d) => ({ ...d, elementos: d.elementos.map((e) => (e.id === tempId ? real : e)) }), false);
-    } else {
-      patchDraft((d) => ({ ...d, elementos: d.elementos.filter((e) => e.id !== tempId) }), false);
-      alert(res.message || 'No se pudo crear el elemento');
-    }
-  };
-
-  const handleDeleteElemento = async (id: string) => {
-    const elemento = elementos.find((e) => e.id === id);
-    // Optimista: sacar al instante y restaurar si falla
-    patchDraft((d) => ({ ...d, elementos: d.elementos.filter((e) => e.id !== id) }), false);
-    setSeleccion(null);
-    if (id.startsWith('temp-')) return; // todavía no existía en el server
-    const res = await eliminarElementoPlano(id);
-    if (!res.success) {
-      if (elemento) patchDraft((d) => ({ ...d, elementos: [...d.elementos, elemento] }), false);
-      alert(res.message || 'No se pudo eliminar');
-    }
-  };
-
-  // ---- Operación (modo ver) ----
-  const handleLiberar = async (mesa: MesaPlano) => {
-    if (!confirm(`¿Liberar ${mesa.identificador}? Se cerrará la sesión actual.`)) return;
-    setLiberandoId(mesa.id);
-    const res = await liberarMesaAction(mesa.id);
-    setLiberandoId(null);
-    if (res.success) queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
-    else alert(res.message || 'No se pudo liberar la mesa');
-  };
-
-  // Abre la mesa (ocupa) sin que el cliente escanee y lleva al mozo a cargar el pedido.
-  const handleAbrir = async (mesa: MesaPlano) => {
-    setAbriendoId(mesa.id);
-    const res = await abrirMesaAction(mesa.id);
-    setAbriendoId(null);
-    if (res.success) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
-      router.push(`/admin/mesas/${mesa.id}`);
-    } else {
-      alert(res.message || 'No se pudo abrir la mesa');
-    }
-  };
-
-  const seleccionarMesa = (mesa: MesaPlano) => {
-    if (mesa.ambienteId && mesa.ambienteId !== activeId) setAmbienteActivoId(mesa.ambienteId);
-    setSeleccion({ tipo: 'mesa', id: mesa.id });
-    setMostrarLista(false);
-  };
-
-  const handleDividir = async (mesa: MesaPlano) => {
-    const def = Math.max(1, Math.floor(mesa.capacidad / 2));
-    const entrada = window.prompt(
-      `Dividir ${mesa.identificador} (${mesa.capacidad} lugares).\n¿Cuántos lugares para la nueva sub-mesa?`,
-      String(def)
-    );
-    if (entrada == null) return;
-    const cap = parseInt(entrada, 10);
-    if (!Number.isFinite(cap) || cap < 1 || cap >= mesa.capacidad) {
-      alert(`Tiene que ser un número entre 1 y ${mesa.capacidad - 1}.`);
-      return;
-    }
-    const res = await dividirMesaAction(mesa.id, cap);
-    if (res.success) {
-      if (res.mesa) setSeleccion({ tipo: 'mesa', id: (res.mesa as { id: string }).id });
-      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
-    } else {
-      alert(res.message || 'No se pudo dividir la mesa');
-    }
-  };
-
-  const handleUnir = async (mesa: MesaPlano) => {
-    if (!confirm(`¿Volver a unir ${mesa.identificador} con su mesa madre?`)) return;
-    const res = await unirMesaAction(mesa.id);
-    if (res.success) {
-      setSeleccion(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
-    } else {
-      alert(res.message || 'No se pudo unir la mesa');
-    }
-  };
-
-  // ---- Guardado batch de la geometría ----
-  const guardar = async () => {
-    if (!draft) return;
-    setGuardando(true);
-    // Ignorar ids temporales: corresponden a creaciones aún sin confirmar en el server
-    const res = await guardarLayoutAction({
-      mesas: draft.mesas.filter((m) => !m.id.startsWith('temp-')).map((m) => ({
-        id: m.id,
-        ambienteId: m.ambienteId,
-        posX: m.posX,
-        posY: m.posY,
-        ancho: m.ancho,
-        alto: m.alto,
-        forma: m.forma,
-        capacidad: m.capacidad,
-        rotacion: m.rotacion,
-      })),
-      elementos: draft.elementos.filter((e) => !e.id.startsWith('temp-')).map((e) => ({
-        id: e.id,
-        posX: e.posX,
-        posY: e.posY,
-        ancho: e.ancho,
-        alto: e.alto,
-        rotacion: e.rotacion,
-        etiqueta: e.etiqueta,
-      })),
-    });
-    setGuardando(false);
-    if (res.success) {
-      setDirty(false);
-      // Sincroniza el plano para cuando se vuelva a modo operación.
-      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
-    } else {
-      alert(res.message || 'No se pudo guardar el plano');
-    }
-  };
-
+  // ---- Transiciones de modo / selección (estado de UI) ----
   const entrarEdicion = () => iniciarEdicion(planoData);
 
   const salirEdicion = () => {
@@ -430,6 +134,12 @@ export function PlanoManager({
     if (id === activeId) return;
     setSeleccion(null);
     setAmbienteActivoId(id);
+  };
+
+  const seleccionarMesa = (mesa: MesaPlano) => {
+    if (mesa.ambienteId && mesa.ambienteId !== activeId) setAmbienteActivoId(mesa.ambienteId);
+    setSeleccion({ tipo: 'mesa', id: mesa.id });
+    setMostrarLista(false);
   };
 
   const mostrarPanel = editando ? !!(selMesa || selElemento) : !!selMesa;
@@ -456,111 +166,26 @@ export function PlanoManager({
         </div>
       )}
 
-      {/* Barra superior: pestañas de ambiente + acciones */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {ambientes.map((amb) => {
-            const activo = amb.id === activeId;
-            return (
-              <button
-                key={amb.id}
-                onClick={() => cambiarAmbiente(amb.id)}
-                onDoubleClick={() => editando && handleRenameAmbiente(amb)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-                  activo ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                title={editando ? 'Doble clic para renombrar' : undefined}
-              >
-                {amb.nombre}
-              </button>
-            );
-          })}
-          {editando && (
-            <button
-              onClick={handleAddAmbiente}
-              className="px-2.5 py-1.5 rounded-md text-sm text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 flex items-center gap-1"
-            >
-              <Plus size={14} /> Ambiente
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {!editando && (
-            <button
-              onClick={() => setMostrarLista((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition border ${
-                mostrarLista
-                  ? 'bg-blue-50 border-blue-200 text-blue-700'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <ListIcon size={16} /> Lista
-            </button>
-          )}
-          {canManage && (
-            <button
-              onClick={toggleModo}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-bold transition ${
-                editando ? 'bg-gray-700 text-white hover:bg-gray-800' : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              {editando ? (
-                <>
-                  <Eye size={16} /> Modo operación
-                </>
-              ) : (
-                <>
-                  <Pencil size={16} /> Editar plano
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Barra de herramientas (solo edición) */}
-      {editando && (
-        <div className="flex flex-wrap items-center gap-2 mb-4 p-2 bg-gray-50 border border-gray-200 rounded-lg">
-          <ToolButton active={herramienta === 'seleccionar'} onClick={() => setHerramienta('seleccionar')}>
-            <MousePointer2 size={14} /> Mover
-          </ToolButton>
-          <ToolButton active={herramienta === 'pared'} onClick={() => setHerramienta('pared')}>
-            <Minus size={14} /> Pared
-          </ToolButton>
-          <ToolButton active={herramienta === 'linea'} onClick={() => setHerramienta('linea')}>
-            <PenLine size={14} /> Línea
-          </ToolButton>
-          <ToolButton active={herramienta === 'barra'} onClick={() => setHerramienta('barra')}>
-            <Square size={14} /> Barra
-          </ToolButton>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
-          <button
-            onClick={handleAddMesa}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-green-700 border border-green-200 bg-green-50 hover:bg-green-100"
-          >
-            <Plus size={14} /> Mesa
-          </button>
-          {ambienteActivo && ambientes.length > 1 && (
-            <button
-              onClick={() => handleDeleteAmbiente(ambienteActivo)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
-              title="Eliminar el ambiente actual"
-            >
-              <Trash2 size={14} /> Ambiente
-            </button>
-          )}
-          <div className="flex-1" />
-          {dirty && <span className="text-xs text-amber-600 font-medium">Cambios sin guardar</span>}
-          <button
-            onClick={guardar}
-            disabled={!dirty || guardando}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40"
-          >
-            <Save size={15} /> {guardando ? 'Guardando...' : 'Guardar cambios'}
-          </button>
-        </div>
-      )}
+      <PlanoToolbar
+        ambientes={ambientes}
+        activeId={activeId}
+        ambienteActivo={ambienteActivo}
+        editando={editando}
+        canManage={canManage}
+        mostrarLista={mostrarLista}
+        herramienta={herramienta}
+        dirty={dirty}
+        guardando={guardando}
+        onCambiarAmbiente={cambiarAmbiente}
+        onRenameAmbiente={acciones.handleRenameAmbiente}
+        onAddAmbiente={acciones.handleAddAmbiente}
+        onToggleMostrarLista={() => setMostrarLista((v) => !v)}
+        onToggleModo={toggleModo}
+        onSetHerramienta={setHerramienta}
+        onAddMesa={acciones.handleAddMesa}
+        onDeleteAmbiente={acciones.handleDeleteAmbiente}
+        onGuardar={acciones.guardar}
+      />
 
       {/* Área principal: lienzo + panel lateral */}
       <div className="flex flex-col lg:flex-row gap-4">
@@ -572,10 +197,10 @@ export function PlanoManager({
               modo={modo}
               herramienta={herramienta}
               seleccion={seleccion}
-              onChangeMesa={updateMesa}
-              onChangeElemento={updateElemento}
+              onChangeMesa={acciones.updateMesa}
+              onChangeElemento={acciones.updateElemento}
               onSelect={setSeleccion}
-              onCreateElemento={handleCreateElemento}
+              onCreateElemento={acciones.handleCreateElemento}
             />
           ) : (
             <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg text-gray-500">
@@ -596,15 +221,15 @@ export function PlanoManager({
               <MesaPanel
                 mesa={selMesa}
                 ambientes={ambientes}
-                onUpdate={(p) => updateMesa(selMesa.id, p)}
-                onDelete={() => handleDeleteMesa(selMesa.id)}
+                onUpdate={(p) => acciones.updateMesa(selMesa.id, p)}
+                onDelete={() => acciones.handleDeleteMesa(selMesa.id)}
               />
             )}
             {editando && selElemento && (
               <ElementoPanel
                 elemento={selElemento}
-                onUpdate={(p) => updateElemento(selElemento.id, p)}
-                onDelete={() => handleDeleteElemento(selElemento.id)}
+                onUpdate={(p) => acciones.updateElemento(selElemento.id, p)}
+                onDelete={() => acciones.handleDeleteElemento(selElemento.id)}
               />
             )}
             {!editando && selMesa && (
@@ -615,10 +240,10 @@ export function PlanoManager({
                 canTakeOrders={canTakeOrders}
                 liberando={liberandoId === selMesa.id}
                 abriendo={abriendoId === selMesa.id}
-                onLiberar={() => handleLiberar(selMesa)}
-                onAbrir={() => handleAbrir(selMesa)}
-                onDividir={() => handleDividir(selMesa)}
-                onUnir={() => handleUnir(selMesa)}
+                onLiberar={() => acciones.handleLiberar(selMesa)}
+                onAbrir={() => acciones.handleAbrir(selMesa)}
+                onDividir={() => acciones.handleDividir(selMesa)}
+                onUnir={() => acciones.handleUnir(selMesa)}
                 onClose={() => setSeleccion(null)}
               />
             )}
@@ -628,386 +253,18 @@ export function PlanoManager({
 
       {/* Lista de mesas (complemento, sin pestañas) */}
       {!editando && mostrarLista && (
-        <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
-          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-600">
-            Mesas ({mesas.length})
-          </div>
-          {mesas.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-gray-400">No hay mesas todavía.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {mesas.map((m) => (
-                <li key={m.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${m.ocupada ? 'bg-orange-500' : 'bg-green-500'}`}
-                    title={m.ocupada ? 'Ocupada' : 'Libre'}
-                  />
-                  <button onClick={() => seleccionarMesa(m)} className="flex-1 min-w-0 text-left">
-                    <span className="font-medium text-gray-800">{m.identificador}</span>
-                    <span className="text-xs text-gray-400 ml-2">{ambNombre(m.ambienteId)}</span>
-                  </button>
-                  <span className="flex items-center gap-1 text-xs text-gray-500 shrink-0">
-                    <Users size={12} /> {m.capacidad}
-                  </span>
-                  {m.ocupada && canTakeOrders && (
-                    <Link
-                      href={`/admin/mesas/${m.id}`}
-                      className="text-xs font-bold text-blue-600 hover:text-blue-800 shrink-0"
-                    >
-                      Pedido
-                    </Link>
-                  )}
-                  {!m.ocupada && canTakeOrders && (
-                    <button
-                      onClick={() => handleAbrir(m)}
-                      disabled={abriendoId === m.id}
-                      className="text-xs font-bold text-green-700 hover:text-green-900 disabled:opacity-50 shrink-0"
-                    >
-                      {abriendoId === m.id ? '...' : 'Abrir'}
-                    </button>
-                  )}
-                  {m.ocupada && canManage && (
-                    <button
-                      onClick={() => handleLiberar(m)}
-                      disabled={liberandoId === m.id}
-                      className="text-xs font-bold text-orange-600 hover:text-orange-800 disabled:opacity-50 shrink-0"
-                    >
-                      {liberandoId === m.id ? '...' : 'Liberar'}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ToolButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition ${
-        active ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function OperacionPanel({
-  mesa,
-  origin,
-  canManage,
-  canTakeOrders,
-  liberando,
-  abriendo,
-  onLiberar,
-  onAbrir,
-  onDividir,
-  onUnir,
-  onClose,
-}: {
-  mesa: MesaPlano;
-  origin: string;
-  canManage: boolean;
-  canTakeOrders: boolean;
-  liberando: boolean;
-  abriendo: boolean;
-  onLiberar: () => void;
-  onAbrir: () => void;
-  onDividir: () => void;
-  onUnir: () => void;
-  onClose: () => void;
-}) {
-  const url = `${origin}/mesa/${mesa.qrToken}`;
-  const esSubMesa = !!mesa.parentMesaId;
-  return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-bold text-gray-800">{mesa.identificador}</h3>
-        <span
-          className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-            mesa.ocupada ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
-          }`}
-        >
-          {mesa.ocupada ? 'Ocupada' : 'Libre'}
-        </span>
-      </div>
-
-      <p className="flex items-center gap-1 text-xs text-gray-500">
-        <Users size={12} /> {mesa.capacidad} lugares
-      </p>
-
-      {mesa.ocupada && canTakeOrders && (
-        <Link
-          href={`/admin/mesas/${mesa.id}`}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100"
-        >
-          <ClipboardList size={15} /> Ver / Agregar pedido
-        </Link>
-      )}
-
-      {mesa.ocupada && canManage && (
-        <button
-          onClick={onLiberar}
-          disabled={liberando}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 disabled:opacity-50"
-        >
-          <DoorOpen size={15} /> {liberando ? 'Liberando...' : 'Liberar mesa'}
-        </button>
-      )}
-
-      {!mesa.ocupada && canTakeOrders && (
-        <button
-          onClick={onAbrir}
-          disabled={abriendo}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-green-700 border border-green-200 bg-green-50 hover:bg-green-100 disabled:opacity-50"
-        >
-          <ClipboardList size={15} /> {abriendo ? 'Abriendo...' : 'Abrir mesa y tomar pedido'}
-        </button>
-      )}
-
-      {!mesa.ocupada && (
-        <p className="text-xs text-gray-500 bg-white border border-gray-200 rounded-md p-2">
-          También se abre sola cuando el cliente escanea el QR.
-        </p>
-      )}
-
-      {/* División de mesas (solo libres) */}
-      {canManage && !mesa.ocupada && esSubMesa && (
-        <button
-          onClick={onUnir}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-gray-700 border border-gray-300 bg-white hover:bg-gray-100"
-        >
-          <Combine size={15} /> Volver a unir
-        </button>
-      )}
-      {canManage && !mesa.ocupada && !esSubMesa && mesa.capacidad >= 2 && (
-        <button
-          onClick={onDividir}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100"
-        >
-          <Scissors size={15} /> Dividir mesa
-        </button>
-      )}
-
-      <div className="pt-2 border-t border-gray-200">
-        <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase mb-1">
-          <QrCode size={12} /> QR de la comanda
-        </label>
-        <div className="bg-white p-2 border border-gray-200 rounded-lg flex justify-center">
-          <QRCodeSVG value={url} size={148} level="H" />
-        </div>
-        <input
-          type="text"
-          readOnly
-          value={url}
-          onClick={(e) => {
-            e.currentTarget.select();
-            navigator.clipboard?.writeText(url);
-          }}
-          title="Clic para copiar"
-          className="w-full mt-2 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <MesaLista
+          mesas={mesas}
+          ambientes={ambientes}
+          canManage={canManage}
+          canTakeOrders={canTakeOrders}
+          abriendoId={abriendoId}
+          liberandoId={liberandoId}
+          onSeleccionar={seleccionarMesa}
+          onAbrir={acciones.handleAbrir}
+          onLiberar={acciones.handleLiberar}
         />
-      </div>
-
-      <button onClick={onClose} className="w-full py-1.5 rounded-md text-sm text-gray-500 hover:bg-gray-100">
-        Cerrar
-      </button>
-    </div>
-  );
-}
-
-function MesaPanel({
-  mesa,
-  ambientes,
-  onUpdate,
-  onDelete,
-}: {
-  mesa: MesaPlano;
-  ambientes: AmbienteUI[];
-  onUpdate: (p: Partial<MesaPlano>) => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <h3 className="font-bold text-gray-800">{mesa.identificador}</h3>
-
-      <div>
-        <label className="text-xs font-semibold text-gray-500 uppercase">Forma</label>
-        <div className="flex gap-2 mt-1">
-          <button
-            onClick={() => onUpdate({ forma: 'cuadrada' })}
-            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-sm border ${
-              mesa.forma !== 'redonda' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200'
-            }`}
-          >
-            <Square size={14} /> Cuadrada
-          </button>
-          <button
-            onClick={() => onUpdate({ forma: 'redonda' })}
-            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-sm border ${
-              mesa.forma === 'redonda' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200'
-            }`}
-          >
-            <Circle size={14} /> Redonda
-          </button>
-        </div>
-      </div>
-
-      <Stepper
-        label="Capacidad (sillas)"
-        value={mesa.capacidad}
-        onDec={() => onUpdate({ capacidad: Math.max(1, mesa.capacidad - 1) })}
-        onInc={() => onUpdate({ capacidad: mesa.capacidad + 1 })}
-      />
-
-      <div className="grid grid-cols-2 gap-2">
-        <Stepper
-          label="Ancho"
-          value={mesa.ancho}
-          onDec={() => onUpdate({ ancho: Math.max(1, mesa.ancho - 1) })}
-          onInc={() => onUpdate({ ancho: mesa.ancho + 1 })}
-        />
-        <Stepper
-          label="Alto"
-          value={mesa.alto}
-          onDec={() => onUpdate({ alto: Math.max(1, mesa.alto - 1) })}
-          onInc={() => onUpdate({ alto: mesa.alto + 1 })}
-        />
-      </div>
-
-      <button
-        onClick={() => onUpdate({ rotacion: (mesa.rotacion + 90) % 360 })}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-gray-200 bg-white hover:bg-gray-100"
-      >
-        <RotateCw size={14} /> Rotar 90°
-      </button>
-
-      <div>
-        <label className="text-xs font-semibold text-gray-500 uppercase">Ambiente</label>
-        <select
-          value={mesa.ambienteId ?? ''}
-          onChange={(e) => onUpdate({ ambienteId: e.target.value })}
-          className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded-md text-sm bg-white"
-        >
-          {ambientes.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <button
-        onClick={onDelete}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
-      >
-        <Trash2 size={14} /> Eliminar mesa
-      </button>
-    </div>
-  );
-}
-
-function ElementoPanel({
-  elemento,
-  onUpdate,
-  onDelete,
-}: {
-  elemento: ElementoPlanoUI;
-  onUpdate: (p: Partial<ElementoPlanoUI>) => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <h3 className="font-bold text-gray-800 capitalize">{elemento.tipo}</h3>
-
-      {elemento.tipo === 'barra' && (
-        <div>
-          <label className="text-xs font-semibold text-gray-500 uppercase">Etiqueta</label>
-          <input
-            type="text"
-            value={elemento.etiqueta ?? ''}
-            onChange={(e) => onUpdate({ etiqueta: e.target.value })}
-            placeholder="Ej: Barra"
-            className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded-md text-sm bg-white"
-          />
-        </div>
       )}
-
-      <div className="grid grid-cols-2 gap-2">
-        <Stepper
-          label="Ancho"
-          value={elemento.ancho}
-          onDec={() => onUpdate({ ancho: Math.max(1, elemento.ancho - 1) })}
-          onInc={() => onUpdate({ ancho: elemento.ancho + 1 })}
-        />
-        <Stepper
-          label="Alto"
-          value={elemento.alto}
-          onDec={() => onUpdate({ alto: Math.max(1, elemento.alto - 1) })}
-          onInc={() => onUpdate({ alto: elemento.alto + 1 })}
-        />
-      </div>
-
-      <button
-        onClick={() => onUpdate({ rotacion: (elemento.rotacion + 90) % 360 })}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-gray-200 bg-white hover:bg-gray-100"
-      >
-        <RotateCw size={14} /> Rotar 90°
-      </button>
-
-      <button
-        onClick={onDelete}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
-      >
-        <Trash2 size={14} /> Eliminar elemento
-      </button>
-    </div>
-  );
-}
-
-function Stepper({
-  label,
-  value,
-  onDec,
-  onInc,
-}: {
-  label: string;
-  value: number;
-  onDec: () => void;
-  onInc: () => void;
-}) {
-  return (
-    <div>
-      <label className="text-xs font-semibold text-gray-500 uppercase">{label}</label>
-      <div className="flex items-center gap-2 mt-1">
-        <button
-          onClick={onDec}
-          className="w-8 h-8 rounded-md border border-gray-200 bg-white hover:bg-gray-100 text-lg leading-none"
-        >
-          −
-        </button>
-        <span className="flex-1 text-center font-semibold text-gray-800">{value}</span>
-        <button
-          onClick={onInc}
-          className="w-8 h-8 rounded-md border border-gray-200 bg-white hover:bg-gray-100 text-lg leading-none"
-        >
-          +
-        </button>
-      </div>
     </div>
   );
 }

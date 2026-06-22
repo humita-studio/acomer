@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
     // Redirect back to config page with success message
     return NextResponse.redirect(new URL('/admin/configuracion?success=mp_connected', req.url));
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('MP OAuth error:', error);
     return NextResponse.redirect(new URL('/admin/configuracion?error=internal_error', req.url));
   }

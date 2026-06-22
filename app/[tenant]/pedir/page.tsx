@@ -1,29 +1,22 @@
+import Link from 'next/link';
 import { db } from '@/shared/db';
-import {
-  categorias,
-  productos,
-  modificadores,
-  productosPrecios,
-  modificadoresPrecios,
-  productoModificadoresDisponibles,
-  itemsBorradorMesa,
-  sesionesMesa,
-  datosEntrega,
-} from '@/shared/db/schema';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { itemsBorradorMesa, sesionesMesa, datosEntrega } from '@/shared/db/schema';
+import { eq, and, asc } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
-import { MenuDigital, ProductoMenu, CategoriaMenu } from '@/features/comanda/components/MenuDigital';
+import { obtenerCarta } from '@/features/carta/obtenerCarta';
+import { MenuDigital } from '@/features/comanda/components/MenuDigital';
+import type { CategoriaMenu } from '@/features/carta/types';
 import { RealtimeMesaSync } from '@/features/comanda/components/RealtimeMesaSync';
-import { MenuExterno } from '@/features/comanda/components/MenuExterno';
-import type { CartItem } from '@/features/comanda/store';
+import { MenuExterno } from '@/features/pedidos-online/components/MenuExterno';
+import type { CartItem } from '@/features/carta/cart';
 import { getMetodosPago } from '@/features/pagos/get-metodos-pago';
-import { obtenerTicketMesa } from '@/features/comanda/obtener-ticket-mesa';
+import { obtenerTicketMesa } from '@/features/pedidos/obtenerTicketMesa';
 import { obtenerTicketAction } from '@/features/pagos/obtener-ticket-action';
 import { ResumenPago } from '@/features/pagos/components/ResumenPago';
-import { obtenerSeguimientoPedido } from '@/features/comanda/obtener-seguimiento';
-import { SeguimientoPedido } from '@/features/comanda/components/SeguimientoPedido';
-import { obtenerDeliveryConfig } from '@/features/comanda/delivery-config-actions';
-import { modosPermitidos, puedeAgregar } from '@/features/comanda/delivery-config';
+import { obtenerSeguimientoPedido } from '@/features/pedidos-online/obtenerSeguimiento';
+import { SeguimientoPedido } from '@/features/pedidos-online/components/SeguimientoPedido';
+import { obtenerDeliveryConfig } from '@/features/pedidos-online/deliveryConfigActions';
+import { modosPermitidos, puedeAgregar } from '@/features/pedidos-online/deliveryConfig';
 
 type ModificadorSnapshot = {
   id: string;
@@ -87,83 +80,9 @@ export default async function PedirPage({
     }
   }
 
-  // Catálogo activo (mismas queries que la comanda de mesa). Lo necesitan tanto
-  // el flujo "menú primero" (sin sesión) como el de la sesión externa.
-  const cats = await db
-    .select({ id: categorias.id, nombre: categorias.nombre })
-    .from(categorias)
-    .where(
-      and(
-        eq(categorias.restauranteId, tenantId),
-        eq(categorias.activo, true),
-        isNull(categorias.deletedAt),
-      ),
-    )
-    .orderBy(asc(categorias.createdAt));
-
-  const prods = await db
-    .select({
-      id: productos.id,
-      categoriaId: productos.categoriaId,
-      nombre: productos.nombre,
-      descripcion: productos.descripcion,
-      permiteAdicionales: productos.permiteAdicionales,
-      precio: productosPrecios.precio,
-    })
-    .from(productos)
-    .innerJoin(
-      productosPrecios,
-      and(eq(productos.id, productosPrecios.productoId), isNull(productosPrecios.vigentaHsta)),
-    )
-    .where(
-      and(
-        eq(productos.restauranteId, tenantId),
-        eq(productos.activo, true),
-        isNull(productos.deletedAt),
-      ),
-    );
-
-  const modsDisponibles = await db
-    .select({
-      productoId: productoModificadoresDisponibles.productoId,
-      id: modificadores.id,
-      nombre: modificadores.nombre,
-      precioExtra: modificadoresPrecios.precioExtra,
-    })
-    .from(productoModificadoresDisponibles)
-    .innerJoin(modificadores, eq(productoModificadoresDisponibles.modificadorId, modificadores.id))
-    .innerJoin(
-      modificadoresPrecios,
-      and(
-        eq(modificadores.id, modificadoresPrecios.modificadorId),
-        isNull(modificadoresPrecios.vigentaHsta),
-      ),
-    )
-    .where(
-      and(
-        eq(modificadores.restauranteId, tenantId),
-        eq(modificadores.disponible, true),
-        isNull(modificadores.deletedAt),
-      ),
-    );
-
-  const menuProductos: ProductoMenu[] = prods.map((p) => ({
-    id: p.id,
-    categoriaId: p.categoriaId,
-    nombre: p.nombre,
-    descripcion: p.descripcion,
-    precio: parseFloat(p.precio?.toString() || '0'),
-    permiteAdicionales: p.permiteAdicionales,
-    modificadores: p.permiteAdicionales
-      ? modsDisponibles
-          .filter((m) => m.productoId === p.id)
-          .map((m) => ({
-            id: m.id,
-            nombre: m.nombre,
-            precioExtra: parseFloat(m.precioExtra?.toString() || '0'),
-          }))
-      : [],
-  }));
+  // Catálogo activo (categorías + productos con adicionales y variantes). Lo
+  // necesitan tanto el flujo "menú primero" (sin sesión) como la sesión externa.
+  const { categorias: cats, productos: menuProductos } = await obtenerCarta(tenantId);
 
   // Paso 1: sin sesión → menú primero. El cliente arma el carrito (local) y
   // sólo en el checkout se crea sesión + datos de entrega + pedido.
@@ -241,6 +160,7 @@ export default async function PedirPage({
   const initialCartItems: CartItem[] = borradorData.map((item) => ({
     id: item.id,
     productoId: item.productoId,
+    varianteId: item.varianteId,
     nombre: item.nombreProducto,
     precioUnitario: parseFloat(item.precioUnitario?.toString() || '0'),
     cantidad: item.cantidad,
@@ -260,12 +180,12 @@ export default async function PedirPage({
 
       <header className="bg-background p-4 border-b text-center sticky top-0 z-20 shadow-sm">
         {modoAgregar && (
-          <a
+          <Link
             href={`/pedir?sesion=${sesionId}`}
             className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground hover:text-foreground"
           >
             ← Estado
-          </a>
+          </Link>
         )}
         <h1 className="font-bold text-xl">{modoAgregar ? 'Agregar productos' : etiqueta}</h1>
         <p className="text-sm text-muted-foreground">

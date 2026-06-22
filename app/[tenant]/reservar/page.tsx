@@ -1,5 +1,6 @@
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
-import { obtenerReservasConfig } from '@/features/reservas/reservas-config-actions';
+import { obtenerReservasConfig } from '@/features/reservas/reservasConfigActions';
+import { turnosConSlots } from '@/features/reservas/reservasConfig';
 import { ReservarForm } from '@/features/reservas/components/ReservarForm';
 
 export default async function ReservarPage({
@@ -36,5 +37,5 @@ export default async function ReservarPage({
     );
   }
 
-  return <ReservarForm tenantSlug={tenant} turnos={config.turnos} />;
+  return <ReservarForm tenantSlug={tenant} turnos={turnosConSlots(config.turnos)} />;
 }

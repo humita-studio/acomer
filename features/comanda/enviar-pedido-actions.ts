@@ -4,7 +4,7 @@ import { db } from '@/shared/db';
 import { itemsBorradorMesa, transaccionesPago } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
-import { crearPedidoConItems } from './crear-pedido-core';
+import { crearPedidoConItems } from '@/features/pedidos/crearPedidoCore';
 
 type ModificadorSnapshot = {
   id: string;
@@ -41,6 +41,7 @@ export async function enviarPedidoAction(
         notas,
         items: borradorItems.map((item) => ({
           productoId: item.productoId,
+          varianteId: item.varianteId,
           cantidad: item.cantidad,
           modificadores: ((item.modificadores as ModificadorSnapshot[]) || []).map((m) => ({ id: m.id })),
         })),
@@ -101,8 +102,9 @@ export async function enviarPedidoAction(
     }
 
     return { success: true, ...resultado };
-  } catch (error: any) {
+  } catch (error) {
     console.error('[enviarPedidoAction]', error);
-    return { success: false, message: error.message || 'Error al enviar pedido' };
+    const message = error instanceof Error ? error.message : 'Error al enviar pedido';
+    return { success: false, message };
   }
 }

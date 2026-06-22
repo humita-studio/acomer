@@ -22,7 +22,7 @@ export interface PaymentVerificationResult {
   status: 'Aprobado' | 'Pendiente' | 'Rechazado' | 'Cancelado';
   monto: number;
   referenciaExterna: string;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 export interface PaymentProvider {

@@ -39,7 +39,7 @@ export function PaymentMethodModal({
         const res = await pedirCuentaAction(sesionMesaId, tenantId, currentUrl);
 
         if (res.success && res.paymentUrl) {
-          window.location.href = res.paymentUrl;
+          window.location.assign(res.paymentUrl);
           return; // No reset processing — estamos redirigiendo
         } else {
           setResult({ success: false, message: res.message || 'Error al iniciar el pago con Mercado Pago.' });
@@ -54,14 +54,17 @@ export function PaymentMethodModal({
 
         if (res.success && res.transactionId) {
           const baseUrl = window.location.href.split('?')[0];
-          window.location.href = `${baseUrl}?pago=pendiente&tx=${res.transactionId}`;
+          window.location.assign(`${baseUrl}?pago=pendiente&tx=${res.transactionId}`);
           return; // No reset processing, we are redirecting
         } else {
           setResult({ success: false, message: res.message });
         }
       }
-    } catch (error: any) {
-      setResult({ success: false, message: error.message || 'Error inesperado.' });
+    } catch (error) {
+      setResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error inesperado.',
+      });
     } finally {
       setProcessing(null);
     }

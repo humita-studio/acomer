@@ -15,7 +15,7 @@ export async function POST(
     const searchParams = url.searchParams;
 
     let paymentIdToVerify: string | null = null;
-    let topic = searchParams.get('topic') || searchParams.get('type');
+    const topic = searchParams.get('topic') || searchParams.get('type');
 
     if (provider === 'mercado_pago') {
       // Mercado Pago webhooks can come as ?topic=payment&id=12345
@@ -166,8 +166,9 @@ export async function POST(
 
     return NextResponse.json({ success: true, status: verification.status });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Webhook error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Error interno';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
