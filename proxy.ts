@@ -69,7 +69,7 @@ export async function proxy(req: NextRequest) {
   const mainDomain =
     process.env.NEXT_PUBLIC_ROOT_DOMAIN ||
     (process.env.NODE_ENV === 'production'
-      ? 'acomer.com.ar' // (Reemplazar por tu dominio final)
+      ? 'sonodos.com' // (Reemplazar por tu dominio final)
       : 'localhost:3000');
 
   // Los dominios de Vercel (preview/producción de pruebas) no tienen subdominios
@@ -78,8 +78,12 @@ export async function proxy(req: NextRequest) {
     return response;
   }
 
-  // Excluir el dominio principal y el panel de administración genérico
-  if (hostname === mainDomain || hostname === `app.${mainDomain}`) {
+  // Excluir el dominio principal, el `www` y el panel de administración genérico
+  if (
+    hostname === mainDomain ||
+    hostname === `www.${mainDomain}` ||
+    hostname === `app.${mainDomain}`
+  ) {
     return response;
   }
 
