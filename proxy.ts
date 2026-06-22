@@ -65,10 +65,18 @@ export async function proxy(req: NextRequest) {
   }
 
   // --- 4. Lógica de subdominios (tenants) ---
+  // Configurable por env var; cae al dominio final en prod y a localhost en dev.
   const mainDomain =
-    process.env.NODE_ENV === 'production'
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN ||
+    (process.env.NODE_ENV === 'production'
       ? 'acomer.com.ar' // (Reemplazar por tu dominio final)
-      : 'localhost:3000';
+      : 'localhost:3000');
+
+  // Los dominios de Vercel (preview/producción de pruebas) no tienen subdominios
+  // de tenant: hay que tratarlos como dominio principal, no como un restaurante.
+  if (hostname.endsWith('.vercel.app')) {
+    return response;
+  }
 
   // Excluir el dominio principal y el panel de administración genérico
   if (hostname === mainDomain || hostname === `app.${mainDomain}`) {
