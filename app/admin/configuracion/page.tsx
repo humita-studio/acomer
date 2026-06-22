@@ -97,7 +97,7 @@ export default async function ConfiguracionPage() {
                                             href={mpConnectUrl}
                                             className="block w-full text-center bg-[#009EE3] hover:bg-[#0088C4] text-white p-2 rounded-md transition-colors font-medium"
                                         >
-                                            Vincular cuenta de Mercado Pago
+                                            Vincular cuenta de Mercado Pago!
                                         </a>
                                     ) : (
                                         <a
