@@ -5,7 +5,7 @@ import { categorias } from '@/shared/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 /**
  * Lista las categorías del menú del restaurante. Estado de servidor que consume
@@ -33,6 +33,8 @@ export async function crearCategoria(nombre: string) {
       nombre,
     });
 
+    revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Categoría creada exitosamente' };
   } catch (error) {
     console.error('[crearCategoria]', error);
@@ -58,6 +60,7 @@ export async function editarCategoria(id: string, nombre: string) {
       );
 
     revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Categoría actualizada' };
   } catch (error) {
     console.error('[editarCategoria]', error);
@@ -83,6 +86,8 @@ export async function eliminarCategoria(id: string) {
         )
       );
 
+    revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Categoría eliminada' };
   } catch (error) {
     console.error('[eliminarCategoria]', error);

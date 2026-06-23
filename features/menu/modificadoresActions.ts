@@ -10,6 +10,7 @@ import {
 import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { revalidateTag } from 'next/cache';
 
 export type AdicionalMenu = {
   productoId: string;
@@ -103,6 +104,7 @@ export async function agregarAdicionalAPlato(
         .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
     });
 
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Adicional agregado' };
   } catch (error) {
     console.error('[agregarAdicionalAPlato]', error);
@@ -152,6 +154,7 @@ export async function editarPrecioAdicional(modificadorId: string, nuevoPrecio: 
       });
     });
 
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Precio actualizado' };
   } catch (error) {
     console.error('[editarPrecioAdicional]', error);
@@ -210,6 +213,7 @@ export async function eliminarAdicionalDePlato(productoId: string, modificadorId
       }
     });
 
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Adicional eliminado' };
   } catch (error) {
     console.error('[eliminarAdicionalDePlato]', error);

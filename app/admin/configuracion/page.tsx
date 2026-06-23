@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { getCurrentSession } from '@/features/auth/session';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -8,24 +9,45 @@ import { LandingConfigForm } from '@/features/landing/components/LandingConfigFo
 import { SubdominioForm } from '@/features/tenant/components/SubdominioForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { SubmitButton } from '@/shared/ui/submit-button';
+import { Skeleton } from '@/shared/ui/skeleton';
 
-export default async function ConfiguracionPage() {
+function ConfigSkeleton() {
+    return (
+        <div className="flex-1 space-y-4 p-8 pt-6">
+            <Skeleton className="h-8 w-72" />
+            <Skeleton className="h-10 w-48" />
+            <div className="max-w-2xl space-y-4">
+                <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+async function ConfigContent() {
     const session = await getCurrentSession();
 
     if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
         redirect('/unauthorized');
     }
 
-    // Cargar configuración actual
-    const config = await db.query.configuracionPagos.findFirst({
-        where: (t, { eq }) => eq(t.restauranteId, session.restauranteId)
-    });
-
-    const landing = await obtenerLandingConfig(session.restauranteId);
+    // Cargar configuración actual — paralelizado para evitar waterfalls secuenciales
+    const [config, landing, headersList] = await Promise.all([
+        db.query.configuracionPagos.findFirst({
+            where: (t, { eq }) => eq(t.restauranteId, session.restauranteId)
+        }),
+        obtenerLandingConfig(session.restauranteId),
+        headers(),
+    ]);
 
     // Dominio base para mostrar el subdominio del local (ej. "acomer.com.ar" o
     // "localhost:3000" en dev). El admin se sirve en el dominio principal/app.
-    const host = (await headers()).get('host') || '';
+    const host = headersList.get('host') || '';
     const dominioBase = host.replace(/^app\./, '') || 'acomer.com.ar';
 
     const creds = (config?.credenciales ?? {}) as { access_token?: string };
@@ -117,5 +139,13 @@ export default async function ConfiguracionPage() {
                 </TabsContent>
             </Tabs>
         </div>
+    );
+}
+
+export default function ConfiguracionPage() {
+    return (
+        <Suspense fallback={<ConfigSkeleton />}>
+            <ConfigContent />
+        </Suspense>
     );
 }

@@ -5,6 +5,7 @@ import { productos, productoVariantes, productoVariantesPrecios } from '@/shared
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { revalidateTag } from 'next/cache';
 import type { Variante } from './types';
 
 /**
@@ -112,6 +113,7 @@ export async function agregarVariante(
       });
     });
 
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Variante agregada' };
   } catch (error) {
     console.error('[agregarVariante]', error);
@@ -161,6 +163,7 @@ export async function editarPrecioVariante(varianteId: string, nuevoPrecio: numb
       });
     });
 
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Precio actualizado' };
   } catch (error) {
     console.error('[editarPrecioVariante]', error);
@@ -223,6 +226,7 @@ export async function eliminarVariante(productoId: string, varianteId: string) {
       }
     });
 
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Variante eliminada' };
   } catch (error) {
     console.error('[eliminarVariante]', error);
@@ -263,6 +267,7 @@ export async function marcarVarianteDefault(productoId: string, varianteId: stri
         );
     });
 
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Variante por defecto actualizada' };
   } catch (error) {
     console.error('[marcarVarianteDefault]', error);

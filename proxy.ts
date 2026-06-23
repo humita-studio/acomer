@@ -45,22 +45,24 @@ export async function proxy(req: NextRequest) {
     }
   );
 
-  // getUser() refresca el token si es necesario y verifica la sesión
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // --- 2. Protección de rutas autenticadas ---
-  // Rutas que requieren autenticación
   const protectedPaths = ['/admin'];
   const isProtectedRoute = protectedPaths.some((p) => path.startsWith(p));
+  const isAuthRoute = path === '/login' || path === '/register';
+
+  // Optimización: Solo hacemos getUser() (que requiere request a BD) en rutas que lo necesitan
+  let user = null;
+  if (isProtectedRoute || isAuthRoute) {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
 
   if (isProtectedRoute && !user) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
   // --- 3. Redirigir usuarios autenticados lejos del login ---
-  if (path === '/login' && user) {
+  if (isAuthRoute && user) {
     return NextResponse.redirect(new URL('/admin', req.url));
   }
 

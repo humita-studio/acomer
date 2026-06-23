@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { db } from '@/shared/db';
 import { categorias, productos } from '@/shared/db/schema';
@@ -6,8 +7,29 @@ import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
 import { listarPromocionesAction } from '@/features/promociones/promocionesActions';
 import { PromocionesManager } from '@/features/promociones/components/PromocionesManager';
+import { Skeleton } from '@/shared/ui/skeleton';
 
-export default async function PromocionesPage() {
+function PromocionesSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <Skeleton className="h-8 w-44" />
+        <Skeleton className="h-4 w-80" />
+      </div>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-9 w-36" />
+      </div>
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function PromocionesContent() {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
   // Mismo público que el menú (owner/admin gestionan la carta y las promos).
@@ -42,5 +64,13 @@ export default async function PromocionesPage() {
         productos={prods}
       />
     </div>
+  );
+}
+
+export default function PromocionesPage() {
+  return (
+    <Suspense fallback={<PromocionesSkeleton />}>
+      <PromocionesContent />
+    </Suspense>
   );
 }

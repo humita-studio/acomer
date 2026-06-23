@@ -13,7 +13,7 @@ import {
 import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 /**
  * Lista los productos del menú con su precio vigente. Estado de servidor que
@@ -136,6 +136,8 @@ export async function crearProducto(data: {
       }
     });
 
+    revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Producto creado exitosamente' };
   } catch (error) {
     console.error('[crearProducto]', error);
@@ -168,6 +170,7 @@ export async function editarProducto(
       );
 
     revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Producto actualizado' };
   } catch (error) {
     console.error('[editarProducto]', error);
@@ -197,6 +200,8 @@ export async function cambiarDisponibilidadProducto(productoId: string, disponib
         )
       );
 
+    revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: disponible ? 'Producto disponible' : 'Producto marcado agotado' };
   } catch (error) {
     console.error('[cambiarDisponibilidadProducto]', error);
@@ -310,6 +315,8 @@ export async function duplicarProducto(productoId: string) {
       }
     });
 
+    revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Producto duplicado' };
   } catch (error) {
     console.error('[duplicarProducto]', error);
@@ -346,6 +353,8 @@ export async function modificarPrecioProducto(productoId: string, nuevoPrecio: n
       });
     });
 
+    revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Precio actualizado' };
   } catch (error) {
     console.error('[modificarPrecioProducto]', error);
@@ -371,6 +380,8 @@ export async function eliminarProducto(id: string) {
         )
       );
 
+    revalidatePath('/admin/menu');
+    revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Producto eliminado' };
   } catch (error) {
     console.error('[eliminarProducto]', error);

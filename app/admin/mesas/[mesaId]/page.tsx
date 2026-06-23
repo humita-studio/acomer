@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { db } from '@/shared/db';
@@ -10,14 +11,33 @@ import { obtenerCarta } from '@/features/carta/obtenerCarta';
 import type { CategoriaMenu } from '@/features/carta/types';
 import { MesaPedidoManager } from './mesa-pedido-manager';
 import { AbrirMesaButton } from './abrir-mesa-button';
+import { Skeleton } from '@/shared/ui/skeleton';
 
-export default async function MesaPedidoPage({
-  params,
-}: {
-  params: Promise<{ mesaId: string }>;
-}) {
-  const { mesaId } = await params;
+function MesaDetalleSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <Skeleton className="h-4 w-28 mb-2" />
+        <Skeleton className="h-8 w-36" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+        <div className="rounded-xl border bg-card p-6 shadow-sm space-y-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
+async function MesaDetalleContent({ mesaId }: { mesaId: string }) {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
   if (!hasPermission(session.role, 'canTakeOrders')) redirect('/unauthorized');
@@ -68,5 +88,19 @@ export default async function MesaPedidoPage({
         />
       )}
     </div>
+  );
+}
+
+export default async function MesaPedidoPage({
+  params,
+}: {
+  params: Promise<{ mesaId: string }>;
+}) {
+  const { mesaId } = await params;
+
+  return (
+    <Suspense fallback={<MesaDetalleSkeleton />}>
+      <MesaDetalleContent mesaId={mesaId} />
+    </Suspense>
   );
 }

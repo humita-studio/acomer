@@ -151,7 +151,7 @@ export function AppSidebar({
                           isActive={isLinkActive(link.href)}
                           tooltip={link.label}
                         >
-                          <Link href={link.href}>
+                          <Link href={link.href} prefetch={true}>
                             <Icon />
                             <span>{link.label}</span>
                           </Link>

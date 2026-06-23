@@ -36,6 +36,13 @@
       "when": 1781546254608,
       "tag": "0004_workable_sphinx",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782247477615,
+      "tag": "0018_sync_drizzle_and_indexes",
+      "breakpoints": true
     }
   ]
 }

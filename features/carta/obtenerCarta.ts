@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { db } from '@/shared/db';
 import {
   categorias,
@@ -13,12 +14,9 @@ import { eq, and, isNull, asc } from 'drizzle-orm';
 import type { CategoriaMenu, ProductoMenu } from './types';
 
 /**
- * Carta activa de un restaurante para las superficies del cliente (mesa QR y
- * "menú primero" externo). Fuente única: trae categorías, productos con su precio
- * vigente, adicionales y variantes. Usa `leftJoin` con el precio base porque un
- * producto con variantes no lo tiene (su precio vive en cada variante).
+ * Función interna que consulta la DB.
  */
-export async function obtenerCarta(
+async function fetchCarta(
   tenantId: string
 ): Promise<{ categorias: CategoriaMenu[]; productos: ProductoMenu[] }> {
   const [cats, prods, modsDisponibles, variantesRows] = await Promise.all([
@@ -141,3 +139,17 @@ export async function obtenerCarta(
 
   return { categorias: cats, productos: productosMenu };
 }
+
+/**
+ * Carta activa de un restaurante cacheada.
+ * Se invalida automáticamente cuando el admin actualiza la carta
+ * usando revalidateTag(`carta-${tenantId}`).
+ */
+export async function obtenerCarta(tenantId: string) {
+  return unstable_cache(
+    async () => fetchCarta(tenantId),
+    ['carta', tenantId],
+    { tags: [`carta-${tenantId}`] }
+  )();
+}
+

@@ -2,6 +2,7 @@ import {
   boolean,
   check,
   foreignKey,
+  index,
   integer,
   jsonb,
   numeric,
@@ -372,6 +373,7 @@ export const sesionesMesa = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    restauranteCreatedAtIdx: index('sesiones_mesa_restaurante_created_at_idx').on(table.restauranteId, table.createdAt),
     restauranteIdFk: foreignKey({
       columns: [table.restauranteId],
       foreignColumns: [restaurantes.id],
@@ -636,6 +638,7 @@ export const pedidos = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    restauranteCreatedAtIdx: index('pedidos_restaurante_created_at_idx').on(table.restauranteId, table.createdAt),
     restauranteIdFk: foreignKey({
       columns: [table.restauranteId],
       foreignColumns: [restaurantes.id],
@@ -668,6 +671,7 @@ export const comandaItems = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    restauranteCreatedAtIdx: index('comanda_items_restaurante_created_at_idx').on(table.restauranteId, table.createdAt),
     restauranteIdFk: foreignKey({
       columns: [table.restauranteId],
       foreignColumns: [restaurantes.id],
@@ -808,6 +812,7 @@ export const transaccionesPago = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    restauranteCreatedAtIdx: index('transacciones_pago_restaurante_created_at_idx').on(table.restauranteId, table.createdAt),
     restauranteIdFk: foreignKey({
       columns: [table.restauranteId],
       foreignColumns: [restaurantes.id],
@@ -869,6 +874,7 @@ export const movimientosCaja = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    restauranteCreatedAtIdx: index('movimientos_caja_restaurante_created_at_idx').on(table.restauranteId, table.createdAt),
     restauranteIdFk: foreignKey({
       columns: [table.restauranteId],
       foreignColumns: [restaurantes.id],

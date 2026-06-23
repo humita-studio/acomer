@@ -1,11 +1,42 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
 import { getOrdenesExternasAction } from '@/features/pedidos-online/pedidoExternoActions';
 import { getDeliveryConfigAction } from '@/features/pedidos-online/deliveryConfigActions';
 import { PedidosOnlineManager } from '@/features/pedidos-online/components/PedidosOnlineManager';
+import { Skeleton } from '@/shared/ui/skeleton';
 
-export default async function PedidosOnlinePage() {
+function PedidosSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-80" />
+      </div>
+      <div className="flex gap-2">
+        <Skeleton className="h-9 w-24" />
+        <Skeleton className="h-9 w-24" />
+        <Skeleton className="h-9 w-24" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-xl border bg-card p-6 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function PedidosContent() {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
   if (!canAccessSection(session.role, 'delivery')) redirect('/unauthorized');
@@ -31,5 +62,13 @@ export default async function PedidosOnlinePage() {
         initialConfig={configRes.config}
       />
     </div>
+  );
+}
+
+export default function PedidosOnlinePage() {
+  return (
+    <Suspense fallback={<PedidosSkeleton />}>
+      <PedidosContent />
+    </Suspense>
   );
 }
