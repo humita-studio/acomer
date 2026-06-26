@@ -8,7 +8,11 @@ import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { crearPedidoConItems, type PedidoItemInput } from '@/features/pedidos/crearPedidoCore';
+import {
+  resolverLineasBulk,
+  inserirPedidoDesdeLineas,
+  type PedidoItemInput,
+} from '@/features/pedidos/crearPedidoCore';
 import { obtenerDeliveryConfig } from './deliveryConfigActions';
 import { modosPermitidos } from './deliveryConfig';
 
@@ -69,15 +73,10 @@ export async function crearPedidoExternoAction(
       return { success: false, message: 'Tipo de pedido inválido' };
     }
 
-    // Respetar la config del local: pedidos online habilitados y modalidad ofrecida.
-    const config = await obtenerDeliveryConfig(tenantId);
-    if (!config.activo) {
-      return { success: false, message: 'El local no está tomando pedidos online en este momento' };
+    const itemsLimpios = (items ?? []).filter((i) => i.productoId && i.cantidad > 0);
+    if (itemsLimpios.length === 0) {
+      return { success: false, message: 'El carrito está vacío' };
     }
-    if (!modosPermitidos(config).includes(tipo)) {
-      return { success: false, message: 'Esa modalidad de pedido no está disponible' };
-    }
-
     if (!contacto.nombreContacto?.trim() || !contacto.telefono?.trim()) {
       return { success: false, message: 'Nombre y teléfono son obligatorios' };
     }
@@ -85,9 +84,28 @@ export async function crearPedidoExternoAction(
       return { success: false, message: 'La dirección es obligatoria para envíos' };
     }
 
-    const itemsLimpios = (items ?? []).filter((i) => i.productoId && i.cantidad > 0);
-    if (itemsLimpios.length === 0) {
-      return { success: false, message: 'El carrito está vacío' };
+    // Config de delivery e ítems del carrito resueltos en PARALELO antes de abrir
+    // la transacción. `resolverLineasBulk` usa `db` (fuera de tx) y hace todas las
+    // lecturas de producto/precio/modificadores en lote; hacerlo dentro del lock
+    // de la transacción alargaba innecesariamente el tiempo de espera en la DB.
+    const [config, lineasResueltas] = await Promise.all([
+      obtenerDeliveryConfig(tenantId),
+      resolverLineasBulk(
+        tenantId,
+        itemsLimpios.map((i) => ({
+          productoId: i.productoId,
+          varianteId: i.varianteId,
+          cantidad: i.cantidad,
+          modificadores: (i.modificadores ?? []).map((m) => ({ id: m.id })),
+        })),
+      ),
+    ]);
+
+    if (!config.activo) {
+      return { success: false, message: 'El local no está tomando pedidos online en este momento' };
+    }
+    if (!modosPermitidos(config).includes(tipo)) {
+      return { success: false, message: 'Esa modalidad de pedido no está disponible' };
     }
 
     const { sesionId } = await db.transaction(async (tx) => {
@@ -96,33 +114,30 @@ export async function crearPedidoExternoAction(
         .values({ restauranteId: tenantId, mesaId: null, tipo, estado: 'Activa' })
         .returning({ id: sesionesMesa.id });
 
-      await tx.insert(datosEntrega).values({
-        restauranteId: tenantId,
-        sesionMesaId: sesion.id,
-        nombreContacto: contacto.nombreContacto.trim(),
-        telefono: contacto.telefono.trim(),
-        direccion: contacto.direccion?.trim() || null,
-        referencia: contacto.referencia?.trim() || null,
-        costoEnvio: (contacto.costoEnvio ?? 0).toString(),
-        horaEstimada: contacto.horaEstimada ? new Date(contacto.horaEstimada) : null,
-        estadoEntrega: 'Recibido',
-      });
-
-      await crearPedidoConItems(tx, {
-        tenantId,
-        sesionMesaId: sesion.id,
-        items: itemsLimpios.map((i) => ({
-          productoId: i.productoId,
-          varianteId: i.varianteId,
-          cantidad: i.cantidad,
-          modificadores: (i.modificadores ?? []).map((m) => ({ id: m.id })),
-        })),
-      });
+      // datosEntrega + pedido con items son independientes entre sí: van en
+      // paralelo dentro de la transacción. Los items ya están resueltos (nombres,
+      // precios, variantes) así que los inserts son solo escrituras.
+      await Promise.all([
+        tx.insert(datosEntrega).values({
+          restauranteId: tenantId,
+          sesionMesaId: sesion.id,
+          nombreContacto: contacto.nombreContacto.trim(),
+          telefono: contacto.telefono.trim(),
+          direccion: contacto.direccion?.trim() || null,
+          referencia: contacto.referencia?.trim() || null,
+          costoEnvio: (contacto.costoEnvio ?? 0).toString(),
+          horaEstimada: contacto.horaEstimada ? new Date(contacto.horaEstimada) : null,
+          estadoEntrega: 'Recibido',
+        }),
+        inserirPedidoDesdeLineas(tx, { tenantId, sesionMesaId: sesion.id, lineas: lineasResueltas }),
+      ]);
 
       return { sesionId: sesion.id };
     });
 
-    await broadcastOrdenExterna(tenantId, 'orden_externa_nueva', { sesionMesaId: sesionId, tipo });
+    // Fire-and-forget: el broadcast no afecta al comensal y no debe alargar el
+    // tiempo de respuesta percibido. Los errores se loguean dentro de la función.
+    void broadcastOrdenExterna(tenantId, 'orden_externa_nueva', { sesionMesaId: sesionId, tipo });
 
     return { success: true, sesionId, tenantId };
   } catch (error) {
@@ -261,17 +276,18 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
           ),
         );
 
-      if (nuevoEstado === 'Entregado' || nuevoEstado === 'Cancelado') {
-        await tx
-          .update(sesionesMesa)
-          .set({ estado: 'Cerrada', updatedAt: new Date() })
-          .where(
-            and(
-              eq(sesionesMesa.id, sesionMesaId),
-              eq(sesionesMesa.restauranteId, session.restauranteId),
-            ),
-          );
-      }
+      // Entregado/Cancelado cierran la sesión; volver a un estado en curso (p. ej.
+      // arrastrando la tarjeta hacia atrás en el tablero) la reabre.
+      const terminal = nuevoEstado === 'Entregado' || nuevoEstado === 'Cancelado';
+      await tx
+        .update(sesionesMesa)
+        .set({ estado: terminal ? 'Cerrada' : 'Activa', updatedAt: new Date() })
+        .where(
+          and(
+            eq(sesionesMesa.id, sesionMesaId),
+            eq(sesionesMesa.restauranteId, session.restauranteId),
+          ),
+        );
     });
 
     await broadcastOrdenExterna(session.restauranteId, 'orden_externa_actualizada', {

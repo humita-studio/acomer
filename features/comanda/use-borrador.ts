@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { queryKeys } from '@/shared/query/keys';
 import { useComandaStore } from './store';
@@ -37,6 +37,20 @@ function sameMods(a: Modificador[], b: Modificador[]): boolean {
 const notificarOtrosDispositivos = () => {
   useComandaStore.getState().broadcastChange?.();
 };
+
+/**
+ * `onSettled` para las mutaciones del borrador: refetchea contra el server SÓLO
+ * cuando es la última mutación en vuelo. Evita un refetch por cada toque (+/−) y
+ * las "vueltas atrás" de cantidad por respuestas que llegan fuera de orden; el
+ * update optimista ya mantiene la UI correcta mientras tanto. El refetch final
+ * reconcilia (ej. cambia los ids `temp-` por los reales del server).
+ */
+const reconciliarSiNoHayMutacionesEnVuelo =
+  (queryClient: QueryClient, key: readonly unknown[]) => () => {
+    if (queryClient.isMutating() === 1) {
+      queryClient.invalidateQueries({ queryKey: key });
+    }
+  };
 
 /**
  * El borrador (carrito compartido) de una sesión de mesa. Fuente de verdad del
@@ -88,9 +102,7 @@ export function useAgregarItem(tenantId: string, sesionMesaId: string) {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
     },
     onSuccess: notificarOtrosDispositivos,
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: key });
-    },
+    onSettled: reconciliarSiNoHayMutacionesEnVuelo(queryClient, key),
   });
 }
 
@@ -110,9 +122,7 @@ export function useEliminarItem(tenantId: string, sesionMesaId: string) {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
     },
     onSuccess: notificarOtrosDispositivos,
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: key });
-    },
+    onSettled: reconciliarSiNoHayMutacionesEnVuelo(queryClient, key),
   });
 }
 
@@ -136,9 +146,7 @@ export function useActualizarCantidad(tenantId: string, sesionMesaId: string) {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
     },
     onSuccess: notificarOtrosDispositivos,
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: key });
-    },
+    onSettled: reconciliarSiNoHayMutacionesEnVuelo(queryClient, key),
   });
 }
 

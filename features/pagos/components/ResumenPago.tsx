@@ -157,11 +157,27 @@ export function ResumenPago({ ticket }: ResumenPagoProps) {
                 </div>
               </div>
             ) : (
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-gray-500 text-lg">TOTAL</span>
-                <span className="font-black text-3xl text-gray-900">
-                  ${ticket.transaccion.monto.toFixed(2)}
-                </span>
+              <div className="space-y-2">
+                {ticket.transaccion.descuento > 0 && (
+                  <>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500">Subtotal</span>
+                      <span className="text-gray-900 tabular-nums">
+                        ${(ticket.transaccion.monto + ticket.transaccion.descuento).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm text-green-600">
+                      <span>Descuento</span>
+                      <span className="tabular-nums">−${ticket.transaccion.descuento.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between items-center pt-1">
+                  <span className="font-bold text-gray-500 text-lg">TOTAL</span>
+                  <span className="font-black text-3xl text-gray-900 tabular-nums">
+                    ${ticket.transaccion.monto.toFixed(2)}
+                  </span>
+                </div>
               </div>
             )}
             {isPending && ticket.transaccion.proveedor !== 'mercado_pago' && (

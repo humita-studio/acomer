@@ -86,6 +86,14 @@ export const PROMO_METODOS: { label: string; value: PromoMetodoPago }[] = [
   { label: 'Mercado Pago', value: 'mercado_pago' },
 ];
 
+/** Mapea el tipo de sesión (salon/takeaway/delivery/mostrador) al canal de promo. */
+export function canalDeTipoSesion(tipo: string | null | undefined): PromoCanal {
+  if (tipo === 'delivery') return 'delivery';
+  if (tipo === 'takeaway') return 'takeaway';
+  if (tipo === 'mostrador') return 'mostrador';
+  return 'salon';
+}
+
 /** Etiqueta corta del tipo+valor para mostrar en listas (ej. "−10%", "2x1"). */
 export function promoTipoBadge(tipo: PromoTipo, valor: number): string {
   switch (tipo) {
@@ -98,6 +106,49 @@ export function promoTipoBadge(tipo: PromoTipo, valor: number): string {
     case 'combo':
       return 'Combo';
   }
+}
+
+/**
+ * Resumen corto y legible de las condiciones de una promo (método de pago, días,
+ * franja horaria, monto mínimo). Devuelve '' si no tiene condiciones; cada caller
+ * decide el texto por defecto. Lo usan la tabla del admin y la vista del comensal.
+ */
+export function promoCondicionResumen(p: Promocion): string {
+  const c = p.condiciones || {};
+  const partes: string[] = [];
+  if (c.soloEfectivo || (c.metodosPago?.length === 1 && c.metodosPago[0] === 'efectivo')) {
+    partes.push('Pago en efectivo');
+  } else if (c.metodosPago?.length) {
+    partes.push(c.metodosPago.map((m) => (m === 'mercado_pago' ? 'MP' : m)).join('/'));
+  }
+  if (c.dias?.length) {
+    partes.push(c.dias.map((d) => PROMO_DIAS.find((x) => x.value === d)?.label ?? d).join(''));
+  }
+  if (c.horaDesde && c.horaHasta) partes.push(`${c.horaDesde}–${c.horaHasta}`);
+  if (c.montoMinimo) partes.push(`mín. $${c.montoMinimo}`);
+  return partes.join(' · ');
+}
+
+/**
+ * Promos que tiene sentido mostrarle al comensal en una superficie dada: activas,
+ * dentro de su rango de fechas y cuyo canal (si lo restringe) incluya alguno de
+ * los canales de la superficie. NO filtra por método de pago / día / hora: esas
+ * condiciones se muestran como texto (ver `promoCondicionResumen`) para que el
+ * comensal sepa cómo acceder al beneficio. El descuento real lo decide el motor.
+ */
+export function promosVisibles(
+  promos: Promocion[],
+  canales: PromoCanal[],
+  now: Date = new Date(),
+): Promocion[] {
+  return promos.filter((p) => {
+    if (!p.activa) return false;
+    if (p.vigenteDesde && now < new Date(p.vigenteDesde)) return false;
+    if (p.vigenteHasta && now > new Date(p.vigenteHasta)) return false;
+    const restric = p.condiciones?.canales;
+    if (restric?.length && !restric.some((c) => canales.includes(c))) return false;
+    return true;
+  });
 }
 
 /** Normaliza una hora "H:MM"/"HH:MM" a "HH:MM" o null si es inválida. */

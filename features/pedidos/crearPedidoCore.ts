@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { db } from '@/shared/db';
 import {
   pedidos,
@@ -10,7 +11,7 @@ import {
   modificadores,
   modificadoresPrecios,
 } from '@/shared/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 
 // Tipo de la transacción de drizzle (el `tx` del callback de db.transaction).
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -124,11 +125,158 @@ async function resolverLineaProducto(
   };
 }
 
+export type LineaResuelta = {
+  productoId: string;
+  varianteId: string | null;
+  nombreSnapshot: string;
+  precio: number;
+  cantidad: number;
+  mods: { id: string; nombre: string; precio: number }[];
+};
+
+/**
+ * Resuelve TODAS las líneas de un pedido (nombre/precio/variante + modificadores)
+ * en unas pocas consultas en LOTE y en paralelo, en vez de N+1 por ítem. Las
+ * lecturas van por `db` (fuera de la transacción de inserts): no necesitan la tx
+ * y así no alargan el lock. Mantiene las mismas validaciones que la versión vieja
+ * por ítem (producto inexistente, variante obligatoria/ inválida, precio vigente).
+ */
+export async function resolverLineasBulk(
+  tenantId: string,
+  items: PedidoItemInput[],
+): Promise<LineaResuelta[]> {
+  const productoIds = Array.from(new Set(items.map((i) => i.productoId)));
+  const varianteIds = Array.from(
+    new Set(items.map((i) => i.varianteId).filter((x): x is string => !!x)),
+  );
+  const modIds = Array.from(new Set(items.flatMap((i) => (i.modificadores ?? []).map((m) => m.id))));
+
+  const [prodRows, prodPrecioRows, conVariantesRows, varRows, varPrecioRows, modRows, modPrecioRows] =
+    await Promise.all([
+      productoIds.length
+        ? db
+            .select({ id: productos.id, nombre: productos.nombre })
+            .from(productos)
+            .where(and(eq(productos.restauranteId, tenantId), inArray(productos.id, productoIds)))
+        : Promise.resolve([] as { id: string; nombre: string }[]),
+      productoIds.length
+        ? db
+            .select({ productoId: productosPrecios.productoId, precio: productosPrecios.precio })
+            .from(productosPrecios)
+            .where(and(inArray(productosPrecios.productoId, productoIds), isNull(productosPrecios.vigentaHsta)))
+        : Promise.resolve([] as { productoId: string; precio: string }[]),
+      productoIds.length
+        ? db
+            .selectDistinct({ productoId: productoVariantes.productoId })
+            .from(productoVariantes)
+            .where(
+              and(
+                eq(productoVariantes.restauranteId, tenantId),
+                inArray(productoVariantes.productoId, productoIds),
+                eq(productoVariantes.activo, true),
+                isNull(productoVariantes.deletedAt),
+              ),
+            )
+        : Promise.resolve([] as { productoId: string }[]),
+      varianteIds.length
+        ? db
+            .select({
+              id: productoVariantes.id,
+              productoId: productoVariantes.productoId,
+              nombre: productoVariantes.nombre,
+            })
+            .from(productoVariantes)
+            .where(
+              and(
+                eq(productoVariantes.restauranteId, tenantId),
+                inArray(productoVariantes.id, varianteIds),
+                isNull(productoVariantes.deletedAt),
+              ),
+            )
+        : Promise.resolve([] as { id: string; productoId: string; nombre: string }[]),
+      varianteIds.length
+        ? db
+            .select({ varianteId: productoVariantesPrecios.varianteId, precio: productoVariantesPrecios.precio })
+            .from(productoVariantesPrecios)
+            .where(
+              and(
+                inArray(productoVariantesPrecios.varianteId, varianteIds),
+                isNull(productoVariantesPrecios.vigentaHsta),
+              ),
+            )
+        : Promise.resolve([] as { varianteId: string; precio: string }[]),
+      modIds.length
+        ? db
+            .select({ id: modificadores.id, nombre: modificadores.nombre })
+            .from(modificadores)
+            .where(and(eq(modificadores.restauranteId, tenantId), inArray(modificadores.id, modIds)))
+        : Promise.resolve([] as { id: string; nombre: string }[]),
+      modIds.length
+        ? db
+            .select({
+              modificadorId: modificadoresPrecios.modificadorId,
+              precioExtra: modificadoresPrecios.precioExtra,
+            })
+            .from(modificadoresPrecios)
+            .where(and(inArray(modificadoresPrecios.modificadorId, modIds), isNull(modificadoresPrecios.vigentaHsta)))
+        : Promise.resolve([] as { modificadorId: string; precioExtra: string }[]),
+    ]);
+
+  const nombrePorProducto = new Map(prodRows.map((p) => [p.id, p.nombre]));
+  const precioPorProducto = new Map(
+    prodPrecioRows.map((p) => [p.productoId, parseFloat(p.precio?.toString() || '0')]),
+  );
+  const productosConVariantes = new Set(conVariantesRows.map((v) => v.productoId));
+  const variantePorId = new Map(varRows.map((v) => [v.id, v]));
+  const precioPorVariante = new Map(
+    varPrecioRows.map((v) => [v.varianteId, parseFloat(v.precio?.toString() || '0')]),
+  );
+  const nombrePorMod = new Map(modRows.map((m) => [m.id, m.nombre]));
+  const precioPorMod = new Map(
+    modPrecioRows.map((m) => [m.modificadorId, parseFloat(m.precioExtra?.toString() || '0')]),
+  );
+
+  return items.map((item) => {
+    const prodNombre = nombrePorProducto.get(item.productoId);
+    if (prodNombre === undefined) throw new Error(`Producto no encontrado: ${item.productoId}`);
+
+    let varianteId: string | null = null;
+    let nombreSnapshot = prodNombre;
+    let precio = precioPorProducto.get(item.productoId) ?? 0;
+
+    if (item.varianteId) {
+      const variante = variantePorId.get(item.varianteId);
+      if (!variante || variante.productoId !== item.productoId) {
+        throw new Error(`Variante no encontrada para el producto: ${item.productoId}`);
+      }
+      varianteId = item.varianteId;
+      nombreSnapshot = `${prodNombre} ${variante.nombre}`;
+      precio = precioPorVariante.get(item.varianteId) ?? 0;
+    } else if (productosConVariantes.has(item.productoId)) {
+      throw new Error(`El producto requiere elegir una variante: ${item.productoId}`);
+    }
+
+    const mods = (item.modificadores ?? [])
+      .map((m) => {
+        const nombre = nombrePorMod.get(m.id);
+        if (nombre === undefined) return null; // mod inexistente: se omite (igual que antes)
+        return { id: m.id, nombre, precio: precioPorMod.get(m.id) ?? 0 };
+      })
+      .filter((m): m is { id: string; nombre: string; precio: number } => m !== null);
+
+    return { productoId: item.productoId, varianteId, nombreSnapshot, precio, cantidad: item.cantidad, mods };
+  });
+}
+
 /**
  * Crea un pedido + comanda_items + modificadores dentro de una transacción ya
  * abierta, tomando snapshots de nombre/precio vigentes desde la DB (el cliente
  * nunca define el precio). Lo reusan `enviarPedidoAction` (desde el borrador) y
  * `crearPedidoExternoAction` (desde el carrito local del flujo externo).
+ *
+ * Las lecturas se resuelven en lote y en paralelo (`resolverLineasBulk`) y los
+ * inserts van batcheados con ids generados en el cliente, así la transacción son
+ * 3 inserts en vez de ~5 queries por ítem en serie.
  */
 export async function crearPedidoConItems(
   tx: Tx,
@@ -136,71 +284,108 @@ export async function crearPedidoConItems(
 ): Promise<{ pedidoId: string; totalPedido: number }> {
   const { tenantId, sesionMesaId, items, notas } = params;
 
-  const [nuevoPedido] = await tx
-    .insert(pedidos)
-    .values({
-      restauranteId: tenantId,
-      sesionMesaId,
-      estado: 'Pendiente',
-      notas: notas || null,
-      total: '0',
-    })
-    .returning({ id: pedidos.id });
+  const lineas = await resolverLineasBulk(tenantId, items);
 
-  const pedidoId = nuevoPedido.id;
+  const pedidoId = randomUUID();
   let totalPedido = 0;
 
-  for (const item of items) {
-    const linea = await resolverLineaProducto(tx, tenantId, item.productoId, item.varianteId);
+  // Cada línea con su id de comanda_item (generado acá para correlacionar los
+  // modificadores sin depender del orden de RETURNING).
+  const itemRows = lineas.map((linea) => {
+    const subtotal =
+      (linea.precio + linea.mods.reduce((s, m) => s + m.precio, 0)) * linea.cantidad;
+    totalPedido += subtotal;
+    return { id: randomUUID(), linea };
+  });
 
-    let subtotalItem = linea.precio * item.cantidad;
+  await tx.insert(pedidos).values({
+    id: pedidoId,
+    restauranteId: tenantId,
+    sesionMesaId,
+    estado: 'Pendiente',
+    notas: notas || null,
+    total: totalPedido.toString(),
+  });
 
-    const [nuevoComandaItem] = await tx
-      .insert(comandaItems)
-      .values({
-        restauranteId: tenantId,
-        pedidoId,
-        productoId: item.productoId,
-        varianteId: linea.varianteId,
-        cantidad: item.cantidad.toString(),
-        nombreProductoSnapshot: linea.nombreSnapshot,
-        precioUnitarioSnapshot: linea.precio.toString(),
-      })
-      .returning({ id: comandaItems.id });
+  await tx.insert(comandaItems).values(
+    itemRows.map(({ id, linea }) => ({
+      id,
+      restauranteId: tenantId,
+      pedidoId,
+      productoId: linea.productoId,
+      varianteId: linea.varianteId,
+      cantidad: linea.cantidad.toString(),
+      nombreProductoSnapshot: linea.nombreSnapshot,
+      precioUnitarioSnapshot: linea.precio.toString(),
+    })),
+  );
 
-    const comandaItemId = nuevoComandaItem.id;
+  const modRows = itemRows.flatMap(({ id, linea }) =>
+    linea.mods.map((m) => ({
+      restauranteId: tenantId,
+      comandaItemId: id,
+      modificadorId: m.id,
+      nombreModificadorSnapshot: m.nombre,
+      precioExtraSnapshot: m.precio.toString(),
+    })),
+  );
+  if (modRows.length) await tx.insert(comandaItemModificadores).values(modRows);
 
-    for (const mod of item.modificadores ?? []) {
-      const [modData] = await tx
-        .select({ nombre: modificadores.nombre })
-        .from(modificadores)
-        .where(eq(modificadores.id, mod.id))
-        .limit(1);
-      if (!modData) continue;
+  return { pedidoId, totalPedido };
+}
 
-      const [modPrecioData] = await tx
-        .select({ precioExtra: modificadoresPrecios.precioExtra })
-        .from(modificadoresPrecios)
-        .where(
-          and(eq(modificadoresPrecios.modificadorId, mod.id), isNull(modificadoresPrecios.vigentaHsta)),
-        )
-        .limit(1);
-      const precioMod = parseFloat(modPrecioData?.precioExtra?.toString() || '0');
-      subtotalItem += precioMod * item.cantidad;
+/**
+ * Inserta un pedido + sus items/modificadores a partir de líneas ya resueltas
+ * (`LineaResuelta[]`). Útsala cuando las lecturas ya se hicieron fuera de la
+ * transacción (con `resolverLineasBulk`) para no alargar el lock.
+ */
+export async function inserirPedidoDesdeLineas(
+  tx: Tx,
+  params: { tenantId: string; sesionMesaId: string; lineas: LineaResuelta[]; notas?: string | null },
+): Promise<{ pedidoId: string; totalPedido: number }> {
+  const { tenantId, sesionMesaId, lineas, notas } = params;
 
-      await tx.insert(comandaItemModificadores).values({
-        restauranteId: tenantId,
-        comandaItemId,
-        modificadorId: mod.id,
-        nombreModificadorSnapshot: modData.nombre,
-        precioExtraSnapshot: precioMod.toString(),
-      });
-    }
+  const pedidoId = randomUUID();
+  let totalPedido = 0;
 
-    totalPedido += subtotalItem;
-  }
+  const itemRows = lineas.map((linea) => {
+    const subtotal = (linea.precio + linea.mods.reduce((s, m) => s + m.precio, 0)) * linea.cantidad;
+    totalPedido += subtotal;
+    return { id: randomUUID(), linea };
+  });
 
-  await tx.update(pedidos).set({ total: totalPedido.toString() }).where(eq(pedidos.id, pedidoId));
+  await tx.insert(pedidos).values({
+    id: pedidoId,
+    restauranteId: tenantId,
+    sesionMesaId,
+    estado: 'Pendiente',
+    notas: notas || null,
+    total: totalPedido.toString(),
+  });
+
+  await tx.insert(comandaItems).values(
+    itemRows.map(({ id, linea }) => ({
+      id,
+      restauranteId: tenantId,
+      pedidoId,
+      productoId: linea.productoId,
+      varianteId: linea.varianteId,
+      cantidad: linea.cantidad.toString(),
+      nombreProductoSnapshot: linea.nombreSnapshot,
+      precioUnitarioSnapshot: linea.precio.toString(),
+    })),
+  );
+
+  const modRows = itemRows.flatMap(({ id, linea }) =>
+    linea.mods.map((m) => ({
+      restauranteId: tenantId,
+      comandaItemId: id,
+      modificadorId: m.id,
+      nombreModificadorSnapshot: m.nombre,
+      precioExtraSnapshot: m.precio.toString(),
+    })),
+  );
+  if (modRows.length) await tx.insert(comandaItemModificadores).values(modRows);
 
   return { pedidoId, totalPedido };
 }

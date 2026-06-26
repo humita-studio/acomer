@@ -44,21 +44,17 @@ export function CobrosManager({
 
   const totalPorConfirmar = transacciones.reduce((acc, tx) => acc + Number(tx.monto), 0);
 
+  // El update optimista quita la tarjeta de inmediato, así que cerramos el modal
+  // sin esperar al servidor. Si el cobro falla, la mutación revierte y reaparece.
   const handleConfirmAprobar = (vars: { id: string; montoRecibido?: number }) => {
-    aprobarMutation.mutate(vars, {
-      onSuccess: (res) => {
-        if (res.success) setAprobarTarget(null);
-      },
-    });
+    setAprobarTarget(null);
+    aprobarMutation.mutate(vars);
   };
 
   const handleConfirmRechazar = () => {
     if (!rechazarTarget) return;
-    rechazarMutation.mutate(rechazarTarget.id, {
-      onSuccess: (res) => {
-        if (res.success) setRechazarTarget(null);
-      },
-    });
+    rechazarMutation.mutate(rechazarTarget.id);
+    setRechazarTarget(null);
   };
 
   return (
@@ -99,7 +95,6 @@ export function CobrosManager({
               tx={tx}
               onAprobar={setAprobarTarget}
               onRechazar={setRechazarTarget}
-              disabled={aprobarMutation.isPending || rechazarMutation.isPending}
             />
           ))}
         </div>
@@ -111,7 +106,6 @@ export function CobrosManager({
         open={!!aprobarTarget}
         onOpenChange={(o) => !o && setAprobarTarget(null)}
         onConfirm={handleConfirmAprobar}
-        pending={aprobarMutation.isPending}
       />
 
       {/* Confirmación de rechazo */}
@@ -125,19 +119,11 @@ export function CobrosManager({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRechazarTarget(null)}
-              disabled={rechazarMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => setRechazarTarget(null)}>
               Cancelar
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmRechazar}
-              disabled={rechazarMutation.isPending}
-            >
-              {rechazarMutation.isPending ? 'Rechazando…' : 'Rechazar cobro'}
+            <Button variant="destructive" onClick={handleConfirmRechazar}>
+              Rechazar cobro
             </Button>
           </DialogFooter>
         </DialogContent>

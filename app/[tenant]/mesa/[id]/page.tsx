@@ -12,6 +12,7 @@ import { getMetodosPago } from '@/features/pagos/get-metodos-pago';
 import { obtenerTicketAction } from '@/features/pagos/obtener-ticket-action';
 import { ResumenPago } from '@/features/pagos/components/ResumenPago';
 import { obtenerTicketMesa } from '@/features/pedidos/obtenerTicketMesa';
+import { obtenerPromocionesPublicas } from '@/features/promociones/promosPublicasActions';
 
 type ModificadorSnapshot = {
   id: string;
@@ -99,6 +100,9 @@ export default async function ComandaPage({
   // 5. Obtener Métodos de Pago Disponibles
   const metodosPago = await getMetodosPago(tenantId);
 
+  // 6. Promos vigentes del local (para mostrar y previsualizar el descuento)
+  const promos = await obtenerPromocionesPublicas(tenantId);
+
   return (
     <main className="min-h-screen bg-muted/30">
       {/* Realtime listener invisible — invalida el borrador y avisa a otros dispositivos */}
@@ -121,6 +125,8 @@ export default async function ComandaPage({
         metodosPago={metodosPago}
         initialItems={initialCartItems}
         pedidosConfirmados={pedidosConfirmados}
+        promos={promos}
+        canal="salon"
       />
     </main>
   );

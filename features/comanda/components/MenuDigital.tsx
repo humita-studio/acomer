@@ -1,8 +1,17 @@
 'use client';
 
+import { useMemo } from 'react';
 import { MenuView } from '@/features/carta/components/MenuView';
 import type { CategoriaMenu, ProductoMenu } from '@/features/carta/types';
-import type { CartApi, PedidoConfirmadoResumen } from '@/features/carta/cart';
+import type { CartApi, CartPromoDisponible, PedidoConfirmadoResumen } from '@/features/carta/cart';
+import {
+  type Promocion,
+  type PromoCanal,
+  promoCondicionResumen,
+  promoTipoBadge,
+  promosVisibles,
+} from '@/features/promociones/promociones';
+import { calcularPromosCarrito } from '@/features/promociones/promosCarrito';
 import { PaymentMethodModal } from '../../pagos/components/PaymentMethodModal';
 import type { MetodoPago } from '../../pagos/get-metodos-pago';
 import { llamarMozoAction } from '../sesion-mesa-actions';
@@ -28,6 +37,9 @@ type MenuDigitalProps = {
     modo?: 'mesa' | 'externo';
     // Abrir el pago al montar (viene del checkout externo con pagar=1).
     autoAbrirPago?: boolean;
+    // Promos vigentes del local (para mostrar) y canal de esta superficie.
+    promos?: Promocion[];
+    canal?: PromoCanal;
 };
 
 export function MenuDigital({
@@ -41,9 +53,22 @@ export function MenuDigital({
     pedidosConfirmados = [],
     modo = 'mesa',
     autoAbrirPago = false,
+    promos = [],
+    canal = 'salon',
 }: MenuDigitalProps) {
     const cart = useServerCart(tenantId, sesionMesaId, initialItems);
     const enviar = useEnviarPedido(tenantId, sesionMesaId);
+
+    const preview = useMemo(
+        () => calcularPromosCarrito(cart.items, productos, promos, { canal }),
+        [cart.items, productos, promos, canal],
+    );
+    const promosDisponibles: CartPromoDisponible[] = promosVisibles(promos, [canal]).map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        badge: promoTipoBadge(p.tipo, p.valor),
+        condicion: promoCondicionResumen(p) || undefined,
+    }));
 
     const onConfirm = async () => {
         const res = await enviar.mutateAsync();
@@ -80,6 +105,8 @@ export function MenuDigital({
             onConfirm={onConfirm}
             confirming={enviar.isPending}
             drawerTitulo={modo === 'externo' ? 'Tu pedido' : 'Resumen de tu Mesa'}
+            promosDisponibles={promosDisponibles}
+            promoResumen={preview}
         />
     );
 }

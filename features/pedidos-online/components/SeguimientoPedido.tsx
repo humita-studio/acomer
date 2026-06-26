@@ -247,15 +247,33 @@ export function SeguimientoPedido({
               </div>
             ))}
           </div>
+          {pedido.descuento > 0 && (
+            <>
+              <div className="flex justify-between text-sm text-muted-foreground border-t pt-2">
+                <span>Subtotal</span>
+                <span className="tabular-nums">${pedido.total.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Descuento</span>
+                <span className="tabular-nums">−${pedido.descuento.toFixed(2)}</span>
+              </div>
+            </>
+          )}
           {pedido.costoEnvio > 0 && (
-            <div className="flex justify-between text-sm text-muted-foreground border-t pt-2">
+            <div
+              className={`flex justify-between text-sm text-muted-foreground ${
+                pedido.descuento > 0 ? '' : 'border-t pt-2'
+              }`}
+            >
               <span>Envío</span>
               <span className="tabular-nums">${pedido.costoEnvio.toFixed(2)}</span>
             </div>
           )}
           <div className="flex justify-between font-bold border-t pt-3">
             <span>Total</span>
-            <span className="tabular-nums">${(pedido.total + pedido.costoEnvio).toFixed(2)}</span>
+            <span className="tabular-nums">
+              ${(pedido.totalConDescuento + pedido.costoEnvio).toFixed(2)}
+            </span>
           </div>
           {tipo === 'delivery' && pedido.direccion && (
             <p className="text-xs text-muted-foreground border-t pt-3">

@@ -12,12 +12,10 @@ export function CobroCard({
     tx,
     onAprobar,
     onRechazar,
-    disabled,
 }: {
     tx: TransaccionCobro;
     onAprobar: (tx: TransaccionCobro) => void;
     onRechazar: (tx: TransaccionCobro) => void;
-    disabled?: boolean;
 }) {
     const metodo = metodoInfo(tx.proveedor);
     const descuento = Number(tx.descuento);
@@ -61,14 +59,13 @@ export function CobroCard({
 
             {/* Acciones */}
             <div className="mt-5 flex gap-2">
-                <Button size="lg" className="flex-1" disabled={disabled} onClick={() => onAprobar(tx)}>
+                <Button size="lg" className="flex-1" onClick={() => onAprobar(tx)}>
                     <Check className="size-4" />
                     Aprobar cobro
                 </Button>
                 <Button
                     variant="outline"
                     size="icon"
-                    disabled={disabled}
                     onClick={() => onRechazar(tx)}
                     aria-label="Rechazar cobro"
                     title="Rechazar y mantener la mesa abierta"

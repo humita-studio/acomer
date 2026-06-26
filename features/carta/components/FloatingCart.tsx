@@ -1,8 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Minus, Plus, ShoppingCart } from 'lucide-react';
-import { getCartTotal, type CartApi, type PedidoConfirmadoResumen } from '../cart';
+import { CheckCircle2, Minus, Plus, ShoppingCart, Tag } from 'lucide-react';
+import {
+  getCartTotal,
+  type CartApi,
+  type CartPromoResumen,
+  type PedidoConfirmadoResumen,
+} from '../cart';
 import {
   Sheet,
   SheetContent,
@@ -22,6 +27,8 @@ type FloatingCartProps = {
   confirming: boolean;
   /** Título del drawer (ej: "Resumen de tu Mesa" | "Tu pedido"). */
   titulo?: string;
+  /** Descuento por promos sobre el borrador (preview server-side). Opcional. */
+  promoResumen?: CartPromoResumen | null;
 };
 
 export function FloatingCart({
@@ -31,6 +38,7 @@ export function FloatingCart({
   onConfirm,
   confirming,
   titulo = 'Resumen de tu Mesa',
+  promoResumen = null,
 }: FloatingCartProps) {
   const items = cart.items;
   const [isOpen, setIsOpen] = useState(false);
@@ -45,7 +53,13 @@ export function FloatingCart({
   const totalConfirmado = pedidosConfirmados.reduce((sum, item) => sum + item.subtotal, 0);
   const totalItemsConfirmado = pedidosConfirmados.reduce((sum, item) => sum + item.cantidad, 0);
 
-  const granTotal = totalBorrador + totalConfirmado;
+  // Descuento aplicable al borrador (sólo si el preview lo trae). El total mostrado
+  // se mantiene consistente con las líneas locales: total = borrador − descuento.
+  const descuento = promoResumen && promoResumen.descuento > 0 ? promoResumen.descuento : 0;
+  const promosAplicadas = descuento > 0 ? promoResumen?.aplicadas ?? [] : [];
+  const totalBorradorNeto = Math.max(0, totalBorrador - descuento);
+
+  const granTotal = totalBorradorNeto + totalConfirmado;
   const totalItemsGeneral = totalItemsBorrador + totalItemsConfirmado;
 
   const handleRemoveItem = (itemId: string) => {
@@ -205,10 +219,48 @@ export function FloatingCart({
                   {error}
                 </div>
               )}
-              <div className="mb-4 flex items-center justify-between text-lg font-bold">
-                <span>A enviar ahora</span>
-                <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
-              </div>
+
+              {/* Promos aplicadas automáticamente al borrador (preview). */}
+              {promosAplicadas.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {promosAplicadas.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-success-subtle px-3 py-2 text-success-foreground"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Tag className="size-4 shrink-0" />
+                        <span className="truncate text-sm font-medium">{p.nombre}</span>
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums">
+                        −${p.descuento.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {descuento > 0 ? (
+                <div className="mb-4 space-y-1">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-success-foreground">
+                    <span>Descuento</span>
+                    <span className="tabular-nums">−${descuento.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-1.5 text-lg font-bold">
+                    <span>A enviar ahora</span>
+                    <span className="tabular-nums">${totalBorradorNeto.toFixed(2)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-4 flex items-center justify-between text-lg font-bold">
+                  <span>A enviar ahora</span>
+                  <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
+                </div>
+              )}
               <Button
                 onClick={handleSubmit}
                 disabled={confirming}

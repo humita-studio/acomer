@@ -2,7 +2,7 @@
 
 import { db } from '@/shared/db';
 import { reservas, mesas } from '@/shared/db/schema';
-import { and, eq, gte, lt, isNull, inArray } from 'drizzle-orm';
+import { and, eq, gte, lt, ne, desc, isNull, inArray } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
@@ -398,6 +398,78 @@ export async function getReservasDelDiaAction(desdeISO: string, hastaISO: string
   } catch (error) {
     console.error('[getReservasDelDiaAction]', error);
     return { success: false, message: 'Error al cargar reservas', reservas: [] };
+  }
+}
+
+/**
+ * Admin: inicio de la próxima reserva vigente (no cancelada) a partir de un
+ * instante. Sirve para saltar al próximo día con reservas cuando el día/mes
+ * visible está vacío, incluso si cae en un mes futuro fuera de lo ya cargado.
+ */
+export async function getProximaReservaAction(desdeISO: string) {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageReservas')) {
+      return { success: false, message: 'No autorizado', inicio: null as string | null };
+    }
+    const desde = new Date(desdeISO);
+    if (Number.isNaN(desde.getTime())) {
+      return { success: false, message: 'Fecha inválida', inicio: null as string | null };
+    }
+
+    const [fila] = await db
+      .select({ inicio: reservas.inicio })
+      .from(reservas)
+      .where(
+        and(
+          eq(reservas.restauranteId, session.restauranteId),
+          gte(reservas.inicio, desde),
+          ne(reservas.estado, 'Cancelada'),
+        ),
+      )
+      .orderBy(reservas.inicio)
+      .limit(1);
+
+    return { success: true, inicio: fila ? new Date(fila.inicio).toISOString() : null };
+  } catch (error) {
+    console.error('[getProximaReservaAction]', error);
+    return { success: false, message: 'Error al buscar la próxima reserva', inicio: null as string | null };
+  }
+}
+
+/**
+ * Admin: inicio de la reserva vigente (no cancelada) más reciente anterior a un
+ * instante. Espejo de getProximaReservaAction para saltar al día anterior con
+ * reservas cuando mirás un día vacío, incluso si cae en un mes ya pasado.
+ */
+export async function getReservaAnteriorAction(hastaISO: string) {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageReservas')) {
+      return { success: false, message: 'No autorizado', inicio: null as string | null };
+    }
+    const hasta = new Date(hastaISO);
+    if (Number.isNaN(hasta.getTime())) {
+      return { success: false, message: 'Fecha inválida', inicio: null as string | null };
+    }
+
+    const [fila] = await db
+      .select({ inicio: reservas.inicio })
+      .from(reservas)
+      .where(
+        and(
+          eq(reservas.restauranteId, session.restauranteId),
+          lt(reservas.inicio, hasta),
+          ne(reservas.estado, 'Cancelada'),
+        ),
+      )
+      .orderBy(desc(reservas.inicio))
+      .limit(1);
+
+    return { success: true, inicio: fila ? new Date(fila.inicio).toISOString() : null };
+  } catch (error) {
+    console.error('[getReservaAnteriorAction]', error);
+    return { success: false, message: 'Error al buscar la reserva anterior', inicio: null as string | null };
   }
 }
 

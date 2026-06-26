@@ -45,21 +45,23 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
   const modsTotal = selectedMods.reduce((sum, mod) => sum + mod.precioExtra, 0);
   const subtotal = (precioUnitario + modsTotal) * cantidad;
 
-  const handleAddToCart = async () => {
-    // El driver aplica el update optimista al instante; esperamos a que resuelva
-    // (en server reconcilia y avisa a otros dispositivos) antes de cerrar.
-    try {
-      await cart.agregar({
+  const handleAddToCart = () => {
+    // El driver aplica el update optimista al instante (y revierte solo si el
+    // server falla). Cerramos el modal YA, sin esperar el roundtrip: el item
+    // aparece en el carrito al toque. Bloquear el cierre hacía sentir lento al
+    // flujo de mesa aunque la caché ya estuviera actualizada.
+    cart
+      .agregar({
         productoId: product.id,
         varianteId: variante?.id ?? null,
         nombreProducto: variante ? `${product.nombre} ${variante.nombre}` : product.nombre,
         precioUnitario,
         cantidad,
         modificadores: selectedMods,
+      })
+      .catch(() => {
+        // El driver ya revirtió el optimismo; no hay nada que hacer al cerrar.
       });
-    } catch {
-      // Si falla, el driver ya revirtió el optimismo; cerramos igual.
-    }
     onClose();
   };
 
@@ -165,11 +167,10 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
         <div className="border-t bg-muted/40 p-4">
           <Button
             onClick={handleAddToCart}
-            disabled={cart.agregando}
             size="lg"
             className="h-12 w-full justify-between text-base"
           >
-            <span>{cart.agregando ? 'Agregando...' : 'Agregar al Pedido'}</span>
+            <span>Agregar al Pedido</span>
             <span className="tabular-nums">${subtotal.toFixed(2)}</span>
           </Button>
         </div>

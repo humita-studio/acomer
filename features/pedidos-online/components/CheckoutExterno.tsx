@@ -1,13 +1,42 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { getCartTotal, type CartItem } from '@/features/carta/cart';
+import { Loader2 } from 'lucide-react';
+import { cn } from '@/shared/lib/utils';
+import { formatPeso } from '@/shared/lib/format';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/shared/ui/sheet';
+import { getCartTotal, type CartItem, type CartPromoResumen } from '@/features/carta/cart';
 import { crearPedidoExternoAction } from '../pedidoExternoActions';
-import { useLocalCartStore } from '@/features/carta/useLocalCart';
 import type { ModoPedido } from '../deliveryConfig';
 
 type Tipo = 'takeaway' | 'delivery';
+
+function Campo({
+  label,
+  opcional,
+  children,
+}: {
+  label: string;
+  opcional?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium tracking-[0.2px] text-muted-foreground">
+        {label}
+        {opcional && <span className="text-muted-foreground/70"> (opcional)</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 export function CheckoutExterno({
   open,
@@ -15,6 +44,8 @@ export function CheckoutExterno({
   tenantSlug,
   cartItems,
   modos,
+  promoResumen = null,
+  onPedidoCreado,
 }: {
   open: boolean;
   onClose: () => void;
@@ -22,9 +53,14 @@ export function CheckoutExterno({
   cartItems: CartItem[];
   // Modalidades habilitadas por el local; si hay una sola no se muestra selector.
   modos: ModoPedido[];
+  // Descuento por promos sobre el carrito (preview). El método aún no se eligió.
+  promoResumen?: CartPromoResumen | null;
+  // Pedido creado en DB: el padre decide qué sigue (abrir el pago in-place o
+  // navegar al seguimiento). Acá no se navega para no pagar un render de página.
+  // Devolvemos también el tipo elegido: es el canal con el que el pago resuelve
+  // las promos, así el descuento del modal coincide con el que se cobra.
+  onPedidoCreado: (sesionId: string, tipo: Tipo) => void;
 }) {
-  const router = useRouter();
-  const limpiar = useLocalCartStore((s) => s.limpiar);
   const opciones: Tipo[] = modos.length > 0 ? modos : ['takeaway', 'delivery'];
   const [tipo, setTipo] = useState<Tipo>(opciones[0]);
   const [nombre, setNombre] = useState('');
@@ -34,9 +70,9 @@ export function CheckoutExterno({
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!open) return null;
-
-  const total = getCartTotal(cartItems);
+  const subtotal = getCartTotal(cartItems);
+  const descuento = promoResumen && promoResumen.descuento > 0 ? promoResumen.descuento : 0;
+  const total = Math.max(0, subtotal - descuento);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,12 +100,9 @@ export function CheckoutExterno({
         })),
       );
       if (res.success && res.sesionId) {
-        limpiar();
-        // El tenant viene del subdominio (proxy reescribe a /[tenant]/...), por
-        // eso la URL no lleva el slug — igual que /mesa/<id>.
-        // pagar=1 → la pantalla de /pedir abre el pago automáticamente, así el
-        // cliente paga (o elige pagar al recibir) antes de seguir cargando.
-        router.push(`/pedir?sesion=${res.sesionId}&pagar=1`);
+        // El pedido ya está persistido. El padre cierra este sheet y abre el pago
+        // sobre la misma pantalla (sin navegar), así no hay segundos muertos.
+        onPedidoCreado(res.sesionId, tipo);
       } else {
         setError(res.message ?? 'No se pudo confirmar el pedido');
         setEnviando(false);
@@ -81,125 +114,134 @@ export function CheckoutExterno({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto p-6 space-y-5 animate-in slide-in-from-bottom-10"
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent
+        side="bottom"
+        className="mx-auto flex max-h-[92vh] flex-col gap-0 bg-background p-0 sm:max-w-md sm:rounded-t-2xl"
       >
-        <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-800">Finalizá tu pedido</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"
-            aria-label="Cerrar"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        </div>
+        <SheetHeader className="border-b p-5">
+          <SheetTitle className="text-lg">Finalizá tu pedido</SheetTitle>
+        </SheetHeader>
 
-        {/* Selector de tipo: sólo modalidades habilitadas. Una sola → sin selector. */}
-        {opciones.length > 1 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {opciones.includes('takeaway') && (
-              <button
-                type="button"
-                onClick={() => setTipo('takeaway')}
-                className={`py-3 rounded-xl font-semibold border transition-colors ${
-                  tipo === 'takeaway'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
-                }`}
-              >
-                Retiro en local
-              </button>
-            )}
-            {opciones.includes('delivery') && (
-              <button
-                type="button"
-                onClick={() => setTipo('delivery')}
-                className={`py-3 rounded-xl font-semibold border transition-colors ${
-                  tipo === 'delivery'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
-                }`}
-              >
-                Envío a domicilio
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl bg-blue-50 text-blue-700 font-semibold py-3 text-center">
-            {opciones[0] === 'delivery' ? 'Envío a domicilio' : 'Retiro en local'}
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              required
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Tu nombre"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-            <input
-              type="tel"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              required
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Ej: 11 2345 6789"
-            />
-          </div>
-
-          {tipo === 'delivery' && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-                <input
-                  type="text"
-                  value={direccion}
-                  onChange={(e) => setDireccion(e.target.value)}
-                  required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Calle, número, piso/depto"
-                />
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto p-5">
+            {/* Modalidad: sólo si hay más de una habilitada. */}
+            {opciones.length > 1 ? (
+              <div className="grid grid-cols-2 gap-3">
+                {opciones.includes('takeaway') && (
+                  <button
+                    type="button"
+                    onClick={() => setTipo('takeaway')}
+                    className={cn(
+                      'rounded-lg border py-3 text-sm font-medium transition-colors',
+                      tipo === 'takeaway'
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Retiro en local
+                  </button>
+                )}
+                {opciones.includes('delivery') && (
+                  <button
+                    type="button"
+                    onClick={() => setTipo('delivery')}
+                    className={cn(
+                      'rounded-lg border py-3 text-sm font-medium transition-colors',
+                      tipo === 'delivery'
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Envío a domicilio
+                  </button>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Referencia <span className="text-gray-400">(opcional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={referencia}
-                  onChange={(e) => setReferencia(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ej: timbre roto, golpear"
-                />
+            ) : (
+              <div className="rounded-lg bg-muted py-3 text-center text-sm font-medium text-foreground">
+                {opciones[0] === 'delivery' ? 'Envío a domicilio' : 'Retiro en local'}
               </div>
-            </>
-          )}
-        </div>
+            )}
 
-        {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium">{error}</div>
-        )}
+            <Campo label="Nombre">
+              <Input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                required
+                className="h-12 rounded-lg"
+                placeholder="Tu nombre"
+              />
+            </Campo>
 
-        <button
-          type="submit"
-          disabled={enviando}
-          className="w-full bg-blue-600 disabled:bg-blue-400 text-white font-bold py-4 rounded-xl shadow-md shadow-blue-200 flex justify-between px-6 items-center"
-        >
-          <span>{enviando ? 'Confirmando…' : 'Confirmar pedido'}</span>
-          <span>${total.toFixed(2)}</span>
-        </button>
-      </form>
-    </div>
+            <Campo label="Teléfono">
+              <Input
+                type="tel"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                required
+                className="h-12 rounded-lg"
+                placeholder="Ej: 11 2345 6789"
+              />
+            </Campo>
+
+            {tipo === 'delivery' && (
+              <>
+                <Campo label="Dirección">
+                  <Input
+                    value={direccion}
+                    onChange={(e) => setDireccion(e.target.value)}
+                    required
+                    className="h-12 rounded-lg"
+                    placeholder="Calle, número, piso/depto"
+                  />
+                </Campo>
+                <Campo label="Referencia" opcional>
+                  <Input
+                    value={referencia}
+                    onChange={(e) => setReferencia(e.target.value)}
+                    className="h-12 rounded-lg"
+                    placeholder="Ej: timbre roto, golpear"
+                  />
+                </Campo>
+              </>
+            )}
+
+            {error && (
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                {error}
+              </div>
+            )}
+          </div>
+
+          {/* Footer: desglose del descuento (si hay) + confirmar con total neto. */}
+          <div className="space-y-3 border-t bg-muted/40 p-5">
+            {descuento > 0 && (
+              <div className="space-y-1 text-sm">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">{formatPeso(subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-success-foreground">
+                  <span>Descuento</span>
+                  <span className="tabular-nums">−{formatPeso(descuento)}</span>
+                </div>
+              </div>
+            )}
+            <Button
+              type="submit"
+              disabled={enviando}
+              size="lg"
+              className="h-12 w-full justify-between text-base"
+            >
+              <span className="flex items-center gap-2">
+                {enviando && <Loader2 className="size-4 animate-spin" />}
+                {enviando ? 'Confirmando…' : 'Confirmar pedido'}
+              </span>
+              <span className="tabular-nums">{formatPeso(total)}</span>
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

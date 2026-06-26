@@ -9,6 +9,8 @@ import {
   cambiarEstadoReservaAction,
   sentarReservaAction,
   getReservasDelDiaAction,
+  getProximaReservaAction,
+  getReservaAnteriorAction,
   crearReservaAdminAction,
   getMesasDisponiblesAction,
 } from '../reservasActions';
@@ -29,6 +31,40 @@ export function useReservasMes(params: {
       return res.success ? (res.reservas as Reserva[]) : [];
     },
     initialData: params.initial,
+  });
+}
+
+/**
+ * Inicio de la próxima reserva vigente a partir de un instante. Se usa para
+ * ofrecer "ir al próximo día con reservas" cuando el mes visible no tiene
+ * ninguna después del día elegido (puede caer en un mes futuro). On-demand.
+ */
+export function useProximaReserva(params: { tenantId: string; desdeISO: string; enabled: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.proximaReserva(params.tenantId, params.desdeISO),
+    queryFn: async () => {
+      const res = await getProximaReservaAction(params.desdeISO);
+      return res.success ? res.inicio : null;
+    },
+    enabled: params.enabled,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Inicio de la reserva vigente más reciente anterior a un instante. Espejo de
+ * useProximaReserva para ofrecer "ir al día anterior con reservas" cuando el mes
+ * visible no tiene ninguna antes del día elegido. On-demand.
+ */
+export function useReservaAnterior(params: { tenantId: string; hastaISO: string; enabled: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.reservaAnterior(params.tenantId, params.hastaISO),
+    queryFn: async () => {
+      const res = await getReservaAnteriorAction(params.hastaISO);
+      return res.success ? res.inicio : null;
+    },
+    enabled: params.enabled,
+    staleTime: 60_000,
   });
 }
 

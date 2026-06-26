@@ -23,13 +23,11 @@ export function AprobarCobroDialog({
   open,
   onOpenChange,
   onConfirm,
-  pending,
 }: {
   tx: TransaccionCobro | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (vars: AprobarVars) => void;
-  pending: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -42,7 +40,6 @@ export function AprobarCobroDialog({
             tx={tx}
             onOpenChange={onOpenChange}
             onConfirm={onConfirm}
-            pending={pending}
           />
         )}
       </DialogContent>
@@ -54,12 +51,10 @@ function AprobarCobroForm({
   tx,
   onOpenChange,
   onConfirm,
-  pending,
 }: {
   tx: TransaccionCobro;
   onOpenChange: (open: boolean) => void;
   onConfirm: (vars: AprobarVars) => void;
-  pending: boolean;
 }) {
   const [montoRecibido, setMontoRecibido] = useState('');
 
@@ -153,12 +148,10 @@ function AprobarCobroForm({
       </div>
 
       <DialogFooter className="border-t border-border px-6 py-4">
-        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
           Cancelar
         </Button>
-        <Button onClick={handleConfirm} disabled={pending}>
-          {pending ? 'Confirmando…' : 'Confirmar cobro'}
-        </Button>
+        <Button onClick={handleConfirm}>Confirmar cobro</Button>
       </DialogFooter>
     </>
   );

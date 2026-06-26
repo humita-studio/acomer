@@ -26,22 +26,22 @@ export async function pedirCuentaPresencialAction(
   omitirPromoIds?: string[]
 ): Promise<PagoPresencialResult> {
   try {
-    // 1. Validar la sesión
-    const sesion = await db.query.sesionesMesa.findFirst({
-      where: (t, { eq, and }) => and(eq(t.id, sesionMesaId), eq(t.restauranteId, tenantId)),
-    });
+    // 1 + 2 en paralelo: validar la sesión y leer pedidos no cancelados al mismo
+    // tiempo. Si la sesión es inválida descartamos los pedidos; si está bien,
+    // tenemos los dos resultados de un solo round-trip.
+    const [sesion, pedidosMesa] = await Promise.all([
+      db.query.sesionesMesa.findFirst({
+        where: (t, { eq, and }) => and(eq(t.id, sesionMesaId), eq(t.restauranteId, tenantId)),
+      }),
+      db.query.pedidos.findMany({
+        where: (t, { eq, and, ne }) =>
+          and(eq(t.sesionMesaId, sesionMesaId), ne(t.estado, 'Cancelado')),
+      }),
+    ]);
 
     if (!sesion || sesion.estado !== 'Activa') {
       return { success: false, message: 'La sesión no es válida o ya está cerrada.' };
     }
-
-    // 2. Calcular el total
-    const pedidosMesa = await db.query.pedidos.findMany({
-      where: (t, { eq, and, ne }) => and(
-        eq(t.sesionMesaId, sesionMesaId),
-        ne(t.estado, 'Cancelado')
-      ),
-    });
 
     if (pedidosMesa.length === 0) {
       return { success: false, message: 'No hay pedidos para cobrar.' };
@@ -49,12 +49,18 @@ export async function pedirCuentaPresencialAction(
 
     const totalPedidos = pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0);
 
-    const pagosAprobados = await db.query.transaccionesPago.findMany({
-      where: (t, { eq, and }) => and(
-        eq(t.sesionMesaId, sesionMesaId),
-        eq(t.estado, 'Aprobado')
-      )
-    });
+    // 3: pagos ya aprobados y tx pendiente existente en paralelo.
+    const [pagosAprobados, existingTx] = await Promise.all([
+      db.query.transaccionesPago.findMany({
+        where: (t, { eq, and }) =>
+          and(eq(t.sesionMesaId, sesionMesaId), eq(t.estado, 'Aprobado')),
+      }),
+      db.query.transaccionesPago.findFirst({
+        where: (t, { eq, and }) =>
+          and(eq(t.sesionMesaId, sesionMesaId), eq(t.estado, 'Pendiente')),
+      }),
+    ]);
+
     const totalPagado = pagosAprobados.reduce((acc, tx) => acc + Number(tx.monto), 0);
     const saldoPendiente = totalPedidos - totalPagado;
 
@@ -62,8 +68,7 @@ export async function pedirCuentaPresencialAction(
       return { success: false, message: 'La mesa ya se encuentra pagada.' };
     }
 
-    // Promociones automáticas: descuento según método/canal (removible con omitirPromoIds).
-    // Si falla (p.ej. la migración de promos no se aplicó todavía) se cobra sin descuento.
+    // Promociones: corre mientras ya tenemos sesión y saldo, no necesita la tx.
     let descuento = 0;
     let promocionId: string | null = null;
     let promocionesAplicadas: { id: string; nombre: string; tipo: string; descuento: number }[] = [];
@@ -85,14 +90,6 @@ export async function pedirCuentaPresencialAction(
       console.warn('[pedirCuentaPresencialAction] promos no aplicadas:', promoError);
     }
     const totalCalculado = Math.max(0, saldoPendiente - descuento);
-
-    // 3. Revisar si ya existe una transacción pendiente
-    const existingTx = await db.query.transaccionesPago.findFirst({
-      where: (t, { eq, and }) => and(
-        eq(t.sesionMesaId, sesionMesaId),
-        eq(t.estado, 'Pendiente')
-      )
-    });
 
     let transactionId;
 
@@ -126,24 +123,26 @@ export async function pedirCuentaPresencialAction(
       transactionId = nuevaTx[0].id;
     }
 
-    // 4. Notificar al staff vía Supabase Realtime
-    try {
-      const supabase = await createSupabaseServerClient();
-      const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-      await channel.send({
-        type: 'broadcast',
-        event: 'cuenta_solicitada',
-        payload: {
-          sesionMesaId,
-          transactionId,
-          metodoPago,
-          monto: totalCalculado,
-        },
-      });
-    } catch (realtimeError) {
-      console.warn('[pedirCuentaPresencialAction] Error enviando notificación realtime:', realtimeError);
-      // No falla la operación si realtime falla
-    }
+    // Notificar al staff vía Supabase Realtime. Fire-and-forget: el broadcast no
+    // debe alargar el tiempo de respuesta del comensal; los errores se loguean.
+    void (async () => {
+      try {
+        const supabase = await createSupabaseServerClient();
+        const channel = supabase.channel(`admin_restaurant_${tenantId}`);
+        await channel.send({
+          type: 'broadcast',
+          event: 'cuenta_solicitada',
+          payload: {
+            sesionMesaId,
+            transactionId,
+            metodoPago,
+            monto: totalCalculado,
+          },
+        });
+      } catch (realtimeError) {
+        console.warn('[pedirCuentaPresencialAction] Error enviando notificación realtime:', realtimeError);
+      }
+    })();
 
     const metodoLabel = metodoPago === 'efectivo' ? 'efectivo' : 'tarjeta';
     const totalFmt = totalCalculado.toFixed(2);

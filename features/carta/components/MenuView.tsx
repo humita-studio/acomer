@@ -1,12 +1,17 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Tag } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { FloatingCart } from './FloatingCart';
 import { Button } from '@/shared/ui/button';
 import type { CategoriaMenu, ProductoMenu } from '../types';
-import type { CartApi, PedidoConfirmadoResumen } from '../cart';
+import type {
+  CartApi,
+  CartPromoDisponible,
+  CartPromoResumen,
+  PedidoConfirmadoResumen,
+} from '../cart';
 
 // ============================================================================
 // MenuView: shell presentacional del menú. Agnóstico al origen del carrito
@@ -32,6 +37,10 @@ type MenuViewProps = {
     onConfirm: () => Promise<{ success: boolean; message?: string } | void>;
     confirming: boolean;
     drawerTitulo?: string;
+    /** Promos vigentes para mostrar al comensal (informativas). */
+    promosDisponibles?: CartPromoDisponible[];
+    /** Descuento aplicado al carrito (preview), para reflejarlo en el total. */
+    promoResumen?: CartPromoResumen | null;
 };
 
 export function MenuView({
@@ -47,6 +56,8 @@ export function MenuView({
     onConfirm,
     confirming,
     drawerTitulo,
+    promosDisponibles = [],
+    promoResumen = null,
 }: MenuViewProps) {
     const [activeCategory, setActiveCategory] = useState<string>(categorias[0]?.id || '');
     const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
@@ -115,6 +126,29 @@ export function MenuView({
                     </div>
                 </div>
 
+                {/* Promos disponibles (informativas): chips compactos, se ven aunque el
+                    carrito esté vacío. */}
+                {promosDisponibles.length > 0 && (
+                    <div className="border-t px-4 py-3">
+                        <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                            <Tag className="size-3.5 text-primary" />
+                            Promos del local
+                        </p>
+                        <div className="flex gap-2 overflow-x-auto">
+                            {promosDisponibles.map((promo) => (
+                                <span
+                                    key={promo.id}
+                                    title={promo.condicion}
+                                    className="flex shrink-0 items-center gap-1.5 rounded-full bg-sidebar-accent px-3 py-1.5 text-xs text-sidebar-accent-foreground"
+                                >
+                                    <span className="font-bold tabular-nums">{promo.badge}</span>
+                                    <span className="font-medium">{promo.nombre}</span>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Product List */}
                 <div className="p-4 space-y-3">
                     {activeProducts.length === 0 ? (
@@ -160,6 +194,7 @@ export function MenuView({
                     onConfirm={onConfirm}
                     confirming={confirming}
                     titulo={drawerTitulo}
+                    promoResumen={promoResumen}
                 />
 
                 {/* Modal de pago inyectado por el caller (sólo cuando hay sesión) */}

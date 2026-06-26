@@ -25,9 +25,16 @@ export const queryKeys = {
   metodosVenta: (tenantId: string) => ['metodos-venta', tenantId] as const,
   ventaPreview: (metodo: string, omitirIds: string[], items: unknown) =>
     ['venta-preview', metodo, omitirIds, items] as const,
+  // Preview de la cuenta ya persistida por método de pago (modal del comensal).
+  cuentaPreview: (sesionMesaId: string, metodo: string) =>
+    ['cuenta-preview', sesionMesaId, metodo] as const,
   ordenesExternas: (tenantId: string) => ['ordenes-externas', tenantId] as const,
   reservasDia: (tenantId: string, fecha: string) => ['reservas', tenantId, fecha] as const,
   reservasMes: (tenantId: string, mes: string) => ['reservas', 'mes', tenantId, mes] as const,
+  proximaReserva: (tenantId: string, desdeISO: string) =>
+    ['reservas', 'proxima', tenantId, desdeISO] as const,
+  reservaAnterior: (tenantId: string, hastaISO: string) =>
+    ['reservas', 'anterior', tenantId, hastaISO] as const,
   disponibilidad: (inicioISO: string, personas: number) =>
     ['disponibilidad', inicioISO, personas] as const,
   mesasDisponibles: (inicioISO: string, personas: number, duracionMin: number) =>

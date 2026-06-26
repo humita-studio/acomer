@@ -1,8 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Ban, Check, Settings, Store, Truck } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { ArrowRight, Ban, Check, Clock, MoreHorizontal, Settings, Store, Truck } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { Button } from '@/shared/ui/button';
@@ -14,6 +25,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { cn } from '@/shared/lib/utils';
 import {
   getOrdenesExternasAction,
@@ -54,23 +73,13 @@ const LABEL: Record<string, string> = {
   Cancelado: 'Cancelado',
 };
 
-// Clases del badge de estado de entrega, con soporte para dark mode.
-const ESTADO_BADGE: Record<string, string> = {
-  Recibido: 'bg-muted text-muted-foreground',
-  EnPreparacion: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
-  Listo: 'bg-primary/10 text-primary',
-  EnCamino: 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
-  Entregado: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-  Cancelado: 'bg-destructive/10 text-destructive',
-};
-
+// Color del punto del encabezado de cada columna (alineado con el flujo del pedido).
 const ESTADO_DOT: Record<string, string> = {
   Recibido: 'bg-muted-foreground',
-  EnPreparacion: 'bg-amber-500',
+  EnPreparacion: 'bg-warning',
   Listo: 'bg-primary',
   EnCamino: 'bg-purple-500',
-  Entregado: 'bg-emerald-500',
-  Cancelado: 'bg-destructive',
+  Entregado: 'bg-success',
 };
 
 const MODO_LABEL: Record<DeliveryConfig['modo'], string> = {
@@ -79,7 +88,23 @@ const MODO_LABEL: Record<DeliveryConfig['modo'], string> = {
   delivery: 'solo envío',
 };
 
-// Próximo estado según el flujo y el tipo de pedido.
+// Columnas del tablero, en orden del flujo. Cancelado vive aparte (chip + popover).
+const COLUMNAS = [
+  { estado: 'Recibido', label: 'Recibido' },
+  { estado: 'EnPreparacion', label: 'En preparación' },
+  { estado: 'Listo', label: 'Listo' },
+  { estado: 'EnCamino', label: 'En camino' },
+  { estado: 'Entregado', label: 'Entregado' },
+] as const;
+
+const FILTROS = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'delivery', label: 'Envío' },
+  { value: 'takeaway', label: 'Retiro' },
+] as const;
+type Filtro = (typeof FILTROS)[number]['value'];
+
+// Próximo estado según el flujo y el tipo de pedido (acción "Marcar como…").
 function siguienteEstado(estado: string, tipo: string): string | null {
   switch (estado) {
     case 'Recibido':
@@ -95,34 +120,245 @@ function siguienteEstado(estado: string, tipo: string): string | null {
   }
 }
 
-function EstadoBadge({ estado }: { estado: string }) {
+// Se puede soltar la tarjeta en esa columna: no es la misma y, si es retiro, no
+// va a "En camino" (esa etapa es solo para delivery).
+function esTransicionValida(orden: Orden, destino: string): boolean {
+  if (orden.estadoEntrega === destino) return false;
+  if (destino === 'EnCamino' && orden.tipo !== 'delivery') return false;
+  return true;
+}
+
+// "hace X min" relativo a `ahora` (ms), para el pie de cada tarjeta del tablero.
+function tiempoRelativo(desde: string | Date, ahora: number): string {
+  const min = Math.max(0, Math.floor((ahora - new Date(desde).getTime()) / 60_000));
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
+
+function PagoChip({ pagado }: { pagado: boolean }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-        ESTADO_BADGE[estado] ?? 'bg-muted text-muted-foreground',
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+        pagado ? 'bg-success-subtle text-success-foreground' : 'bg-destructive/10 text-destructive',
       )}
     >
-      <span className={cn('size-1.5 rounded-full', ESTADO_DOT[estado] ?? 'bg-muted-foreground')} />
-      {LABEL[estado] ?? estado}
+      <span className={cn('size-1.5 rounded-full', pagado ? 'bg-success-foreground' : 'bg-destructive')} />
+      {pagado ? 'Pagado' : 'No pagado'}
     </span>
   );
 }
 
-function PagoBadge({ pago }: { pago: Orden['estadoPago'] }) {
-  const pagado = pago === 'Pagado';
+function TipoChip({ esEnvio }: { esEnvio: boolean }) {
   return (
-    <span
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+      {esEnvio ? <Truck className="size-3" /> : <Store className="size-3" />}
+      {esEnvio ? 'Envío' : 'Retiro'}
+    </span>
+  );
+}
+
+// Cuerpo (sin drag) de una tarjeta en curso — reutilizado por la columna y el overlay.
+function OrdenCardBody({
+  orden,
+  now,
+  onAdvance,
+  onCancel,
+}: {
+  orden: Orden;
+  now: number;
+  onAdvance: (sesionMesaId: string, nuevoEstado: string) => void;
+  onCancel: (orden: Orden) => void;
+}) {
+  const next = siguienteEstado(orden.estadoEntrega, orden.tipo);
+  const esEnvio = orden.tipo === 'delivery';
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-card-foreground shadow-sm">
+      <div className="min-w-0">
+        <h3 className="truncate text-sm font-semibold leading-tight">{orden.nombreContacto}</h3>
+        <p className="truncate text-xs text-muted-foreground">{orden.telefono}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <TipoChip esEnvio={esEnvio} />
+        <PagoChip pagado={orden.estadoPago === 'Pagado'} />
+      </div>
+
+      {esEnvio && orden.direccion && (
+        <p className="text-[11px] text-muted-foreground">
+          {orden.direccion}
+          {orden.referencia ? ` · ${orden.referencia}` : ''}
+        </p>
+      )}
+
+      <div className="flex flex-col gap-1 rounded-md bg-muted p-2">
+        {orden.items.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Sin items.</p>
+        ) : (
+          orden.items.map((it, i) => (
+            <div key={i} className="flex gap-1.5 text-xs">
+              <span className="font-semibold tabular-nums text-foreground">{it.cantidad}×</span>
+              <span className="min-w-0 flex-1 text-muted-foreground">
+                {it.nombre}
+                {it.modificadores.length > 0 && (
+                  <span className="text-[11px]"> ({it.modificadores.join(', ')})</span>
+                )}
+              </span>
+            </div>
+          ))
+        )}
+        <div className="h-px bg-border" />
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-muted-foreground">Total</span>
+          <span className="font-display text-[15px] font-semibold tabular-nums">
+            ${orden.total.toFixed(2)}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Clock className="size-3" />
+          {tiempoRelativo(orden.createdAt, now)}
+        </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Acciones del pedido"
+              // Evita que el sensor de arrastre tome el click sobre el menú.
+              onPointerDown={(e) => e.stopPropagation()}
+              className="-mr-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            {next && (
+              <>
+                <DropdownMenuItem onClick={() => onAdvance(orden.sesionMesaId, next)}>
+                  <ArrowRight className="size-4" />
+                  Marcar como {LABEL[next].toLowerCase()}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem variant="destructive" onClick={() => onCancel(orden)}>
+              <Ban className="size-4" />
+              Cancelar pedido
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+// Cuerpo compacto (sin drag) de un pedido entregado.
+function EntregadoCardBody({ orden }: { orden: Orden }) {
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border bg-card p-3 text-card-foreground opacity-75">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="truncate text-sm font-semibold">{orden.nombreContacto}</h3>
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-subtle px-2 py-0.5 text-[11px] font-semibold text-success-foreground">
+          <Check className="size-3" />
+          Entregado
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {orden.tipo === 'delivery' ? 'Envío' : 'Retiro'} · entregado
+      </p>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">Total</span>
+        <span className="font-display text-[15px] font-semibold tabular-nums">
+          ${orden.total.toFixed(2)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Envoltorio arrastrable. El cuerpo original se atenúa mientras se arrastra; el
+// clon que sigue al cursor lo dibuja el <DragOverlay> (sin recortarse al cruzar
+// columnas).
+function DraggableCard({ orden, children }: { orden: Orden; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: orden.sesionMesaId,
+    data: { orden },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold',
-        pagado
-          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-          : 'bg-destructive/10 text-destructive',
+        'touch-none cursor-grab rounded-lg outline-none ring-primary focus-visible:ring-2 active:cursor-grabbing',
+        isDragging && 'opacity-30',
       )}
     >
-      {pagado ? <Check className="size-3" /> : <Ban className="size-3" />}
-      {pagado ? 'Pagado' : 'No pagado'}
-    </span>
+      {children}
+    </div>
+  );
+}
+
+function Columna({
+  estado,
+  label,
+  items,
+  now,
+  activeOrden,
+  onAdvance,
+  onCancel,
+}: {
+  estado: string;
+  label: string;
+  items: Orden[];
+  now: number;
+  activeOrden: Orden | null;
+  onAdvance: (sesionMesaId: string, nuevoEstado: string) => void;
+  onCancel: (orden: Orden) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: estado });
+  const esEntregado = estado === 'Entregado';
+  const resaltar = isOver && activeOrden != null && esTransicionValida(activeOrden, estado);
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex h-full w-[264px] shrink-0 flex-col gap-2.5 rounded-xl bg-muted/60 p-2.5 transition-colors',
+        resaltar && 'bg-primary/5 ring-2 ring-inset ring-primary/50',
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-between px-1">
+        <div className="flex items-center gap-1.5">
+          <span className={cn('size-2 rounded-full', ESTADO_DOT[estado] ?? 'bg-muted-foreground')} />
+          <span className="text-sm font-semibold">{label}</span>
+        </div>
+        <span className="inline-flex min-w-5 items-center justify-center rounded-full border bg-card px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+          {items.length}
+        </span>
+      </div>
+      {/* Solo scrollea la lista de tarjetas, no la página. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        {items.length === 0 ? (
+          <p className="px-1 py-6 text-center text-xs text-muted-foreground">Sin pedidos</p>
+        ) : (
+          items.map((o) => (
+            <DraggableCard key={o.sesionMesaId} orden={o}>
+              {esEntregado ? (
+                <EntregadoCardBody orden={o} />
+              ) : (
+                <OrdenCardBody orden={o} now={now} onAdvance={onAdvance} onCancel={onCancel} />
+              )}
+            </DraggableCard>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -136,11 +372,21 @@ export function PedidosOnlineManager({
   initialConfig: DeliveryConfig;
 }) {
   const queryClient = useQueryClient();
+  const ordenesKey = queryKeys.ordenesExternas(tenantId);
   const [configOpen, setConfigOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Orden | null>(null);
+  const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [activeOrden, setActiveOrden] = useState<Orden | null>(null);
+
+  // Tick para refrescar los "hace X min" sin esperar a un evento realtime.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const { data: ordenes = [] } = useQuery({
-    queryKey: queryKeys.ordenesExternas(tenantId),
+    queryKey: ordenesKey,
     queryFn: async () => {
       const res = await getOrdenesExternasAction();
       return res.success ? (res.ordenes as Orden[]) : [];
@@ -153,8 +399,7 @@ export function PedidosOnlineManager({
   // para refrescar el estado Pagado/No pagado del tablero al instante.
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
-    const invalidar = () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.ordenesExternas(tenantId) });
+    const invalidar = () => queryClient.invalidateQueries({ queryKey: ordenesKey });
     const channel = supabase
       .channel(`admin_restaurant_${tenantId}`)
       .on('broadcast', { event: 'orden_externa_nueva' }, invalidar)
@@ -165,17 +410,54 @@ export function PedidosOnlineManager({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tenantId, queryClient]);
+  }, [tenantId, queryClient, ordenesKey]);
 
+  // Cambia el estado de entrega con update optimista (el arrastre y el menú se
+  // ven al instante; realtime/refetch reconcilian al confirmar el server).
   const cambiarEstado = useMutation({
     mutationFn: ({ sesionMesaId, nuevoEstado }: { sesionMesaId: string; nuevoEstado: string }) =>
       cambiarEstadoEntregaAction(sesionMesaId, nuevoEstado as never),
+    onMutate: async ({ sesionMesaId, nuevoEstado }) => {
+      setCancelTarget(null);
+      await queryClient.cancelQueries({ queryKey: ordenesKey });
+      const prev = queryClient.getQueryData<Orden[]>(ordenesKey);
+      queryClient.setQueryData<Orden[]>(ordenesKey, (old = []) =>
+        old.map((o) => (o.sesionMesaId === sesionMesaId ? { ...o, estadoEntrega: nuevoEstado } : o)),
+      );
+      return { prev };
+    },
+    onError: (_e, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(ordenesKey, ctx.prev);
+      alert('No se pudo actualizar el pedido.');
+    },
     onSuccess: (res) => {
       if (!res.success) alert(res.message);
-      setCancelTarget(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.ordenesExternas(tenantId) });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ordenesKey });
     },
   });
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setActiveOrden((e.active.data.current?.orden as Orden | undefined) ?? null);
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const orden = e.active.data.current?.orden as Orden | undefined;
+    setActiveOrden(null);
+    const destino = e.over ? String(e.over.id) : null;
+    if (!orden || !destino || !esTransicionValida(orden, destino)) return;
+    cambiarEstado.mutate({ sesionMesaId: orden.sesionMesaId, nuevoEstado: destino });
+  };
+
+  const advance = (sesionMesaId: string, nuevoEstado: string) =>
+    cambiarEstado.mutate({ sesionMesaId, nuevoEstado });
+
+  const visibles = filtro === 'todos' ? ordenes : ordenes.filter((o) => o.tipo === filtro);
+  const porEstado = (estado: string) => visibles.filter((o) => o.estadoEntrega === estado);
+  const cancelados = visibles.filter((o) => o.estadoEntrega === 'Cancelado');
 
   const activas = ordenes.filter(
     (o) => o.estadoEntrega !== 'Entregado' && o.estadoEntrega !== 'Cancelado',
@@ -183,110 +465,88 @@ export function PedidosOnlineManager({
   const cerradas = ordenes.filter(
     (o) => o.estadoEntrega === 'Entregado' || o.estadoEntrega === 'Cancelado',
   );
-
   const subtitulo = `${activas.length} en curso · ${cerradas.length} finalizado${
     cerradas.length === 1 ? '' : 's'
   } hoy · ${MODO_LABEL[initialConfig.modo]}`;
 
-  const Card = ({ o }: { o: Orden }) => {
-    const next = siguienteEstado(o.estadoEntrega, o.tipo);
-    const busy = cambiarEstado.isPending && cambiarEstado.variables?.sesionMesaId === o.sesionMesaId;
-    const esEnvio = o.tipo === 'delivery';
-    return (
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="font-heading font-semibold">{o.nombreContacto}</h3>
-            <p className="text-sm text-muted-foreground">{o.telefono}</p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <EstadoBadge estado={o.estadoEntrega} />
-            <PagoBadge pago={o.estadoPago} />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-          <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
-            {esEnvio ? <Truck className="size-3" /> : <Store className="size-3" />}
-            {esEnvio ? 'Envío' : 'Retiro'}
-          </span>
-          {esEnvio && o.direccion && <span className="truncate">{o.direccion}</span>}
-        </div>
-        {o.referencia && <p className="-mt-1 text-xs text-muted-foreground">Ref: {o.referencia}</p>}
-
-        {/* Detalle de lo pedido */}
-        <div className="space-y-1 rounded-lg border bg-muted/40 p-3">
-          {o.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin items.</p>
-          ) : (
-            o.items.map((it, i) => (
-              <div key={i} className="text-sm">
-                <span className="font-semibold tabular-nums">{it.cantidad}×</span> {it.nombre}
-                {it.modificadores.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {' '}
-                    ({it.modificadores.join(', ')})
-                  </span>
-                )}
-              </div>
-            ))
-          )}
-          <div className="mt-1 flex justify-between border-t pt-1 text-sm font-semibold">
-            <span>Total</span>
-            <span className="tabular-nums">${o.total.toFixed(2)}</span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {next && (
-            <Button
-              size="sm"
-              className="flex-1"
-              onClick={() => cambiarEstado.mutate({ sesionMesaId: o.sesionMesaId, nuevoEstado: next })}
-              disabled={busy}
-            >
-              {busy ? '…' : LABEL[next]}
-              <ArrowRight className="size-4" />
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={() => setCancelTarget(o)}
-            disabled={busy}
-          >
-            Cancelar
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
-  const FinalizadaCard = ({ o }: { o: Orden }) => (
-    <div className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4 text-card-foreground">
-      <div className="min-w-0">
-        <h3 className="truncate font-heading font-semibold">{o.nombreContacto}</h3>
-        <p className="text-xs text-muted-foreground">
-          {o.tipo === 'delivery' ? 'Envío' : 'Retiro'} · {LABEL[o.estadoEntrega] ?? o.estadoEntrega}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <EstadoBadge estado={o.estadoEntrega} />
-        <span className="text-sm font-semibold tabular-nums">${o.total.toFixed(2)}</span>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="space-y-6">
-      {/* Toolbar: resumen en vivo + tiempo real + configuración */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{subtitulo}</p>
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            En tiempo real
+    // Alto acotado al viewport para que scrolleen las columnas y no la página.
+    // El shell admin usa min-h-svh (no fija altura), así que h-full no resuelve;
+    // descontamos el topbar (h-14 = 3.5rem) y el padding del <main> (p-6 = 3rem).
+    <div className="flex h-[calc(100svh-6.5rem)] flex-col gap-6">
+      {/* Encabezado: título + resumen en vivo + estado realtime */}
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-4">
+        <div className="space-y-1.5">
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Pedidos online</h1>
+          <p className="text-sm text-muted-foreground">{subtitulo}</p>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-full bg-success-subtle px-3 py-1.5 text-sm font-medium text-success-foreground">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+            <span className="relative inline-flex size-2 rounded-full bg-success-foreground" />
           </span>
+          En tiempo real
+        </span>
+      </div>
+
+      {/* Toolbar: filtro por modalidad + cancelados + configuración */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+          {FILTROS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setFiltro(f.value)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm transition-colors',
+                filtro === f.value
+                  ? 'bg-card font-semibold text-foreground shadow-sm'
+                  : 'font-medium text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {cancelados.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <span className="size-1.5 rounded-full bg-destructive" />
+                  Cancelados · {cancelados.length}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 p-0">
+                <div className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Cancelados
+                </div>
+                <div className="max-h-64 overflow-y-auto p-1.5">
+                  {cancelados.map((o) => (
+                    <div
+                      key={o.sesionMesaId}
+                      className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{o.nombreContacto}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {o.tipo === 'delivery' ? 'Envío' : 'Retiro'} ·{' '}
+                          {tiempoRelativo(o.createdAt, now)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                        ${o.total.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
           <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
             <Settings className="size-4" />
             Configuración
@@ -294,35 +554,40 @@ export function PedidosOnlineManager({
         </div>
       </div>
 
-      {/* En curso */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          En curso
-        </h2>
-        {activas.length === 0 ? (
-          <p className="py-10 text-center text-muted-foreground">No hay pedidos en curso.</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {activas.map((o) => (
-              <Card key={o.sesionMesaId} o={o} />
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Tablero kanban con arrastre entre columnas */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveOrden(null)}
+      >
+        <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+          {COLUMNAS.map((c) => (
+            <Columna
+              key={c.estado}
+              estado={c.estado}
+              label={c.label}
+              items={porEstado(c.estado)}
+              now={now}
+              activeOrden={activeOrden}
+              onAdvance={advance}
+              onCancel={setCancelTarget}
+            />
+          ))}
+        </div>
 
-      {/* Finalizados hoy */}
-      {cerradas.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Finalizados hoy
-          </h2>
-          <div className="grid grid-cols-1 gap-4 opacity-70 md:grid-cols-2 lg:grid-cols-3">
-            {cerradas.map((o) => (
-              <FinalizadaCard key={o.sesionMesaId} o={o} />
-            ))}
-          </div>
-        </section>
-      )}
+        <DragOverlay dropAnimation={null}>
+          {activeOrden ? (
+            <div className="w-[244px] rotate-2 cursor-grabbing shadow-xl">
+              {activeOrden.estadoEntrega === 'Entregado' ? (
+                <EntregadoCardBody orden={activeOrden} />
+              ) : (
+                <OrdenCardBody orden={activeOrden} now={now} onAdvance={() => {}} onCancel={() => {}} />
+              )}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <DeliveryConfigSheet
         open={configOpen}

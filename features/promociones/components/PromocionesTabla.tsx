@@ -13,26 +13,9 @@ import {
 import {
   type Promocion,
   PROMO_ALCANCE_LABEL,
-  PROMO_DIAS,
+  promoCondicionResumen,
   promoTipoBadge,
 } from '@/features/promociones/promociones';
-
-/** Resumen corto de las condiciones para la tabla. */
-function condicionResumen(p: Promocion): string {
-  const c = p.condiciones || {};
-  const partes: string[] = [];
-  if (c.soloEfectivo || (c.metodosPago?.length === 1 && c.metodosPago[0] === 'efectivo')) {
-    partes.push('Pago en efectivo');
-  } else if (c.metodosPago?.length) {
-    partes.push(c.metodosPago.map((m) => (m === 'mercado_pago' ? 'MP' : m)).join('/'));
-  }
-  if (c.dias?.length) {
-    partes.push(c.dias.map((d) => PROMO_DIAS.find((x) => x.value === d)?.label ?? d).join(''));
-  }
-  if (c.horaDesde && c.horaHasta) partes.push(`${c.horaDesde}–${c.horaHasta}`);
-  if (c.montoMinimo) partes.push(`min $${c.montoMinimo}`);
-  return partes.join(' · ') || 'Sin condiciones';
-}
 
 /** Tabla de promociones con menú de acciones por fila. */
 export function PromocionesTabla({
@@ -74,7 +57,9 @@ export function PromocionesTabla({
                 {promoTipoBadge(p.tipo, p.valor)}
               </Badge>
             </div>
-            <span className="text-sm text-muted-foreground">{condicionResumen(p)}</span>
+            <span className="text-sm text-muted-foreground">
+              {promoCondicionResumen(p) || 'Sin condiciones'}
+            </span>
             <span className="text-sm text-muted-foreground">{PROMO_ALCANCE_LABEL[p.alcance]}</span>
             <span>
               <span

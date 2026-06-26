@@ -53,3 +53,25 @@ export type PedidoConfirmadoResumen = {
   subtotal: number;
   modificadores: { nombre: string }[];
 };
+
+// Promos de cara al comensal. Tipos PLANOS a propósito: carta es un cimiento y no
+// importa la feature de promociones; las superficies (mesa/online) calculan estos
+// datos y los inyectan. Estructuralmente compatibles con los tipos de promociones.
+
+/** Resultado del descuento aplicado al carrito (subtotal/descuento/total). */
+export type CartPromoResumen = {
+  subtotal: number;
+  descuento: number;
+  total: number;
+  aplicadas: { id: string; nombre: string; descuento: number }[];
+};
+
+/** Una promo disponible para listar en el menú (informativa). */
+export type CartPromoDisponible = {
+  id: string;
+  nombre: string;
+  /** Etiqueta corta del beneficio: "−10%", "2x1", etc. */
+  badge: string;
+  /** Condición legible ("Pago en efectivo · LMV"), si tiene. */
+  condicion?: string;
+};

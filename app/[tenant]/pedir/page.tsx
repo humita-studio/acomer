@@ -17,6 +17,7 @@ import { obtenerSeguimientoPedido } from '@/features/pedidos-online/obtenerSegui
 import { SeguimientoPedido } from '@/features/pedidos-online/components/SeguimientoPedido';
 import { obtenerDeliveryConfig } from '@/features/pedidos-online/deliveryConfigActions';
 import { modosPermitidos, puedeAgregar } from '@/features/pedidos-online/deliveryConfig';
+import { obtenerPromocionesPublicas } from '@/features/promociones/promosPublicasActions';
 
 type ModificadorSnapshot = {
   id: string;
@@ -80,10 +81,6 @@ export default async function PedirPage({
     }
   }
 
-  // Catálogo activo (categorías + productos con adicionales y variantes). Lo
-  // necesitan tanto el flujo "menú primero" (sin sesión) como la sesión externa.
-  const { categorias: cats, productos: menuProductos } = await obtenerCarta(tenantId);
-
   // Paso 1: sin sesión → menú primero. El cliente arma el carrito (local) y
   // sólo en el checkout se crea sesión + datos de entrega + pedido.
   const sesionId = typeof sp?.sesion === 'string' ? sp.sesion : undefined;
@@ -91,6 +88,14 @@ export default async function PedirPage({
     if (!config.activo) {
       return <ErrorBox message="El local no está tomando pedidos online en este momento." />;
     }
+    // Catálogo + promos + métodos de pago: el flujo "menú primero" los necesita
+    // acá (los métodos, para abrir el cobro apenas se confirma el pedido sin
+    // navegar). El resto de los caminos no muestran el menú, así que no se cargan.
+    const [{ categorias: cats, productos: menuProductos }, promos, metodosPago] = await Promise.all([
+      obtenerCarta(tenantId),
+      obtenerPromocionesPublicas(tenantId),
+      getMetodosPago(tenantId),
+    ]);
     return (
       <main className="min-h-screen bg-muted/30">
         <header className="bg-background p-4 border-b text-center sticky top-0 z-20 shadow-sm">
@@ -103,6 +108,8 @@ export default async function PedirPage({
           categorias={cats as CategoriaMenu[]}
           productos={menuProductos}
           modos={modosPermitidos(config)}
+          promos={promos}
+          metodosPago={metodosPago}
         />
       </main>
     );
@@ -151,11 +158,26 @@ export default async function PedirPage({
     return <ErrorBox message="Este pedido ya fue cerrado." />;
   }
 
-  const borradorData = await db
-    .select()
-    .from(itemsBorradorMesa)
-    .where(eq(itemsBorradorMesa.sesionMesaId, sesionId))
-    .orderBy(asc(itemsBorradorMesa.createdAt));
+  // Flujo "agregar productos" (sesión activa, aún sin confirmar o ?agregar=1):
+  // acá sí se muestra el menú, así que se cargan carta + promos + borrador +
+  // pedidos + métodos en paralelo (son independientes entre sí).
+  const [
+    { categorias: cats, productos: menuProductos },
+    promos,
+    borradorData,
+    { items: pedidosConfirmados },
+    metodosPago,
+  ] = await Promise.all([
+    obtenerCarta(tenantId),
+    obtenerPromocionesPublicas(tenantId),
+    db
+      .select()
+      .from(itemsBorradorMesa)
+      .where(eq(itemsBorradorMesa.sesionMesaId, sesionId))
+      .orderBy(asc(itemsBorradorMesa.createdAt)),
+    obtenerTicketMesa(sesionId),
+    getMetodosPago(tenantId),
+  ]);
 
   const initialCartItems: CartItem[] = borradorData.map((item) => ({
     id: item.id,
@@ -167,9 +189,6 @@ export default async function PedirPage({
     modificadores: (item.modificadores as ModificadorSnapshot[]) || [],
   }));
 
-  const { items: pedidosConfirmados } = await obtenerTicketMesa(sesionId);
-
-  const metodosPago = await getMetodosPago(tenantId);
   const etiqueta = sesion.tipo === 'delivery' ? 'Envío a domicilio' : 'Retiro en local';
   // Venimos del checkout (pagar=1) → abrir el pago apenas carga la pantalla.
   const autoAbrirPago = sp?.pagar === '1';
@@ -204,6 +223,8 @@ export default async function PedirPage({
         pedidosConfirmados={pedidosConfirmados}
         modo="externo"
         autoAbrirPago={autoAbrirPago}
+        promos={promos}
+        canal={sesion.tipo === 'delivery' ? 'delivery' : 'takeaway'}
       />
     </main>
   );

@@ -22,6 +22,8 @@ export type TicketData = {
     transaccion: {
         id: string;
         monto: number;
+        /** Descuento por promos aplicado a esta transacción (0 si no hubo). */
+        descuento: number;
         proveedor: string;
         estado: string;
         fecha: Date;
@@ -122,6 +124,7 @@ export async function obtenerTicketAction(transactionId: string): Promise<{ succ
                 transaccion: {
                     id: tx.id,
                     monto: Number(tx.monto),
+                    descuento: Number(tx.descuento) || 0,
                     proveedor: tx.proveedor,
                     estado: tx.estado,
                     fecha: tx.createdAt,
