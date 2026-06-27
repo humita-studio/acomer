@@ -76,10 +76,16 @@ async function ConfigContent() {
                     <TabsTrigger value="pagos">Pagos</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="landing" className="max-w-2xl space-y-4">
-                    <NombreLocalForm nombreActual={restaurante?.nombre || session.nombreRestaurante || ''} />
-                    <SubdominioForm slugActual={session.slugRestaurante} dominioBase={dominioBase} />
-                    <LandingConfigForm initial={landing} />
+                <TabsContent value="landing" className="space-y-4 outline-none">
+                    <LandingConfigForm 
+                        initial={landing}
+                        identidadSuperior={
+                            <>
+                                <NombreLocalForm nombreActual={restaurante?.nombre || session.nombreRestaurante || ''} />
+                                <SubdominioForm slugActual={session.slugRestaurante} dominioBase={dominioBase} />
+                            </>
+                        } 
+                    />
                 </TabsContent>
 
                 <TabsContent value="pagos">
