@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Textarea } from '@/shared/ui/textarea';
@@ -54,6 +55,31 @@ export function LandingConfigForm({ initial }: { initial: LandingConfig }) {
 
   const updateDia = (dow: number, partial: Partial<HorarioDia>) =>
     setHorarios((hs) => hs.map((h, i) => (i === dow ? { ...h, ...partial } : h)));
+  
+  const addTurno = (dow: number) => {
+    setHorarios((hs) => hs.map((h, i) => {
+      if (i !== dow) return h;
+      return { ...h, turnos: [...h.turnos, { desde: '12:00', hasta: '00:00' }] };
+    }));
+  };
+
+  const removeTurno = (dow: number, turnoIndex: number) => {
+    setHorarios((hs) => hs.map((h, i) => {
+      if (i !== dow) return h;
+      return { ...h, turnos: h.turnos.filter((_, idx) => idx !== turnoIndex) };
+    }));
+  };
+
+  const updateTurno = (dow: number, turnoIndex: number, partial: Partial<{ desde: string; hasta: string }>) => {
+    setHorarios((hs) => hs.map((h, i) => {
+      if (i !== dow) return h;
+      return {
+        ...h,
+        turnos: h.turnos.map((t, idx) => idx === turnoIndex ? { ...t, ...partial } : t)
+      };
+    }));
+  };
+
   const updateRed = (k: keyof RedesLanding, v: string) => setRedes((r) => ({ ...r, [k]: v }));
 
   const guardar = useMutation({
@@ -137,22 +163,46 @@ export function LandingConfigForm({ initial }: { initial: LandingConfig }) {
                   </span>
                 </div>
                 {!dia.cerrado && (
-                  <div className="ml-auto flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={dia.desde}
-                      onChange={(e) => updateDia(dow, { desde: e.target.value })}
-                      className="h-8 w-28"
-                      aria-label={`Apertura ${label}`}
-                    />
-                    <span className="text-sm text-muted-foreground">—</span>
-                    <Input
-                      type="time"
-                      value={dia.hasta}
-                      onChange={(e) => updateDia(dow, { hasta: e.target.value })}
-                      className="h-8 w-28"
-                      aria-label={`Cierre ${label}`}
-                    />
+                  <div className="ml-auto flex flex-col gap-2">
+                    {dia.turnos.map((turno, tIdx) => (
+                      <div key={tIdx} className="flex items-center gap-2">
+                        <Input
+                          type="time"
+                          value={turno.desde}
+                          onChange={(e) => updateTurno(dow, tIdx, { desde: e.target.value })}
+                          className="h-8 w-28"
+                          aria-label={`Apertura ${label}`}
+                        />
+                        <span className="text-sm text-muted-foreground">—</span>
+                        <Input
+                          type="time"
+                          value={turno.hasta}
+                          onChange={(e) => updateTurno(dow, tIdx, { hasta: e.target.value })}
+                          className="h-8 w-28"
+                          aria-label={`Cierre ${label}`}
+                        />
+                        {dia.turnos.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => removeTurno(dow, tIdx)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 h-8 w-full text-xs"
+                      onClick={() => addTurno(dow)}
+                    >
+                      <Plus className="mr-1 size-3" /> Agregar turno
+                    </Button>
                   </div>
                 )}
               </div>

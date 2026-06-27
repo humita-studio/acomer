@@ -48,3 +48,33 @@ export async function actualizarSubdominioAction(raw: string): Promise<Resultado
     return { success: false, message: 'No se pudo actualizar el subdominio' };
   }
 }
+
+/**
+ * Admin: cambia el nombre del restaurante.
+ */
+export async function actualizarNombreRestauranteAction(nombreRaw: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const session = await getCurrentSession();
+    if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
+      return { success: false, message: 'No autorizado' };
+    }
+
+    const nombre = nombreRaw.trim();
+    if (!nombre) {
+      return { success: false, message: 'El nombre no puede estar vacío' };
+    }
+
+    if (nombre === session.nombreRestaurante) {
+      return { success: true, message: 'El nombre ya era ese' };
+    }
+
+    await db.update(restaurantes).set({ nombre }).where(eq(restaurantes.id, session.restauranteId));
+
+    revalidatePath('/admin/configuracion');
+    revalidatePath(`/${session.slugRestaurante}`);
+    return { success: true, message: 'Nombre actualizado' };
+  } catch (error) {
+    console.error('[actualizarNombreRestauranteAction]', error);
+    return { success: false, message: 'No se pudo actualizar el nombre' };
+  }
+}

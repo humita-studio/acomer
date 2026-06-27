@@ -7,6 +7,7 @@ import { guardarConfiguracionPagosAction } from '@/features/pagos/configuracion-
 import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
 import { LandingConfigForm } from '@/features/landing/components/LandingConfigForm';
 import { SubdominioForm } from '@/features/tenant/components/SubdominioForm';
+import { NombreLocalForm } from '@/features/tenant/components/NombreLocalForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { SubmitButton } from '@/shared/ui/submit-button';
 import { Skeleton } from '@/shared/ui/skeleton';
@@ -37,12 +38,16 @@ async function ConfigContent() {
     }
 
     // Cargar configuración actual — paralelizado para evitar waterfalls secuenciales
-    const [config, landing, headersList] = await Promise.all([
+    const [config, landing, headersList, restaurante] = await Promise.all([
         db.query.configuracionPagos.findFirst({
             where: (t, { eq }) => eq(t.restauranteId, session.restauranteId)
         }),
         obtenerLandingConfig(session.restauranteId),
         headers(),
+        db.query.restaurantes.findFirst({
+            where: (t, { eq }) => eq(t.id, session.restauranteId),
+            columns: { nombre: true, slug: true }
+        }),
     ]);
 
     // Dominio base para mostrar el subdominio del local (ej. "acomer.com.ar" o
@@ -72,6 +77,7 @@ async function ConfigContent() {
                 </TabsList>
 
                 <TabsContent value="landing" className="max-w-2xl space-y-4">
+                    <NombreLocalForm nombreActual={restaurante?.nombre || session.nombreRestaurante || ''} />
                     <SubdominioForm slugActual={session.slugRestaurante} dominioBase={dominioBase} />
                     <LandingConfigForm initial={landing} />
                 </TabsContent>

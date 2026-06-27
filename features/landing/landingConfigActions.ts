@@ -17,14 +17,25 @@ import {
 
 const COLORES_VALIDOS: ColorMarca[] = ['terracota', 'ambar', 'verde'];
 
-/** Normaliza los 7 días, completando con defaults los que falten o sean inválidos. */
 function parsearHorarios(raw: unknown): HorarioDia[] {
   const arr = Array.isArray(raw) ? raw : [];
   return Array.from({ length: 7 }, (_, i) => {
     const o = (arr[i] ?? {}) as Record<string, unknown>;
-    const desde = normalizarHora(o.desde) ?? LANDING_CONFIG_DEFAULT.horarios[i].desde;
-    const hasta = normalizarHora(o.hasta) ?? LANDING_CONFIG_DEFAULT.horarios[i].hasta;
-    return { cerrado: o.cerrado === true, desde, hasta };
+    
+    let turnos: { desde: string; hasta: string }[] = [];
+    if (Array.isArray(o.turnos)) {
+      turnos = o.turnos.map((t: any) => ({
+        desde: normalizarHora(t?.desde) ?? '12:00',
+        hasta: normalizarHora(t?.hasta) ?? '00:00',
+      }));
+    } else {
+      // Compatibilidad con versión anterior (desde/hasta únicos)
+      const desde = normalizarHora(o.desde) ?? LANDING_CONFIG_DEFAULT.horarios[i].turnos[0].desde;
+      const hasta = normalizarHora(o.hasta) ?? LANDING_CONFIG_DEFAULT.horarios[i].turnos[0].hasta;
+      turnos = [{ desde, hasta }];
+    }
+
+    return { cerrado: o.cerrado === true, turnos };
   });
 }
 
@@ -89,9 +100,16 @@ export async function getLandingConfigAction() {
 function sanearHorarios(horarios: HorarioDia[]): HorarioDia[] {
   return Array.from({ length: 7 }, (_, i) => {
     const h = horarios?.[i];
-    const desde = normalizarHora(h?.desde) ?? LANDING_CONFIG_DEFAULT.horarios[i].desde;
-    const hasta = normalizarHora(h?.hasta) ?? LANDING_CONFIG_DEFAULT.horarios[i].hasta;
-    return { cerrado: h?.cerrado === true, desde, hasta };
+    let turnos = h?.turnos;
+    if (!Array.isArray(turnos) || turnos.length === 0) {
+      turnos = [...LANDING_CONFIG_DEFAULT.horarios[i].turnos];
+    } else {
+      turnos = turnos.map(t => ({
+        desde: normalizarHora(t?.desde) ?? '12:00',
+        hasta: normalizarHora(t?.hasta) ?? '00:00',
+      }));
+    }
+    return { cerrado: h?.cerrado === true, turnos };
   });
 }
 

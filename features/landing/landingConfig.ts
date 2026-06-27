@@ -4,11 +4,15 @@
 
 export type ColorMarca = 'terracota' | 'ambar' | 'verde';
 
-/** Atención de un día: si está cerrado o el rango horario 'HH:MM'. */
-export type HorarioDia = {
-  cerrado: boolean;
+export type TurnoHorario = {
   desde: string; // 'HH:MM'
   hasta: string; // 'HH:MM' (si <= desde, se interpreta cruzando la medianoche)
+};
+
+/** Atención de un día: si está cerrado o sus turnos horarios. */
+export type HorarioDia = {
+  cerrado: boolean;
+  turnos: TurnoHorario[];
 };
 
 /** Qué tarjetas ofrece la landing. */
@@ -35,13 +39,13 @@ export type LandingConfig = {
   redes: RedesLanding;
 };
 
-const HORARIO_DIA_DEFAULT: HorarioDia = { cerrado: false, desde: '12:00', hasta: '00:00' };
+const HORARIO_DIA_DEFAULT: HorarioDia = { cerrado: false, turnos: [{ desde: '12:00', hasta: '00:00' }] };
 
 /** Defaults usados cuando el restaurante no tiene fila de config todavía. */
 export const LANDING_CONFIG_DEFAULT: LandingConfig = {
   descripcion: '',
   direccion: '',
-  horarios: Array.from({ length: 7 }, () => ({ ...HORARIO_DIA_DEFAULT })),
+  horarios: Array.from({ length: 7 }, () => ({ ...HORARIO_DIA_DEFAULT, turnos: [...HORARIO_DIA_DEFAULT.turnos] })),
   acciones: { verCarta: true, pedirOnline: true, reservar: true, qr: true },
   colorMarca: 'terracota',
   redes: { whatsapp: '', instagram: '', telefono: '' },
@@ -146,9 +150,9 @@ export function ahoraLocal(tz: string = ZONA_HORARIA, date: Date = new Date()): 
 }
 
 /** Rango [ini, fin) en minutos de un día (fin se extiende si cruza medianoche). */
-function rango(h: HorarioDia): { ini: number; fin: number } | null {
-  const ini = horaAMin(h.desde);
-  let fin = horaAMin(h.hasta);
+function rango(t: TurnoHorario): { ini: number; fin: number } | null {
+  const ini = horaAMin(t.desde);
+  let fin = horaAMin(t.hasta);
   if (ini == null || fin == null) return null;
   if (fin <= ini) fin += 1440; // cruza medianoche
   return { ini, fin };
@@ -161,14 +165,18 @@ function rango(h: HorarioDia): { ini: number; fin: number } | null {
  */
 export function estaAbierto(horarios: HorarioDia[], ahora: AhoraLocal): boolean {
   const hoy = horarios[ahora.dow];
-  if (hoy && !hoy.cerrado) {
-    const r = rango(hoy);
-    if (r && ahora.min >= r.ini && ahora.min < r.fin) return true;
+  if (hoy && !hoy.cerrado && hoy.turnos) {
+    for (const t of hoy.turnos) {
+      const r = rango(t);
+      if (r && ahora.min >= r.ini && ahora.min < r.fin) return true;
+    }
   }
   const ayer = horarios[(ahora.dow + 6) % 7];
-  if (ayer && !ayer.cerrado) {
-    const r = rango(ayer);
-    if (r && r.fin > 1440 && ahora.min + 1440 >= r.ini && ahora.min + 1440 < r.fin) return true;
+  if (ayer && !ayer.cerrado && ayer.turnos) {
+    for (const t of ayer.turnos) {
+      const r = rango(t);
+      if (r && r.fin > 1440 && ahora.min + 1440 >= r.ini && ahora.min + 1440 < r.fin) return true;
+    }
   }
   return false;
 }
@@ -176,6 +184,6 @@ export function estaAbierto(horarios: HorarioDia[], ahora: AhoraLocal): boolean 
 /** Texto del horario de hoy para el hero: "Hoy 12:00–00:00" o "Cerrado hoy". */
 export function horarioDeHoy(horarios: HorarioDia[], ahora: AhoraLocal): string {
   const hoy = horarios[ahora.dow];
-  if (!hoy || hoy.cerrado) return 'Cerrado hoy';
-  return `Hoy ${hoy.desde}–${hoy.hasta}`;
+  if (!hoy || hoy.cerrado || !hoy.turnos || hoy.turnos.length === 0) return 'Cerrado hoy';
+  return `Hoy ${hoy.turnos.map((t) => `${t.desde}–${t.hasta}`).join(', ')}`;
 }
