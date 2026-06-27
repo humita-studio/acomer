@@ -71,7 +71,7 @@ export async function proxy(req: NextRequest) {
   const mainDomain =
     process.env.NEXT_PUBLIC_ROOT_DOMAIN ||
     (process.env.NODE_ENV === 'production'
-      ? 'sonodos.com' // (Reemplazar por tu dominio final)
+      ? 'acomer.com.ar' // Dominio principal en producción
       : 'localhost:3000');
 
   // Los dominios de Vercel (preview/producción de pruebas) no tienen subdominios
