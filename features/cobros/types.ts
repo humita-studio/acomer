@@ -10,4 +10,8 @@ export type TransaccionCobro = {
   fecha: Date;
   sesionMesaId: string;
   mesaIdentificador: string;
+  /** Metadatos del cobro (vuelto, monto recibido, etc.). */
+  metadata?: Record<string, unknown> | null;
+  /** Fecha en que fue aprobado o rechazado. */
+  resueltaAt?: Date | null;
 };

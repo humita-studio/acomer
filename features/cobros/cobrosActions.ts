@@ -28,12 +28,47 @@ export async function getTransaccionesPendientesAction(tenantId: string): Promis
             fecha: tx.createdAt,
             sesionMesaId: tx.sesionMesaId,
             mesaIdentificador: tx.sesionMesa?.mesaId || 'Desconocida',
+            metadata: tx.metadata as Record<string, unknown> | null,
+            resueltaAt: tx.updatedAt,
         }));
     } catch (error) {
         console.error('[getTransaccionesPendientesAction]', error);
         return [];
     }
 }
+
+/** Devuelve las transacciones del día agrupables por estado (Pendiente, Aprobado, Rechazado). */
+export async function getTransaccionesTableroAction(tenantId: string): Promise<TransaccionCobro[]> {
+    try {
+        const txs = await db.query.transaccionesPago.findMany({
+            where: and(
+                eq(transaccionesPago.restauranteId, tenantId),
+                inArray(transaccionesPago.estado, ['Pendiente', 'Aprobado', 'Rechazado'])
+            ),
+            with: {
+                sesionMesa: true,
+            },
+            orderBy: [desc(transaccionesPago.createdAt)],
+        });
+
+        return txs.map(tx => ({
+            id: tx.id,
+            monto: tx.monto,
+            descuento: tx.descuento ?? '0',
+            proveedor: tx.proveedor,
+            estado: tx.estado,
+            fecha: tx.createdAt,
+            sesionMesaId: tx.sesionMesaId,
+            mesaIdentificador: tx.sesionMesa?.mesaId || 'Desconocida',
+            metadata: tx.metadata as Record<string, unknown> | null,
+            resueltaAt: tx.updatedAt,
+        }));
+    } catch (error) {
+        console.error('[getTransaccionesTableroAction]', error);
+        return [];
+    }
+}
+
 
 type AprobarOpts = {
     /** Efectivo recibido, para registrar el vuelto entregado. */

@@ -6,17 +6,17 @@ import { toast } from 'sonner';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import {
-  getTransaccionesPendientesAction,
+  getTransaccionesTableroAction,
   aprobarPagoPresencialAction,
   rechazarPagoPresencialAction,
 } from '../cobrosActions';
 import type { TransaccionCobro } from '../types';
 
-/** Cobros presenciales pendientes de aprobación. Siembra la caché con el fetch del Server Component. */
-export function useCobrosPendientes(tenantId: string, initial: TransaccionCobro[]) {
+/** Cobros del tablero (Pendiente + Aprobado + Rechazado). */
+export function useCobrosTablero(tenantId: string, initial: TransaccionCobro[]) {
   return useQuery({
     queryKey: queryKeys.cobros(tenantId),
-    queryFn: () => getTransaccionesPendientesAction(tenantId),
+    queryFn: () => getTransaccionesTableroAction(tenantId),
     initialData: initial,
   });
 }
@@ -44,20 +44,23 @@ type AprobarVars = { id: string; montoRecibido?: number };
 type CobrosSnapshot = { previous?: TransaccionCobro[] };
 
 /**
- * Quita el cobro de la lista en caché al instante (update optimista) y devuelve
- * el estado previo. Cancela cualquier refetch en curso para que no pise el
- * cambio. Si el server action falla, `revertirCobros` restaura este snapshot.
+ * Actualiza el estado del cobro optimistamente en la caché.
+ * Para aprobaciones, mueve de Pendiente → Aprobado.
+ * Para rechazos, mueve de Pendiente → Rechazado.
  */
-async function quitarCobroOptimista(
+async function moverCobroOptimista(
   queryClient: QueryClient,
   tenantId: string,
   id: string,
+  nuevoEstado: 'Aprobado' | 'Rechazado',
 ): Promise<CobrosSnapshot> {
   const key = queryKeys.cobros(tenantId);
   await queryClient.cancelQueries({ queryKey: key });
   const previous = queryClient.getQueryData<TransaccionCobro[]>(key);
   queryClient.setQueryData<TransaccionCobro[]>(key, (old) =>
-    (old ?? []).filter((tx) => tx.id !== id),
+    (old ?? []).map((tx) =>
+      tx.id === id ? { ...tx, estado: nuevoEstado, resueltaAt: new Date() } : tx,
+    ),
   );
   return { previous };
 }
@@ -73,8 +76,7 @@ export function useAprobarCobro(tenantId: string) {
   return useMutation({
     mutationFn: ({ id, montoRecibido }: AprobarVars) =>
       aprobarPagoPresencialAction(id, tenantId, { montoRecibido }),
-    // La tarjeta desaparece al instante; el server action corre en segundo plano.
-    onMutate: ({ id }) => quitarCobroOptimista(queryClient, tenantId, id),
+    onMutate: ({ id }) => moverCobroOptimista(queryClient, tenantId, id, 'Aprobado'),
     onError: (_err, _vars, context) => {
       revertirCobros(queryClient, tenantId, context);
       toast.error('No se pudo aprobar el cobro. Volvé a intentarlo.');
@@ -83,12 +85,10 @@ export function useAprobarCobro(tenantId: string) {
       if (res.success) {
         toast.success(res.message ?? 'Cobro aprobado');
       } else {
-        // Falló la validación del lado del servidor: devolvemos la tarjeta.
         revertirCobros(queryClient, tenantId, context);
         toast.error(res.message);
       }
     },
-    // Reconcilia con el servidor una vez resuelto (éxito o error).
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cobros(tenantId) });
     },
@@ -99,7 +99,7 @@ export function useRechazarCobro(tenantId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => rechazarPagoPresencialAction(id, tenantId),
-    onMutate: (id) => quitarCobroOptimista(queryClient, tenantId, id),
+    onMutate: (id) => moverCobroOptimista(queryClient, tenantId, id, 'Rechazado'),
     onError: (_err, _vars, context) => {
       revertirCobros(queryClient, tenantId, context);
       toast.error('No se pudo rechazar el cobro. Volvé a intentarlo.');
