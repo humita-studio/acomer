@@ -3,6 +3,8 @@
 import { db } from '@/shared/db';
 import { transaccionesPago, sesionesMesa } from '@/shared/db/schema';
 import { and, eq, sql, type AnyColumn, type SQL } from 'drizzle-orm';
+import { getCurrentSession } from '@/features/auth/session';
+import { hasPermission } from '@/features/authorization/roles';
 import type { ReporteData } from './types';
 
 const REPORTE_VACIO: ReporteData = {
@@ -32,6 +34,11 @@ export async function getReporteAction(
   desde: string,
   hasta: string
 ): Promise<ReporteData> {
+  const session = await getCurrentSession();
+  if (!session || !hasPermission(session.role, 'canViewReports')) {
+    return REPORTE_VACIO;
+  }
+  tenantId = session.restauranteId;
   try {
     // Render the timezone as a literal, not a bind param: Drizzle would emit a
     // fresh parameter ($1, $7, $8…) for each ${TZ} interpolation, and Postgres

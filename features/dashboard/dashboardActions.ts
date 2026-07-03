@@ -3,6 +3,7 @@
 import { db } from '@/shared/db';
 import { mesas, sesionesMesa, transaccionesPago, pedidos, comandaItems, reservas } from '@/shared/db/schema';
 import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
+import { getCurrentSession } from '@/features/auth/session';
 
 import type {
   CanalPedido,
@@ -136,6 +137,11 @@ export async function getDashboardMetricsAction(
   tenantId: string,
   periodo: Periodo = 'hoy'
 ): Promise<DashboardMetrics> {
+  // El tenant se toma de la sesión, nunca del parámetro del cliente.
+  const session = await getCurrentSession();
+  if (!session) return metricasVacias(periodo);
+  tenantId = session.restauranteId;
+
   const { inicio, prevInicio, prevCorte, modo, dias } = ventanaPeriodo(periodo);
 
   const bucketExpr =
