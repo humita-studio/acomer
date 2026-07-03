@@ -3,8 +3,9 @@
 import { db } from '@/shared/db';
 import { deliveryConfig } from '@/shared/db/schema';
 import { eq } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { revalidatePath } from 'next/cache';
 import {
   DELIVERY_CONFIG_DEFAULT,
@@ -84,18 +85,20 @@ export async function actualizarDeliveryConfigAction(datos: DeliveryConfig) {
       updatedAt: new Date(),
     };
 
-    await db
-      .insert(deliveryConfig)
-      .values(valores)
-      .onConflictDoUpdate({
-        target: deliveryConfig.restauranteId,
-        set: {
-          activo: valores.activo,
-          modo: valores.modo,
-          agregadosHasta: valores.agregadosHasta,
-          updatedAt: valores.updatedAt,
-        },
-      });
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .insert(deliveryConfig)
+        .values(valores)
+        .onConflictDoUpdate({
+          target: deliveryConfig.restauranteId,
+          set: {
+            activo: valores.activo,
+            modo: valores.modo,
+            agregadosHasta: valores.agregadosHasta,
+            updatedAt: valores.updatedAt,
+          },
+        })
+    );
 
     revalidatePath('/admin/pedidos-online');
     return { success: true, message: 'Configuración guardada' };

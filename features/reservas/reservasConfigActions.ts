@@ -3,8 +3,9 @@
 import { db } from '@/shared/db';
 import { reservasConfig } from '@/shared/db/schema';
 import { eq } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { revalidatePath } from 'next/cache';
 import { RESERVAS_CONFIG_DEFAULT, horaAMin, type ReservasConfig, type Turno } from './reservasConfig';
 
@@ -131,21 +132,23 @@ export async function actualizarReservasConfigAction(datos: ReservasConfig) {
       updatedAt: new Date(),
     };
 
-    await db
-      .insert(reservasConfig)
-      .values(valores)
-      .onConflictDoUpdate({
-        target: reservasConfig.restauranteId,
-        set: {
-          activo: valores.activo,
-          turnos: valores.turnos,
-          duracionMinDefault: valores.duracionMinDefault,
-          anticipacionMinMin: valores.anticipacionMinMin,
-          cupoCubiertosPorTurno: valores.cupoCubiertosPorTurno,
-          maxReservasPorDia: valores.maxReservasPorDia,
-          updatedAt: valores.updatedAt,
-        },
-      });
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .insert(reservasConfig)
+        .values(valores)
+        .onConflictDoUpdate({
+          target: reservasConfig.restauranteId,
+          set: {
+            activo: valores.activo,
+            turnos: valores.turnos,
+            duracionMinDefault: valores.duracionMinDefault,
+            anticipacionMinMin: valores.anticipacionMinMin,
+            cupoCubiertosPorTurno: valores.cupoCubiertosPorTurno,
+            maxReservasPorDia: valores.maxReservasPorDia,
+            updatedAt: valores.updatedAt,
+          },
+        })
+    );
 
     revalidatePath('/admin/reservas');
     return { success: true, message: 'Configuración guardada' };

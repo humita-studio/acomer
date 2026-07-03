@@ -4,7 +4,8 @@ import { db } from '@/shared/db';
 import { landingConfig, restaurantes } from '@/shared/db/schema';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import {
   LANDING_CONFIG_DEFAULT,
   normalizarHora,
@@ -134,21 +135,23 @@ export async function guardarLandingConfigAction(datos: LandingConfig) {
       updatedAt: new Date(),
     };
 
-    await db
-      .insert(landingConfig)
-      .values(valores)
-      .onConflictDoUpdate({
-        target: landingConfig.restauranteId,
-        set: {
-          descripcion: valores.descripcion,
-          direccion: valores.direccion,
-          horarios: valores.horarios,
-          acciones: valores.acciones,
-          colorMarca: valores.colorMarca,
-          redes: valores.redes,
-          updatedAt: valores.updatedAt,
-        },
-      });
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .insert(landingConfig)
+        .values(valores)
+        .onConflictDoUpdate({
+          target: landingConfig.restauranteId,
+          set: {
+            descripcion: valores.descripcion,
+            direccion: valores.direccion,
+            horarios: valores.horarios,
+            acciones: valores.acciones,
+            colorMarca: valores.colorMarca,
+            redes: valores.redes,
+            updatedAt: valores.updatedAt,
+          },
+        })
+    );
 
     // Refrescar el admin y la home pública del local.
     revalidatePath('/admin/configuracion');
