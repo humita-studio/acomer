@@ -4,8 +4,9 @@ import { db } from '@/shared/db';
 import { reservas, mesas } from '@/shared/db/schema';
 import { and, eq, gte, lt, ne, desc, isNull, inArray } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { abrirOReusarSesion, broadcastOcupacion } from '@/features/comanda/sesion-mesa-core';
 import { obtenerReservasConfig } from '@/features/reservas/reservasConfigActions';
 import { turnoDeHora, type ReservasConfig } from '@/features/reservas/reservasConfig';
@@ -301,20 +302,22 @@ export async function crearReservaAdminAction(datos: DatosReservaAdmin) {
       };
     }
 
-    const [reserva] = await db
-      .insert(reservas)
-      .values({
-        restauranteId: tenantId,
-        nombreContacto: datos.nombreContacto.trim(),
-        telefono: datos.telefono.trim(),
-        inicio,
-        duracionMin: datos.duracionMin ?? config.duracionMinDefault,
-        cantidadPersonas: datos.personas,
-        notas: datos.notas?.trim() || null,
-        estado: 'Confirmada',
-        origen: 'telefono',
-      })
-      .returning({ id: reservas.id });
+    const [reserva] = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .insert(reservas)
+        .values({
+          restauranteId: tenantId,
+          nombreContacto: datos.nombreContacto.trim(),
+          telefono: datos.telefono.trim(),
+          inicio,
+          duracionMin: datos.duracionMin ?? config.duracionMinDefault,
+          cantidadPersonas: datos.personas,
+          notas: datos.notas?.trim() || null,
+          estado: 'Confirmada',
+          origen: 'telefono',
+        })
+        .returning({ id: reservas.id })
+    );
 
     try {
       const supabase = await createSupabaseServerClient();
@@ -382,17 +385,19 @@ export async function getReservasDelDiaAction(desdeISO: string, hastaISO: string
       return { success: false, message: 'Rango inválido', reservas: [] };
     }
 
-    const filas = await db
-      .select()
-      .from(reservas)
-      .where(
-        and(
-          eq(reservas.restauranteId, session.restauranteId),
-          gte(reservas.inicio, desde),
-          lt(reservas.inicio, hasta),
-        ),
-      )
-      .orderBy(reservas.inicio);
+    const filas = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .select()
+        .from(reservas)
+        .where(
+          and(
+            eq(reservas.restauranteId, session.restauranteId),
+            gte(reservas.inicio, desde),
+            lt(reservas.inicio, hasta),
+          ),
+        )
+        .orderBy(reservas.inicio)
+    );
 
     return { success: true, reservas: filas };
   } catch (error) {
@@ -417,18 +422,20 @@ export async function getProximaReservaAction(desdeISO: string) {
       return { success: false, message: 'Fecha inválida', inicio: null as string | null };
     }
 
-    const [fila] = await db
-      .select({ inicio: reservas.inicio })
-      .from(reservas)
-      .where(
-        and(
-          eq(reservas.restauranteId, session.restauranteId),
-          gte(reservas.inicio, desde),
-          ne(reservas.estado, 'Cancelada'),
-        ),
-      )
-      .orderBy(reservas.inicio)
-      .limit(1);
+    const [fila] = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .select({ inicio: reservas.inicio })
+        .from(reservas)
+        .where(
+          and(
+            eq(reservas.restauranteId, session.restauranteId),
+            gte(reservas.inicio, desde),
+            ne(reservas.estado, 'Cancelada'),
+          ),
+        )
+        .orderBy(reservas.inicio)
+        .limit(1)
+    );
 
     return { success: true, inicio: fila ? new Date(fila.inicio).toISOString() : null };
   } catch (error) {
@@ -453,18 +460,20 @@ export async function getReservaAnteriorAction(hastaISO: string) {
       return { success: false, message: 'Fecha inválida', inicio: null as string | null };
     }
 
-    const [fila] = await db
-      .select({ inicio: reservas.inicio })
-      .from(reservas)
-      .where(
-        and(
-          eq(reservas.restauranteId, session.restauranteId),
-          lt(reservas.inicio, hasta),
-          ne(reservas.estado, 'Cancelada'),
-        ),
-      )
-      .orderBy(desc(reservas.inicio))
-      .limit(1);
+    const [fila] = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .select({ inicio: reservas.inicio })
+        .from(reservas)
+        .where(
+          and(
+            eq(reservas.restauranteId, session.restauranteId),
+            lt(reservas.inicio, hasta),
+            ne(reservas.estado, 'Cancelada'),
+          ),
+        )
+        .orderBy(desc(reservas.inicio))
+        .limit(1)
+    );
 
     return { success: true, inicio: fila ? new Date(fila.inicio).toISOString() : null };
   } catch (error) {
@@ -481,10 +490,12 @@ export async function cambiarEstadoReservaAction(reservaId: string, nuevoEstado:
       return { success: false, message: 'No autorizado' };
     }
 
-    await db
-      .update(reservas)
-      .set({ estado: nuevoEstado, updatedAt: new Date() })
-      .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)));
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(reservas)
+        .set({ estado: nuevoEstado, updatedAt: new Date() })
+        .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)))
+    );
 
     revalidatePath('/admin/reservas');
     return { success: true, message: 'Reserva actualizada' };
@@ -505,25 +516,30 @@ export async function sentarReservaAction(reservaId: string, mesaId: string) {
       return { success: false, message: 'No autorizado' };
     }
 
-    const [mesa] = await db
-      .select({ id: mesas.id, identificador: mesas.identificador })
-      .from(mesas)
-      .where(
-        and(
-          eq(mesas.id, mesaId),
-          eq(mesas.restauranteId, session.restauranteId),
-          isNull(mesas.deletedAt),
-        ),
-      )
-      .limit(1);
+    const mesa = await withTenant(claimsFromSession(session), async (db) => {
+      const [m] = await db
+        .select({ id: mesas.id, identificador: mesas.identificador })
+        .from(mesas)
+        .where(
+          and(
+            eq(mesas.id, mesaId),
+            eq(mesas.restauranteId, session.restauranteId),
+            isNull(mesas.deletedAt),
+          ),
+        )
+        .limit(1);
+      return m;
+    });
     if (!mesa) return { success: false, message: 'Mesa no encontrada' };
 
     const { sesionId } = await abrirOReusarSesion(session.restauranteId, mesa);
 
-    await db
-      .update(reservas)
-      .set({ estado: 'Sentada', mesaId, sesionMesaId: sesionId, updatedAt: new Date() })
-      .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)));
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(reservas)
+        .set({ estado: 'Sentada', mesaId, sesionMesaId: sesionId, updatedAt: new Date() })
+        .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)))
+    );
 
     await broadcastOcupacion(session.restauranteId, mesaId, true);
 
