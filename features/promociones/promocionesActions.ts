@@ -1,10 +1,10 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { promociones } from '@/shared/db/schema';
 import { and, eq, desc, asc } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { revalidatePath } from 'next/cache';
 import {
   type Promocion,
@@ -138,11 +138,13 @@ export async function listarPromocionesAction(): Promise<{
     const session = await requireManager();
     if (!session) return { success: false, message: 'No autorizado', promociones: [] };
 
-    const rows = await db
-      .select()
-      .from(promociones)
-      .where(eq(promociones.restauranteId, session.restauranteId))
-      .orderBy(desc(promociones.activa), asc(promociones.prioridad), desc(promociones.createdAt));
+    const rows = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .select()
+        .from(promociones)
+        .where(eq(promociones.restauranteId, session.restauranteId))
+        .orderBy(desc(promociones.activa), asc(promociones.prioridad), desc(promociones.createdAt))
+    );
 
     return { success: true, promociones: rows.map(rowToPromocion) };
   } catch (error) {
@@ -159,7 +161,9 @@ export async function crearPromocionAction(input: PromocionInput) {
     const built = buildValues(input, session.restauranteId);
     if ('error' in built) return { success: false, message: built.error };
 
-    const [row] = await db.insert(promociones).values(built.values).returning({ id: promociones.id });
+    const [row] = await withTenant(claimsFromSession(session), (db) =>
+      db.insert(promociones).values(built.values).returning({ id: promociones.id })
+    );
     revalidatePath('/admin/promociones');
     return { success: true, id: row.id, message: 'Promoción creada' };
   } catch (error) {
@@ -178,10 +182,12 @@ export async function actualizarPromocionAction(id: string, input: PromocionInpu
 
     // built.values incluye restauranteId = tenant actual (no cambia el dueño);
     // el WHERE igual lo scopea por seguridad.
-    await db
-      .update(promociones)
-      .set(built.values)
-      .where(and(eq(promociones.id, id), eq(promociones.restauranteId, session.restauranteId)));
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(promociones)
+        .set(built.values)
+        .where(and(eq(promociones.id, id), eq(promociones.restauranteId, session.restauranteId)))
+    );
 
     revalidatePath('/admin/promociones');
     return { success: true, message: 'Promoción actualizada' };
@@ -196,10 +202,12 @@ export async function togglePromocionAction(id: string, activa: boolean) {
     const session = await requireManager();
     if (!session) return { success: false, message: 'No autorizado' };
 
-    await db
-      .update(promociones)
-      .set({ activa, updatedAt: new Date() })
-      .where(and(eq(promociones.id, id), eq(promociones.restauranteId, session.restauranteId)));
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(promociones)
+        .set({ activa, updatedAt: new Date() })
+        .where(and(eq(promociones.id, id), eq(promociones.restauranteId, session.restauranteId)))
+    );
 
     revalidatePath('/admin/promociones');
     return { success: true, message: activa ? 'Promoción activada' : 'Promoción pausada' };
@@ -214,9 +222,11 @@ export async function eliminarPromocionAction(id: string) {
     const session = await requireManager();
     if (!session) return { success: false, message: 'No autorizado' };
 
-    await db
-      .delete(promociones)
-      .where(and(eq(promociones.id, id), eq(promociones.restauranteId, session.restauranteId)));
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .delete(promociones)
+        .where(and(eq(promociones.id, id), eq(promociones.restauranteId, session.restauranteId)))
+    );
 
     revalidatePath('/admin/promociones');
     return { success: true, message: 'Promoción eliminada' };

@@ -221,17 +221,34 @@ return withTenant(claimsFromSession(session), (db) =>
 
 Estado del rollout:
 
-- **Convertido a `withTenant`:** el módulo de cobros (`features/cobros/cobrosActions.ts`).
-- **Pendiente:** el resto de las server actions siguen usando `db` directo
-  (funcionan igual, pero sin la red de RLS). Migrarlas de a una a `withTenant`.
+- **Convertido a `withTenant`** (server actions admin, basadas en sesión):
+  cobros, caja, menú (categorías/productos/modificadores/variantes), mesas
+  (mesas-actions/plano-actions), reservas (acciones admin), promociones
+  (CRUD) y las configs (pagos/reservas/landing/delivery). En estos módulos,
+  las lecturas por `tenantId` del cliente que antes no validaban sesión
+  (cobros, dashboard, reportes, caja) quedaron cerradas: derivan el tenant de
+  la sesión.
 - **Requisito por tabla:** para que un path convertido funcione, la tabla que
-  toca necesita políticas RLS (`restaurant_id = get_current_restaurant_id()`).
-  La migración `drizzle/0019_*` agregó las que faltaban en `transacciones_pago`
-  y `configuracion_pagos`. Antes de convertir un path nuevo, verificá que sus
-  tablas tengan políticas (si tienen RLS activo y 0 políticas, `withTenant`
-  las verá vacías).
-- **Flujos públicos** (carta/pedido del comensal, sin sesión de empleado):
-  requieren setear los claims desde el tenant resuelto por subdominio, no desde
-  una sesión. Todavía no están cubiertos.
+  toca necesita las políticas RLS del CRUD que hace
+  (`restaurant_id = get_current_restaurant_id()`). Migraciones `0019` y `0020`
+  completaron los huecos (`transacciones_pago`, `configuracion_pagos`, y los
+  UPDATE de los ledgers `productos_precios`/`modificadores_precios`). Antes de
+  convertir un path nuevo verificá la cobertura: si la tabla tiene RLS activo y
+  le falta la política de esa operación, bajo `withTenant` la verá vacía o el
+  UPDATE/DELETE afectará 0 filas **sin lanzar error**.
+- **Pendiente a propósito (no convertir a ciegas):**
+  - *Paths de creación de pedido/cobro* que pasan por `crearPedidoCore`
+    (venta-mostrador, acciones de comanda del staff): inserts complejos y
+    compartidos; ya escopan por sesión (sin IDOR). Convertirlos exige probar
+    el alta de pedido/cobro end-to-end bajo RLS.
+  - *Flujos públicos* (carta/pedido del comensal, disponibilidad y alta de
+    reserva pública): sin sesión de empleado; necesitan un helper que arme los
+    claims desde el tenant del subdominio (rol `anon`/`authenticated` con sólo
+    `restaurant_id`), no desde la sesión.
+  - *`tenantActions`* (cambia nombre/subdominio en `restaurantes`): la política
+    UPDATE de `restaurantes` es **owner-only**, pero la acción permite admin.
+    Convertir rompería a los admin. Ajustar la política o dejarlo fuera.
+  - *`invite-employee` / `registro-actions`*: usan el cliente admin de Supabase
+    de forma legítima (crean usuario Auth); no aplican a `withTenant`.
 - El rol `authenticated` ya tiene los GRANT necesarios (default de Supabase);
   no hace falta cambiar `DATABASE_URL`.
