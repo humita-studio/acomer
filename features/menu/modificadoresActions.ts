@@ -1,6 +1,5 @@
 'use server';
 
-import { db } from '@/shared/db';
 import {
   modificadores,
   modificadoresPrecios,
@@ -8,9 +7,13 @@ import {
   productoModificadoresDisponibles,
 } from '@/shared/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { revalidateTag } from 'next/cache';
+
+// El `db` de cada acción es el handle transaccional de withTenant: corre con RLS
+// activo, de modo que la base sólo deja ver/tocar filas del tenant en sesión.
 
 export type AdicionalMenu = {
   productoId: string;
@@ -27,26 +30,28 @@ export async function obtenerAdicionalesMenu(): Promise<AdicionalMenu[]> {
   const session = await getCurrentSession();
   if (!session) return [];
 
-  return db
-    .select({
-      productoId: productoModificadoresDisponibles.productoId,
-      id: modificadores.id,
-      nombre: modificadores.nombre,
-      precio: modificadoresPrecios.precioExtra,
-    })
-    .from(productoModificadoresDisponibles)
-    .innerJoin(productos, eq(productoModificadoresDisponibles.productoId, productos.id))
-    .innerJoin(modificadores, eq(productoModificadoresDisponibles.modificadorId, modificadores.id))
-    .innerJoin(
-      modificadoresPrecios,
-      and(
-        eq(modificadores.id, modificadoresPrecios.modificadorId),
-        isNull(modificadoresPrecios.vigentaHsta)
+  return withTenant(claimsFromSession(session), (db) =>
+    db
+      .select({
+        productoId: productoModificadoresDisponibles.productoId,
+        id: modificadores.id,
+        nombre: modificadores.nombre,
+        precio: modificadoresPrecios.precioExtra,
+      })
+      .from(productoModificadoresDisponibles)
+      .innerJoin(productos, eq(productoModificadoresDisponibles.productoId, productos.id))
+      .innerJoin(modificadores, eq(productoModificadoresDisponibles.modificadorId, modificadores.id))
+      .innerJoin(
+        modificadoresPrecios,
+        and(
+          eq(modificadores.id, modificadoresPrecios.modificadorId),
+          isNull(modificadoresPrecios.vigentaHsta)
+        )
       )
-    )
-    .where(
-      and(eq(productos.restauranteId, session.restauranteId), isNull(modificadores.deletedAt))
-    );
+      .where(
+        and(eq(productos.restauranteId, session.restauranteId), isNull(modificadores.deletedAt))
+      )
+  );
 }
 
 /**
@@ -69,43 +74,47 @@ export async function agregarAdicionalAPlato(
       return { success: false, message: 'El nombre del adicional es obligatorio' };
     }
 
-    // Validar que el producto pertenece al restaurante de la sesión
-    const [producto] = await db
-      .select({ id: productos.id })
-      .from(productos)
-      .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      // Validar que el producto pertenece al restaurante de la sesión
+      const [producto] = await db
+        .select({ id: productos.id })
+        .from(productos)
+        .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
 
-    if (!producto) {
-      return { success: false, message: 'Producto no encontrado' };
-    }
+      if (!producto) {
+        return { success: false, message: 'Producto no encontrado' };
+      }
 
-    await db.transaction(async (tx) => {
-      const [nuevo] = await tx
-        .insert(modificadores)
-        .values({
+      await db.transaction(async (tx) => {
+        const [nuevo] = await tx
+          .insert(modificadores)
+          .values({
+            restauranteId: session.restauranteId,
+            nombre,
+          })
+          .returning();
+
+        await tx.insert(modificadoresPrecios).values({
           restauranteId: session.restauranteId,
-          nombre,
-        })
-        .returning();
+          modificadorId: nuevo.id,
+          precioExtra: (data.precioExtra || 0).toString(),
+        });
 
-      await tx.insert(modificadoresPrecios).values({
-        restauranteId: session.restauranteId,
-        modificadorId: nuevo.id,
-        precioExtra: (data.precioExtra || 0).toString(),
+        await tx
+          .insert(productoModificadoresDisponibles)
+          .values({ productoId, modificadorId: nuevo.id });
+
+        await tx
+          .update(productos)
+          .set({ permiteAdicionales: true })
+          .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
       });
 
-      await tx
-        .insert(productoModificadoresDisponibles)
-        .values({ productoId, modificadorId: nuevo.id });
-
-      await tx
-        .update(productos)
-        .set({ permiteAdicionales: true })
-        .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
+      return { success: true, message: 'Adicional agregado' };
     });
 
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Adicional agregado' };
+    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    return res;
   } catch (error) {
     console.error('[agregarAdicionalAPlato]', error);
     return { success: false, message: 'Error al agregar el adicional' };
@@ -122,40 +131,44 @@ export async function editarPrecioAdicional(modificadorId: string, nuevoPrecio: 
       return { success: false, message: 'No tienes permiso para modificar precios' };
     }
 
-    const [modificador] = await db
-      .select({ id: modificadores.id })
-      .from(modificadores)
-      .where(
-        and(eq(modificadores.id, modificadorId), eq(modificadores.restauranteId, session.restauranteId))
-      );
-
-    if (!modificador) {
-      return { success: false, message: 'Adicional no encontrado' };
-    }
-
-    await db.transaction(async (tx) => {
-      // 1. Cerrar el precio vigente
-      await tx
-        .update(modificadoresPrecios)
-        .set({ vigentaHsta: new Date() })
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const [modificador] = await db
+        .select({ id: modificadores.id })
+        .from(modificadores)
         .where(
-          and(
-            eq(modificadoresPrecios.modificadorId, modificadorId),
-            eq(modificadoresPrecios.restauranteId, session.restauranteId),
-            isNull(modificadoresPrecios.vigentaHsta)
-          )
+          and(eq(modificadores.id, modificadorId), eq(modificadores.restauranteId, session.restauranteId))
         );
 
-      // 2. Insertar el nuevo precio
-      await tx.insert(modificadoresPrecios).values({
-        restauranteId: session.restauranteId,
-        modificadorId,
-        precioExtra: nuevoPrecio.toString(),
+      if (!modificador) {
+        return { success: false, message: 'Adicional no encontrado' };
+      }
+
+      await db.transaction(async (tx) => {
+        // 1. Cerrar el precio vigente
+        await tx
+          .update(modificadoresPrecios)
+          .set({ vigentaHsta: new Date() })
+          .where(
+            and(
+              eq(modificadoresPrecios.modificadorId, modificadorId),
+              eq(modificadoresPrecios.restauranteId, session.restauranteId),
+              isNull(modificadoresPrecios.vigentaHsta)
+            )
+          );
+
+        // 2. Insertar el nuevo precio
+        await tx.insert(modificadoresPrecios).values({
+          restauranteId: session.restauranteId,
+          modificadorId,
+          precioExtra: nuevoPrecio.toString(),
+        });
       });
+
+      return { success: true, message: 'Precio actualizado' };
     });
 
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Precio actualizado' };
+    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    return res;
   } catch (error) {
     console.error('[editarPrecioAdicional]', error);
     return { success: false, message: 'Error al actualizar el precio' };
@@ -173,48 +186,52 @@ export async function eliminarAdicionalDePlato(productoId: string, modificadorId
       return { success: false, message: 'No tienes permiso para gestionar el menú' };
     }
 
-    const [producto] = await db
-      .select({ id: productos.id })
-      .from(productos)
-      .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const [producto] = await db
+        .select({ id: productos.id })
+        .from(productos)
+        .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
 
-    if (!producto) {
-      return { success: false, message: 'Producto no encontrado' };
-    }
-
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(productoModificadoresDisponibles)
-        .where(
-          and(
-            eq(productoModificadoresDisponibles.productoId, productoId),
-            eq(productoModificadoresDisponibles.modificadorId, modificadorId)
-          )
-        );
-
-      // El adicional es propio del plato: darlo de baja
-      await tx
-        .update(modificadores)
-        .set({ deletedAt: new Date(), disponible: false })
-        .where(
-          and(eq(modificadores.id, modificadorId), eq(modificadores.restauranteId, session.restauranteId))
-        );
-
-      const restantes = await tx
-        .select({ modificadorId: productoModificadoresDisponibles.modificadorId })
-        .from(productoModificadoresDisponibles)
-        .where(eq(productoModificadoresDisponibles.productoId, productoId));
-
-      if (restantes.length === 0) {
-        await tx
-          .update(productos)
-          .set({ permiteAdicionales: false })
-          .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
+      if (!producto) {
+        return { success: false, message: 'Producto no encontrado' };
       }
+
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(productoModificadoresDisponibles)
+          .where(
+            and(
+              eq(productoModificadoresDisponibles.productoId, productoId),
+              eq(productoModificadoresDisponibles.modificadorId, modificadorId)
+            )
+          );
+
+        // El adicional es propio del plato: darlo de baja
+        await tx
+          .update(modificadores)
+          .set({ deletedAt: new Date(), disponible: false })
+          .where(
+            and(eq(modificadores.id, modificadorId), eq(modificadores.restauranteId, session.restauranteId))
+          );
+
+        const restantes = await tx
+          .select({ modificadorId: productoModificadoresDisponibles.modificadorId })
+          .from(productoModificadoresDisponibles)
+          .where(eq(productoModificadoresDisponibles.productoId, productoId));
+
+        if (restantes.length === 0) {
+          await tx
+            .update(productos)
+            .set({ permiteAdicionales: false })
+            .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
+        }
+      });
+
+      return { success: true, message: 'Adicional eliminado' };
     });
 
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Adicional eliminado' };
+    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    return res;
   } catch (error) {
     console.error('[eliminarAdicionalDePlato]', error);
     return { success: false, message: 'Error al eliminar el adicional' };

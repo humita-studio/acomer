@@ -1,12 +1,15 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { productos, productoVariantes, productoVariantesPrecios } from '@/shared/db/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { revalidateTag } from 'next/cache';
 import type { Variante } from './types';
+
+// El `db` de cada acción es el handle transaccional de withTenant: corre con RLS
+// activo, de modo que la base sólo deja ver/tocar filas del tenant en sesión.
 
 /**
  * Lista las variantes (presentaciones de elección única) del menú, con su precio
@@ -17,31 +20,33 @@ export async function obtenerVariantesMenu(): Promise<Variante[]> {
   const session = await getCurrentSession();
   if (!session) return [];
 
-  const rows = await db
-    .select({
-      productoId: productoVariantes.productoId,
-      id: productoVariantes.id,
-      nombre: productoVariantes.nombre,
-      precio: productoVariantesPrecios.precio,
-      orden: productoVariantes.orden,
-      esDefault: productoVariantes.esDefault,
-    })
-    .from(productoVariantes)
-    .leftJoin(
-      productoVariantesPrecios,
-      and(
-        eq(productoVariantes.id, productoVariantesPrecios.varianteId),
-        isNull(productoVariantesPrecios.vigentaHsta)
+  const rows = await withTenant(claimsFromSession(session), (db) =>
+    db
+      .select({
+        productoId: productoVariantes.productoId,
+        id: productoVariantes.id,
+        nombre: productoVariantes.nombre,
+        precio: productoVariantesPrecios.precio,
+        orden: productoVariantes.orden,
+        esDefault: productoVariantes.esDefault,
+      })
+      .from(productoVariantes)
+      .leftJoin(
+        productoVariantesPrecios,
+        and(
+          eq(productoVariantes.id, productoVariantesPrecios.varianteId),
+          isNull(productoVariantesPrecios.vigentaHsta)
+        )
       )
-    )
-    .where(
-      and(
-        eq(productoVariantes.restauranteId, session.restauranteId),
-        eq(productoVariantes.activo, true),
-        isNull(productoVariantes.deletedAt)
+      .where(
+        and(
+          eq(productoVariantes.restauranteId, session.restauranteId),
+          eq(productoVariantes.activo, true),
+          isNull(productoVariantes.deletedAt)
+        )
       )
-    )
-    .orderBy(asc(productoVariantes.orden));
+      .orderBy(asc(productoVariantes.orden))
+  );
 
   return rows.map((r) => ({
     productoId: r.productoId,
@@ -72,49 +77,53 @@ export async function agregarVariante(
       return { success: false, message: 'El nombre de la variante es obligatorio' };
     }
 
-    const [producto] = await db
-      .select({ id: productos.id })
-      .from(productos)
-      .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
-    if (!producto) {
-      return { success: false, message: 'Producto no encontrado' };
-    }
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const [producto] = await db
+        .select({ id: productos.id })
+        .from(productos)
+        .where(and(eq(productos.id, productoId), eq(productos.restauranteId, session.restauranteId)));
+      if (!producto) {
+        return { success: false, message: 'Producto no encontrado' };
+      }
 
-    await db.transaction(async (tx) => {
-      const existentes = await tx
-        .select({ orden: productoVariantes.orden })
-        .from(productoVariantes)
-        .where(
-          and(
-            eq(productoVariantes.productoId, productoId),
-            eq(productoVariantes.activo, true),
-            isNull(productoVariantes.deletedAt)
-          )
-        );
-      const orden = existentes.reduce((max, v) => Math.max(max, v.orden), -1) + 1;
-      const esDefault = data.esDefault ?? existentes.length === 0;
+      await db.transaction(async (tx) => {
+        const existentes = await tx
+          .select({ orden: productoVariantes.orden })
+          .from(productoVariantes)
+          .where(
+            and(
+              eq(productoVariantes.productoId, productoId),
+              eq(productoVariantes.activo, true),
+              isNull(productoVariantes.deletedAt)
+            )
+          );
+        const orden = existentes.reduce((max, v) => Math.max(max, v.orden), -1) + 1;
+        const esDefault = data.esDefault ?? existentes.length === 0;
 
-      const [nueva] = await tx
-        .insert(productoVariantes)
-        .values({
+        const [nueva] = await tx
+          .insert(productoVariantes)
+          .values({
+            restauranteId: session.restauranteId,
+            productoId,
+            nombre,
+            orden,
+            esDefault,
+          })
+          .returning();
+
+        await tx.insert(productoVariantesPrecios).values({
           restauranteId: session.restauranteId,
-          productoId,
-          nombre,
-          orden,
-          esDefault,
-        })
-        .returning();
-
-      await tx.insert(productoVariantesPrecios).values({
-        restauranteId: session.restauranteId,
-        varianteId: nueva.id,
-        precio: (data.precio || 0).toString(),
-        creadoPor: session.user.id,
+          varianteId: nueva.id,
+          precio: (data.precio || 0).toString(),
+          creadoPor: session.user.id,
+        });
       });
+
+      return { success: true, message: 'Variante agregada' };
     });
 
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Variante agregada' };
+    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    return res;
   } catch (error) {
     console.error('[agregarVariante]', error);
     return { success: false, message: 'Error al agregar la variante' };
@@ -131,40 +140,44 @@ export async function editarPrecioVariante(varianteId: string, nuevoPrecio: numb
       return { success: false, message: 'No tienes permiso para modificar precios' };
     }
 
-    const [variante] = await db
-      .select({ id: productoVariantes.id })
-      .from(productoVariantes)
-      .where(
-        and(eq(productoVariantes.id, varianteId), eq(productoVariantes.restauranteId, session.restauranteId))
-      );
-    if (!variante) {
-      return { success: false, message: 'Variante no encontrada' };
-    }
-
-    await db.transaction(async (tx) => {
-      // 1. Cerrar el precio vigente
-      await tx
-        .update(productoVariantesPrecios)
-        .set({ vigentaHsta: new Date() })
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const [variante] = await db
+        .select({ id: productoVariantes.id })
+        .from(productoVariantes)
         .where(
-          and(
-            eq(productoVariantesPrecios.varianteId, varianteId),
-            eq(productoVariantesPrecios.restauranteId, session.restauranteId),
-            isNull(productoVariantesPrecios.vigentaHsta)
-          )
+          and(eq(productoVariantes.id, varianteId), eq(productoVariantes.restauranteId, session.restauranteId))
         );
+      if (!variante) {
+        return { success: false, message: 'Variante no encontrada' };
+      }
 
-      // 2. Insertar el nuevo precio
-      await tx.insert(productoVariantesPrecios).values({
-        restauranteId: session.restauranteId,
-        varianteId,
-        precio: nuevoPrecio.toString(),
-        creadoPor: session.user.id,
+      await db.transaction(async (tx) => {
+        // 1. Cerrar el precio vigente
+        await tx
+          .update(productoVariantesPrecios)
+          .set({ vigentaHsta: new Date() })
+          .where(
+            and(
+              eq(productoVariantesPrecios.varianteId, varianteId),
+              eq(productoVariantesPrecios.restauranteId, session.restauranteId),
+              isNull(productoVariantesPrecios.vigentaHsta)
+            )
+          );
+
+        // 2. Insertar el nuevo precio
+        await tx.insert(productoVariantesPrecios).values({
+          restauranteId: session.restauranteId,
+          varianteId,
+          precio: nuevoPrecio.toString(),
+          creadoPor: session.user.id,
+        });
       });
+
+      return { success: true, message: 'Precio actualizado' };
     });
 
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Precio actualizado' };
+    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    return res;
   } catch (error) {
     console.error('[editarPrecioVariante]', error);
     return { success: false, message: 'Error al actualizar el precio' };
@@ -182,52 +195,56 @@ export async function eliminarVariante(productoId: string, varianteId: string) {
       return { success: false, message: 'No tienes permiso para gestionar el menú' };
     }
 
-    const [variante] = await db
-      .select({ id: productoVariantes.id, esDefault: productoVariantes.esDefault })
-      .from(productoVariantes)
-      .where(
-        and(
-          eq(productoVariantes.id, varianteId),
-          eq(productoVariantes.productoId, productoId),
-          eq(productoVariantes.restauranteId, session.restauranteId)
-        )
-      );
-    if (!variante) {
-      return { success: false, message: 'Variante no encontrada' };
-    }
-
-    await db.transaction(async (tx) => {
-      await tx
-        .update(productoVariantes)
-        .set({ deletedAt: new Date(), activo: false })
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const [variante] = await db
+        .select({ id: productoVariantes.id, esDefault: productoVariantes.esDefault })
+        .from(productoVariantes)
         .where(
-          and(eq(productoVariantes.id, varianteId), eq(productoVariantes.restauranteId, session.restauranteId))
-        );
-
-      if (variante.esDefault) {
-        const [siguiente] = await tx
-          .select({ id: productoVariantes.id })
-          .from(productoVariantes)
-          .where(
-            and(
-              eq(productoVariantes.productoId, productoId),
-              eq(productoVariantes.activo, true),
-              isNull(productoVariantes.deletedAt)
-            )
+          and(
+            eq(productoVariantes.id, varianteId),
+            eq(productoVariantes.productoId, productoId),
+            eq(productoVariantes.restauranteId, session.restauranteId)
           )
-          .orderBy(asc(productoVariantes.orden))
-          .limit(1);
-        if (siguiente) {
-          await tx
-            .update(productoVariantes)
-            .set({ esDefault: true })
-            .where(eq(productoVariantes.id, siguiente.id));
-        }
+        );
+      if (!variante) {
+        return { success: false, message: 'Variante no encontrada' };
       }
+
+      await db.transaction(async (tx) => {
+        await tx
+          .update(productoVariantes)
+          .set({ deletedAt: new Date(), activo: false })
+          .where(
+            and(eq(productoVariantes.id, varianteId), eq(productoVariantes.restauranteId, session.restauranteId))
+          );
+
+        if (variante.esDefault) {
+          const [siguiente] = await tx
+            .select({ id: productoVariantes.id })
+            .from(productoVariantes)
+            .where(
+              and(
+                eq(productoVariantes.productoId, productoId),
+                eq(productoVariantes.activo, true),
+                isNull(productoVariantes.deletedAt)
+              )
+            )
+            .orderBy(asc(productoVariantes.orden))
+            .limit(1);
+          if (siguiente) {
+            await tx
+              .update(productoVariantes)
+              .set({ esDefault: true })
+              .where(eq(productoVariantes.id, siguiente.id));
+          }
+        }
+      });
+
+      return { success: true, message: 'Variante eliminada' };
     });
 
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Variante eliminada' };
+    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    return res;
   } catch (error) {
     console.error('[eliminarVariante]', error);
     return { success: false, message: 'Error al eliminar la variante' };
@@ -245,27 +262,29 @@ export async function marcarVarianteDefault(productoId: string, varianteId: stri
       return { success: false, message: 'No tienes permiso para gestionar el menú' };
     }
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(productoVariantes)
-        .set({ esDefault: false })
-        .where(
-          and(
-            eq(productoVariantes.productoId, productoId),
-            eq(productoVariantes.restauranteId, session.restauranteId)
-          )
-        );
-      await tx
-        .update(productoVariantes)
-        .set({ esDefault: true })
-        .where(
-          and(
-            eq(productoVariantes.id, varianteId),
-            eq(productoVariantes.productoId, productoId),
-            eq(productoVariantes.restauranteId, session.restauranteId)
-          )
-        );
-    });
+    await withTenant(claimsFromSession(session), (db) =>
+      db.transaction(async (tx) => {
+        await tx
+          .update(productoVariantes)
+          .set({ esDefault: false })
+          .where(
+            and(
+              eq(productoVariantes.productoId, productoId),
+              eq(productoVariantes.restauranteId, session.restauranteId)
+            )
+          );
+        await tx
+          .update(productoVariantes)
+          .set({ esDefault: true })
+          .where(
+            and(
+              eq(productoVariantes.id, varianteId),
+              eq(productoVariantes.productoId, productoId),
+              eq(productoVariantes.restauranteId, session.restauranteId)
+            )
+          );
+      })
+    );
 
     revalidateTag(`carta-${session.restauranteId}`, 'default');
     return { success: true, message: 'Variante por defecto actualizada' };
