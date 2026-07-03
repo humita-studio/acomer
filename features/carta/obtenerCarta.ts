@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { db } from '@/shared/db';
+import { withPublicTenant } from '@/shared/db/secure-wrapper';
 import {
   categorias,
   productos,
@@ -19,7 +19,7 @@ import type { CategoriaMenu, ProductoMenu } from './types';
 async function fetchCarta(
   tenantId: string
 ): Promise<{ categorias: CategoriaMenu[]; productos: ProductoMenu[] }> {
-  const [cats, prods, modsDisponibles, variantesRows] = await Promise.all([
+  const [cats, prods, modsDisponibles, variantesRows] = await withPublicTenant(tenantId, (db) => Promise.all([
     db
       .select({ id: categorias.id, nombre: categorias.nombre })
       .from(categorias)
@@ -102,7 +102,7 @@ async function fetchCarta(
         )
       )
       .orderBy(asc(productoVariantes.orden)),
-  ]);
+  ]));
 
   const productosMenu: ProductoMenu[] = prods.map((p) => {
     const variantes = variantesRows

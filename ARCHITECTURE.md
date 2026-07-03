@@ -219,6 +219,21 @@ return withTenant(claimsFromSession(session), (db) =>
 );
 ```
 
+Para los **flujos públicos del comensal** (sin sesión de empleado) está
+`withPublicTenant(restauranteId, fn)`: baja el rol a `anon` (sin BYPASSRLS) e
+inyecta sólo el claim `restaurant_id`, resuelto desde el subdominio. Las
+políticas escopan por tenant igual; un `restauranteId` equivocado sólo alcanza
+datos públicos de ese otro local (como visitar su web).
+
+```ts
+import { withPublicTenant } from '@/shared/db/secure-wrapper';
+
+const tenantId = await getTenantBySlug(slug);
+return withPublicTenant(tenantId, (db) =>
+  db.select().from(promociones).where(eq(promociones.restauranteId, tenantId)),
+);
+```
+
 Estado del rollout:
 
 - **Convertido a `withTenant`** (server actions admin, basadas en sesión):
@@ -241,10 +256,13 @@ Estado del rollout:
     (venta-mostrador, acciones de comanda del staff): inserts complejos y
     compartidos; ya escopan por sesión (sin IDOR). Convertirlos exige probar
     el alta de pedido/cobro end-to-end bajo RLS.
-  - *Flujos públicos* (carta/pedido del comensal, disponibilidad y alta de
-    reserva pública): sin sesión de empleado; necesitan un helper que arme los
-    claims desde el tenant del subdominio (rol `anon`/`authenticated` con sólo
-    `restaurant_id`), no desde la sesión.
+  - *Flujos públicos:* las **lecturas** (carta pública, promos públicas y el
+    preview de cuenta del comensal) ya usan `withPublicTenant`. Quedan
+    pendientes las **escrituras** del comensal que pasan por `crearPedidoCore`
+    (enviar pedido, alta de reserva pública), por el mismo motivo que sus
+    equivalentes de staff. El carrito borrador (`items_borrador_mesa`) no se
+    convirtió porque su política es `allow_all` (el UUID de sesión es el token,
+    no hay escopado por tenant a nivel DB).
   - *`tenantActions`* (cambia nombre/subdominio en `restaurantes`): la política
     UPDATE de `restaurantes` es **owner-only**, pero la acción permite admin.
     Convertir rompería a los admin. Ajustar la política o dejarlo fuera.

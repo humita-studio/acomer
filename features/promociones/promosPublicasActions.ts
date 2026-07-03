@@ -1,8 +1,8 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { promociones, sesionesMesa } from '@/shared/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { withPublicTenant } from '@/shared/db/secure-wrapper';
 import { calcularCobroConPromos } from './cobroPromosActions';
 import {
   type Promocion,
@@ -21,10 +21,12 @@ import {
 
 /** Promos activas del restaurante mapeadas al tipo de dominio (para la lista). */
 export async function obtenerPromocionesPublicas(tenantId: string): Promise<Promocion[]> {
-  const rows = await db
-    .select()
-    .from(promociones)
-    .where(and(eq(promociones.restauranteId, tenantId), eq(promociones.activa, true)));
+  const rows = await withPublicTenant(tenantId, (db) =>
+    db
+      .select()
+      .from(promociones)
+      .where(and(eq(promociones.restauranteId, tenantId), eq(promociones.activa, true)))
+  );
   return rows.map((r) => ({
     id: r.id,
     nombre: r.nombre,
@@ -62,9 +64,11 @@ export async function previsualizarCuentaComensalAction(
 ): Promise<{ success: boolean; preview?: PreviewPromosCarrito }> {
   try {
     if (!sesionMesaId || !tenantId) return { success: false };
-    const sesion = await db.query.sesionesMesa.findFirst({
-      where: and(eq(sesionesMesa.id, sesionMesaId), eq(sesionesMesa.restauranteId, tenantId)),
-    });
+    const sesion = await withPublicTenant(tenantId, (db) =>
+      db.query.sesionesMesa.findFirst({
+        where: and(eq(sesionesMesa.id, sesionMesaId), eq(sesionesMesa.restauranteId, tenantId)),
+      })
+    );
     if (!sesion) return { success: false };
 
     const res = await calcularCobroConPromos(sesionMesaId, tenantId, {
