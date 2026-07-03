@@ -1,12 +1,16 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { mesas } from '@/shared/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { abrirOReusarSesion, broadcastOcupacion } from '@/features/comanda/sesion-mesa-core';
 import { revalidatePath } from 'next/cache';
+
+// El `db` de cada acción es el handle transaccional de withTenant (RLS activo).
+// Los helpers (abrirOReusarSesion, broadcastOcupacion) usan su propio db de
+// módulo y todavía no están escopados por RLS.
 
 export async function crearMesa(identificador: string) {
   try {
@@ -15,10 +19,12 @@ export async function crearMesa(identificador: string) {
       return { success: false, message: 'No tienes permiso para gestionar mesas' };
     }
 
-    await db.insert(mesas).values({
-      restauranteId: session.restauranteId,
-      identificador,
-    });
+    await withTenant(claimsFromSession(session), (db) =>
+      db.insert(mesas).values({
+        restauranteId: session.restauranteId,
+        identificador,
+      })
+    );
 
     revalidatePath('/admin/mesas');
     return { success: true, message: 'Mesa creada exitosamente' };
@@ -36,15 +42,17 @@ export async function eliminarMesa(id: string) {
     }
 
     // Soft delete
-    await db
-      .update(mesas)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(mesas.id, id),
-          eq(mesas.restauranteId, session.restauranteId)
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(mesas)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(mesas.id, id),
+            eq(mesas.restauranteId, session.restauranteId)
+          )
         )
-      );
+    );
 
     revalidatePath('/admin/mesas');
     return { success: true, message: 'Mesa eliminada' };
@@ -63,18 +71,20 @@ export async function liberarMesaAction(mesaId: string) {
     }
 
     const { sesionesMesa } = await import('@/shared/db/schema');
-    
+
     // Cerramos cualquier sesión activa de esta mesa
-    await db
-      .update(sesionesMesa)
-      .set({ estado: 'Cerrada' })
-      .where(
-        and(
-          eq(sesionesMesa.mesaId, mesaId),
-          eq(sesionesMesa.restauranteId, session.restauranteId),
-          eq(sesionesMesa.estado, 'Activa')
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(sesionesMesa)
+        .set({ estado: 'Cerrada' })
+        .where(
+          and(
+            eq(sesionesMesa.mesaId, mesaId),
+            eq(sesionesMesa.restauranteId, session.restauranteId),
+            eq(sesionesMesa.estado, 'Activa')
+          )
         )
-      );
+    );
 
     // Avisar al panel admin (plano del local) que la mesa pasó a libre
     await broadcastOcupacion(session.restauranteId, mesaId, false);
@@ -103,17 +113,20 @@ export async function abrirMesaAction(mesaId: string) {
       return { success: false, message: 'No tenés permiso para abrir la mesa' };
     }
 
-    const [mesa] = await db
-      .select({ id: mesas.id, identificador: mesas.identificador })
-      .from(mesas)
-      .where(
-        and(
-          eq(mesas.id, mesaId),
-          eq(mesas.restauranteId, session.restauranteId),
-          isNull(mesas.deletedAt),
-        ),
-      )
-      .limit(1);
+    const mesa = await withTenant(claimsFromSession(session), async (db) => {
+      const [m] = await db
+        .select({ id: mesas.id, identificador: mesas.identificador })
+        .from(mesas)
+        .where(
+          and(
+            eq(mesas.id, mesaId),
+            eq(mesas.restauranteId, session.restauranteId),
+            isNull(mesas.deletedAt),
+          ),
+        )
+        .limit(1);
+      return m;
+    });
     if (!mesa) return { success: false, message: 'Mesa no encontrada' };
 
     const { sesionId } = await abrirOReusarSesion(session.restauranteId, mesa);
