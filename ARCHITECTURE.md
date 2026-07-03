@@ -193,3 +193,45 @@ export async function actualizarXAction(input: XInput) {
 ```
 
 Puntos clave: `'use server'`, validar sesión + permiso, **scopear por `restauranteId`**, `revalidatePath` tras la mutación, y devolver un resultado serializable `{ success, message? }` (nunca lanzar datos no serializables al cliente).
+
+## Aislamiento entre tenants: RLS + `withTenant`
+
+La conexión de Drizzle (`DATABASE_URL`) entra como el rol `postgres`, que tiene
+`BYPASSRLS`: por eso las políticas de Row Level Security definidas en las
+migraciones **no se aplican** en el camino normal. El scoping por `restauranteId`
+en cada query es, por ahora, la barrera principal.
+
+Como defensa en profundidad existe `withTenant()` (`shared/db/secure-wrapper.ts`):
+corre el trabajo de base dentro de una transacción que baja el rol a
+`authenticated` (sin `BYPASSRLS`) e inyecta los claims del tenant de forma
+transaction-local. Con eso, las políticas existentes hacen cumplir el
+aislamiento a nivel base: aunque el código tuviera un bug de scoping, Postgres
+oculta o rechaza las filas de otro restaurante.
+
+```ts
+import { withTenant } from '@/shared/db/secure-wrapper';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
+
+const session = await getCurrentSession();
+if (!session) return [];
+return withTenant(claimsFromSession(session), (db) =>
+  db.query.transaccionesPago.findMany({ /* ... */ }),
+);
+```
+
+Estado del rollout:
+
+- **Convertido a `withTenant`:** el módulo de cobros (`features/cobros/cobrosActions.ts`).
+- **Pendiente:** el resto de las server actions siguen usando `db` directo
+  (funcionan igual, pero sin la red de RLS). Migrarlas de a una a `withTenant`.
+- **Requisito por tabla:** para que un path convertido funcione, la tabla que
+  toca necesita políticas RLS (`restaurant_id = get_current_restaurant_id()`).
+  La migración `drizzle/0019_*` agregó las que faltaban en `transacciones_pago`
+  y `configuracion_pagos`. Antes de convertir un path nuevo, verificá que sus
+  tablas tengan políticas (si tienen RLS activo y 0 políticas, `withTenant`
+  las verá vacías).
+- **Flujos públicos** (carta/pedido del comensal, sin sesión de empleado):
+  requieren setear los claims desde el tenant resuelto por subdominio, no desde
+  una sesión. Todavía no están cubiertos.
+- El rol `authenticated` ya tiene los GRANT necesarios (default de Supabase);
+  no hace falta cambiar `DATABASE_URL`.

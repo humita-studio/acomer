@@ -75,6 +75,19 @@ export const getCurrentSession = cache(async (): Promise<AuthSession | null> => 
 });
 
 /**
+ * Construye los claims para `withTenant` a partir de la sesión: el tenant y el
+ * usuario con los que RLS escopa cada query. Nunca depender de un tenantId que
+ * venga del cliente.
+ */
+export function claimsFromSession(session: AuthSession) {
+  return {
+    sub: session.user.id,
+    restaurant_id: session.restauranteId,
+    email: session.user.email,
+  };
+}
+
+/**
  * Obtiene solo el usuario autenticado, sin incluir el perfil.
  * Útil para rutas públicas que necesitan saber si hay sesión.
  */
