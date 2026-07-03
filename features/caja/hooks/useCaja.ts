@@ -18,7 +18,7 @@ import type { CajaActual, CajaCerrada, TipoMovimiento } from '../types';
 export function useCajaActual(tenantId: string, initial: CajaActual | null) {
   return useQuery({
     queryKey: queryKeys.caja(tenantId),
-    queryFn: () => getCajaActualAction(tenantId),
+    queryFn: () => getCajaActualAction(),
     initialData: initial,
     refetchInterval: 20 * 1000,
   });
@@ -27,7 +27,7 @@ export function useCajaActual(tenantId: string, initial: CajaActual | null) {
 export function useHistorialCajas(tenantId: string, initial: CajaCerrada[]) {
   return useQuery({
     queryKey: queryKeys.cajaHistorial(tenantId),
-    queryFn: () => getHistorialCajasAction(tenantId),
+    queryFn: () => getHistorialCajasAction(),
     initialData: initial,
   });
 }

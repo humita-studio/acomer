@@ -40,8 +40,8 @@ async function CajaContent() {
   }
 
   const [initialCaja, initialHistorial] = await Promise.all([
-    getCajaActualAction(session.restauranteId),
-    getHistorialCajasAction(session.restauranteId),
+    getCajaActualAction(),
+    getHistorialCajasAction(),
   ]);
 
   return (

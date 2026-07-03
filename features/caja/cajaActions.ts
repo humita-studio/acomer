@@ -3,9 +3,14 @@
 import { db } from '@/shared/db';
 import { sesionesCaja, movimientosCaja, transaccionesPago } from '@/shared/db/schema';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import type { TipoMovimiento, CajaActual, CajaCerrada, DetalleCierre } from './types';
+
+// El `db` de cada acción es el handle transaccional de withTenant (RLS activo).
+// `calcularTotales` sigue usando el db de módulo, escopado por el tenantId de la
+// sesión que se le pasa.
 
 type Totales = {
   ventasEfectivo: number;
@@ -80,20 +85,26 @@ async function calcularTotales(
 }
 
 /** Sesión de caja abierta del restaurante (o null), con totales y movimientos. */
-export async function getCajaActualAction(tenantId: string): Promise<CajaActual | null> {
+export async function getCajaActualAction(): Promise<CajaActual | null> {
   try {
-    const sesion = await db.query.sesionesCaja.findFirst({
-      where: and(eq(sesionesCaja.restauranteId, tenantId), eq(sesionesCaja.estado, 'Abierta')),
-      orderBy: [desc(sesionesCaja.abiertaAt)],
-      with: {
-        movimientos: { orderBy: [desc(movimientosCaja.createdAt)] },
-      },
-    });
+    const session = await getCurrentSession();
+    if (!session || !canAccessSection(session.role, 'cashier')) return null;
+    const rid = session.restauranteId;
+
+    const sesion = await withTenant(claimsFromSession(session), (db) =>
+      db.query.sesionesCaja.findFirst({
+        where: and(eq(sesionesCaja.restauranteId, rid), eq(sesionesCaja.estado, 'Abierta')),
+        orderBy: [desc(sesionesCaja.abiertaAt)],
+        with: {
+          movimientos: { orderBy: [desc(movimientosCaja.createdAt)] },
+        },
+      })
+    );
 
     if (!sesion) return null;
 
     const montoInicial = Number(sesion.montoInicial);
-    const totales = await calcularTotales(tenantId, sesion.id, sesion.abiertaAt, montoInicial);
+    const totales = await calcularTotales(rid, sesion.id, sesion.abiertaAt, montoInicial);
 
     return {
       id: sesion.id,
@@ -128,24 +139,28 @@ export async function abrirCajaAction(montoInicial: number): Promise<Resultado> 
       return { success: false, message: 'El monto inicial no es válido.' };
     }
 
-    const yaAbierta = await db.query.sesionesCaja.findFirst({
-      where: and(
-        eq(sesionesCaja.restauranteId, session.restauranteId),
-        eq(sesionesCaja.estado, 'Abierta')
-      ),
-    });
-    if (yaAbierta) {
-      return { success: false, message: 'Ya hay una caja abierta. Cerrala antes de abrir otra.' };
-    }
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const yaAbierta = await db.query.sesionesCaja.findFirst({
+        where: and(
+          eq(sesionesCaja.restauranteId, session.restauranteId),
+          eq(sesionesCaja.estado, 'Abierta')
+        ),
+      });
+      if (yaAbierta) {
+        return { success: false, message: 'Ya hay una caja abierta. Cerrala antes de abrir otra.' };
+      }
 
-    await db.insert(sesionesCaja).values({
-      restauranteId: session.restauranteId,
-      abiertaPor: session.user.id,
-      montoInicial: monto.toFixed(2),
-      estado: 'Abierta',
+      await db.insert(sesionesCaja).values({
+        restauranteId: session.restauranteId,
+        abiertaPor: session.user.id,
+        montoInicial: monto.toFixed(2),
+        estado: 'Abierta',
+      });
+
+      return { success: true, message: 'Caja abierta.' };
     });
 
-    return { success: true, message: 'Caja abierta.' };
+    return res;
   } catch (error) {
     console.error('[abrirCajaAction]', error);
     return { success: false, message: 'No se pudo abrir la caja.' };
@@ -173,26 +188,30 @@ export async function registrarMovimientoAction(
       return { success: false, message: 'El monto debe ser mayor a cero.' };
     }
 
-    const sesion = await db.query.sesionesCaja.findFirst({
-      where: and(
-        eq(sesionesCaja.id, sesionCajaId),
-        eq(sesionesCaja.restauranteId, session.restauranteId)
-      ),
-    });
-    if (!sesion || sesion.estado !== 'Abierta') {
-      return { success: false, message: 'La caja no está abierta.' };
-    }
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const sesion = await db.query.sesionesCaja.findFirst({
+        where: and(
+          eq(sesionesCaja.id, sesionCajaId),
+          eq(sesionesCaja.restauranteId, session.restauranteId)
+        ),
+      });
+      if (!sesion || sesion.estado !== 'Abierta') {
+        return { success: false, message: 'La caja no está abierta.' };
+      }
 
-    await db.insert(movimientosCaja).values({
-      restauranteId: session.restauranteId,
-      sesionCajaId,
-      tipo,
-      monto: m.toFixed(2),
-      concepto: concepto.trim() || null,
-      registradoPor: session.user.id,
+      await db.insert(movimientosCaja).values({
+        restauranteId: session.restauranteId,
+        sesionCajaId,
+        tipo,
+        monto: m.toFixed(2),
+        concepto: concepto.trim() || null,
+        registradoPor: session.user.id,
+      });
+
+      return { success: true, message: 'Movimiento registrado.' };
     });
 
-    return { success: true, message: 'Movimiento registrado.' };
+    return res;
   } catch (error) {
     console.error('[registrarMovimientoAction]', error);
     return { success: false, message: 'No se pudo registrar el movimiento.' };
@@ -216,39 +235,43 @@ export async function cerrarCajaAction(
       return { success: false, message: 'El monto contado no es válido.' };
     }
 
-    const sesion = await db.query.sesionesCaja.findFirst({
-      where: and(
-        eq(sesionesCaja.id, sesionCajaId),
-        eq(sesionesCaja.restauranteId, session.restauranteId)
-      ),
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const sesion = await db.query.sesionesCaja.findFirst({
+        where: and(
+          eq(sesionesCaja.id, sesionCajaId),
+          eq(sesionesCaja.restauranteId, session.restauranteId)
+        ),
+      });
+      if (!sesion || sesion.estado !== 'Abierta') {
+        return { success: false, message: 'La caja no está abierta.' };
+      }
+
+      const montoInicial = Number(sesion.montoInicial);
+      const { esperadoEnCaja } = await calcularTotales(
+        session.restauranteId,
+        sesion.id,
+        sesion.abiertaAt,
+        montoInicial
+      );
+      const diferencia = contado - esperadoEnCaja;
+
+      await db
+        .update(sesionesCaja)
+        .set({
+          estado: 'Cerrada',
+          cerradaPor: session.user.id,
+          cerradaAt: new Date(),
+          montoFinalContado: contado.toFixed(2),
+          montoEsperado: esperadoEnCaja.toFixed(2),
+          diferencia: diferencia.toFixed(2),
+          notasCierre: notas.trim() || null,
+        })
+        .where(eq(sesionesCaja.id, sesion.id));
+
+      return { success: true, message: 'Caja cerrada.', diferencia };
     });
-    if (!sesion || sesion.estado !== 'Abierta') {
-      return { success: false, message: 'La caja no está abierta.' };
-    }
 
-    const montoInicial = Number(sesion.montoInicial);
-    const { esperadoEnCaja } = await calcularTotales(
-      session.restauranteId,
-      sesion.id,
-      sesion.abiertaAt,
-      montoInicial
-    );
-    const diferencia = contado - esperadoEnCaja;
-
-    await db
-      .update(sesionesCaja)
-      .set({
-        estado: 'Cerrada',
-        cerradaPor: session.user.id,
-        cerradaAt: new Date(),
-        montoFinalContado: contado.toFixed(2),
-        montoEsperado: esperadoEnCaja.toFixed(2),
-        diferencia: diferencia.toFixed(2),
-        notasCierre: notas.trim() || null,
-      })
-      .where(eq(sesionesCaja.id, sesion.id));
-
-    return { success: true, message: 'Caja cerrada.', diferencia };
+    return res;
   } catch (error) {
     console.error('[cerrarCajaAction]', error);
     return { success: false, message: 'No se pudo cerrar la caja.' };
@@ -256,16 +279,19 @@ export async function cerrarCajaAction(
 }
 
 /** Historial de cajas cerradas (más recientes primero). */
-export async function getHistorialCajasAction(
-  tenantId: string,
-  limit = 10
-): Promise<CajaCerrada[]> {
+export async function getHistorialCajasAction(limit = 10): Promise<CajaCerrada[]> {
   try {
-    const cajas = await db.query.sesionesCaja.findMany({
-      where: and(eq(sesionesCaja.restauranteId, tenantId), eq(sesionesCaja.estado, 'Cerrada')),
-      orderBy: [desc(sesionesCaja.cerradaAt)],
-      limit,
-    });
+    const session = await getCurrentSession();
+    if (!session || !canAccessSection(session.role, 'cashier')) return [];
+    const rid = session.restauranteId;
+
+    const cajas = await withTenant(claimsFromSession(session), (db) =>
+      db.query.sesionesCaja.findMany({
+        where: and(eq(sesionesCaja.restauranteId, rid), eq(sesionesCaja.estado, 'Cerrada')),
+        orderBy: [desc(sesionesCaja.cerradaAt)],
+        limit,
+      })
+    );
 
     return cajas.map((c) => ({
       id: c.id,
@@ -293,12 +319,14 @@ export async function getDetalleCierreAction(
     const session = await getCurrentSession();
     if (!session || !canAccessSection(session.role, 'cashier')) return null;
 
-    const sesion = await db.query.sesionesCaja.findFirst({
-      where: and(
-        eq(sesionesCaja.id, sesionCajaId),
-        eq(sesionesCaja.restauranteId, session.restauranteId)
-      ),
-    });
+    const sesion = await withTenant(claimsFromSession(session), (db) =>
+      db.query.sesionesCaja.findFirst({
+        where: and(
+          eq(sesionesCaja.id, sesionCajaId),
+          eq(sesionesCaja.restauranteId, session.restauranteId)
+        ),
+      })
+    );
     if (!sesion) return null;
 
     const montoInicial = Number(sesion.montoInicial);
