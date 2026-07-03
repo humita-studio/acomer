@@ -316,7 +316,7 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
                 <div className="font-medium text-gray-700">Precio base: ${selectedProduct.precio.toFixed(2)}</div>
               )}
 
-              {selectedProduct.permiteAdicionales && selectedProduct.modificadores.length > 0 && (
+              {selectedProduct.modificadores.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="font-semibold border-b pb-2">Adicionales</h3>
                   {selectedProduct.modificadores.map((mod) => (

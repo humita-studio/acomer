@@ -48,7 +48,7 @@ export function PasoArmar({
 
   // Con variantes o adicionales: abrir el selector. Sin nada: sumar directo.
   const handleProductoClick = (p: ProductoMenu) => {
-    if (p.variantes.length > 0 || (p.permiteAdicionales && p.modificadores.length > 0)) {
+    if (p.variantes.length > 0 || (p.modificadores.length > 0)) {
       setProdConfig(p);
     } else {
       onAgregar(p, [], 1, null);

@@ -111,7 +111,7 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
           )}
 
           {/* Adicionales (extras opcionales, se suman) */}
-          {product.permiteAdicionales && product.modificadores.length > 0 && (
+          {product.modificadores.length > 0 && (
             <div className="space-y-3">
               <h3 className="border-b pb-2 text-lg font-semibold">Adicionales</h3>
               {product.modificadores.map((mod) => {

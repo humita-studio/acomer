@@ -124,15 +124,13 @@ async function fetchCarta(
       descripcion: p.descripcion,
       precio,
       permiteAdicionales: p.permiteAdicionales,
-      modificadores: p.permiteAdicionales
-        ? modsDisponibles
-            .filter((m) => m.productoId === p.id)
-            .map((m) => ({
-              id: m.id,
-              nombre: m.nombre,
-              precioExtra: parseFloat(m.precioExtra?.toString() || '0'),
-            }))
-        : [],
+      modificadores: modsDisponibles
+        .filter((m) => m.productoId === p.id)
+        .map((m) => ({
+          id: m.id,
+          nombre: m.nombre,
+          precioExtra: parseFloat(m.precioExtra?.toString() || '0'),
+        })),
       variantes,
     };
   });
