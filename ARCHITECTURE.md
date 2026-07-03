@@ -239,10 +239,18 @@ Estado del rollout:
 - **Convertido a `withTenant`** (server actions admin, basadas en sesión):
   cobros, caja, menú (categorías/productos/modificadores/variantes), mesas
   (mesas-actions/plano-actions), reservas (acciones admin), promociones
-  (CRUD) y las configs (pagos/reservas/landing/delivery). En estos módulos,
-  las lecturas por `tenantId` del cliente que antes no validaban sesión
-  (cobros, dashboard, reportes, caja) quedaron cerradas: derivan el tenant de
-  la sesión.
+  (CRUD), configs (pagos/reservas/landing/delivery) y la **creación de
+  pedidos del staff** (comanda: agregar ítems / cambiar estado; venta de
+  mostrador: cobro sync + Mercado Pago). En estos módulos, las lecturas por
+  `tenantId` del cliente que antes no validaban sesión (cobros, dashboard,
+  reportes, caja) quedaron cerradas: derivan el tenant de la sesión.
+- **Convertido a `withPublicTenant`** (flujos del comensal, sin sesión):
+  lecturas (carta pública, promos públicas, preview de cuenta) y **escrituras
+  de alta**: enviar pedido desde el borrador, pedido externo (takeaway/delivery)
+  y alta de reserva pública. La creación de pedido corre el core compartido
+  (`crearPedidoCore`) dentro de la transacción `anon`; se verificó end-to-end
+  que el alta funciona y que un alta con el tenant equivocado la rechaza la
+  política RLS de `pedidos`.
 - **Requisito por tabla:** para que un path convertido funcione, la tabla que
   toca necesita las políticas RLS del CRUD que hace
   (`restaurant_id = get_current_restaurant_id()`). Migraciones `0019` y `0020`
@@ -252,21 +260,18 @@ Estado del rollout:
   le falta la política de esa operación, bajo `withTenant` la verá vacía o el
   UPDATE/DELETE afectará 0 filas **sin lanzar error**.
 - **Pendiente a propósito (no convertir a ciegas):**
-  - *Paths de creación de pedido/cobro* que pasan por `crearPedidoCore`
-    (venta-mostrador, acciones de comanda del staff): inserts complejos y
-    compartidos; ya escopan por sesión (sin IDOR). Convertirlos exige probar
-    el alta de pedido/cobro end-to-end bajo RLS.
-  - *Flujos públicos:* las **lecturas** (carta pública, promos públicas y el
-    preview de cuenta del comensal) ya usan `withPublicTenant`. Quedan
-    pendientes las **escrituras** del comensal que pasan por `crearPedidoCore`
-    (enviar pedido, alta de reserva pública), por el mismo motivo que sus
-    equivalentes de staff. El carrito borrador (`items_borrador_mesa`) no se
-    convirtió porque su política es `allow_all` (el UUID de sesión es el token,
-    no hay escopado por tenant a nivel DB).
+  - *Carrito borrador* (`borrador-actions` / `items_borrador_mesa`): no se
+    convirtió porque su política es `allow_all` (el UUID de sesión es el token
+    de acceso, no hay escopado por tenant a nivel DB), así que `withPublicTenant`
+    no agregaría aislamiento.
   - *`tenantActions`* (cambia nombre/subdominio en `restaurantes`): la política
     UPDATE de `restaurantes` es **owner-only**, pero la acción permite admin.
     Convertir rompería a los admin. Ajustar la política o dejarlo fuera.
   - *`invite-employee` / `registro-actions`*: usan el cliente admin de Supabase
     de forma legítima (crean usuario Auth); no aplican a `withTenant`.
+  - *Lecturas de reportes/dashboard* y varios helpers de módulo (disponibilidad
+    de reservas, `calcularTotales` de caja, `crearPedidoCore.resolverLineasBulk`):
+    siguen leyendo por `db` de módulo. Ya escopan por `tenantId` explícito; son
+    lecturas sin IDOR, así que es defensa en profundidad de menor prioridad.
 - El rol `authenticated` ya tiene los GRANT necesarios (default de Supabase);
   no hace falta cambiar `DATABASE_URL`.

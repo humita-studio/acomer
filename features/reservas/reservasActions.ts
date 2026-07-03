@@ -6,7 +6,7 @@ import { and, eq, gte, lt, ne, desc, isNull, inArray } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
-import { withTenant } from '@/shared/db/secure-wrapper';
+import { withTenant, withPublicTenant } from '@/shared/db/secure-wrapper';
 import { abrirOReusarSesion, broadcastOcupacion } from '@/features/comanda/sesion-mesa-core';
 import { obtenerReservasConfig } from '@/features/reservas/reservasConfigActions';
 import { turnoDeHora, type ReservasConfig } from '@/features/reservas/reservasConfig';
@@ -225,21 +225,23 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
       };
     }
 
-    const [reserva] = await db
-      .insert(reservas)
-      .values({
-        restauranteId: tenantId,
-        nombreContacto: datos.nombreContacto.trim(),
-        telefono: datos.telefono.trim(),
-        inicio,
-        duracionMin: datos.duracionMin ?? config.duracionMinDefault,
-        cantidadPersonas: datos.personas,
-        mesaId: datos.mesaId || null,
-        notas: datos.notas?.trim() || null,
-        estado: 'Pendiente',
-        origen: 'online',
-      })
-      .returning({ id: reservas.id });
+    const [reserva] = await withPublicTenant(tenantId, (db) =>
+      db
+        .insert(reservas)
+        .values({
+          restauranteId: tenantId,
+          nombreContacto: datos.nombreContacto.trim(),
+          telefono: datos.telefono.trim(),
+          inicio,
+          duracionMin: datos.duracionMin ?? config.duracionMinDefault,
+          cantidadPersonas: datos.personas,
+          mesaId: datos.mesaId || null,
+          notas: datos.notas?.trim() || null,
+          estado: 'Pendiente',
+          origen: 'online',
+        })
+        .returning({ id: reservas.id })
+    );
 
     try {
       const supabase = await createSupabaseServerClient();

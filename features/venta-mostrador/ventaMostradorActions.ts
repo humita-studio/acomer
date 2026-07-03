@@ -8,8 +8,9 @@ import {
   restaurantes,
 } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { getMetodosPago, type MetodoPago } from '@/features/pagos/get-metodos-pago';
 import { getPaymentProvider } from '@/features/pagos/core/payment-factory';
 import { crearPedidoConItemsStaff, esItemLibre, type StaffItemInput } from '@/features/pedidos/crearPedidoCore';
@@ -213,7 +214,7 @@ export async function cobrarVentaMostradorAction(
     // en el total del cliente.
     const promo = await promosDeVenta(tenantId, itemsValidos, metodoPago, opciones.omitirIds);
 
-    const result = await db.transaction(async (tx) => {
+    const result = await withTenant(claimsFromSession(session), async (tx) => {
       const [sesion] = await tx
         .insert(sesionesMesa)
         .values({ restauranteId: tenantId, mesaId: null, tipo: 'mostrador', estado: 'Activa' })
@@ -310,7 +311,7 @@ export async function iniciarVentaMostradorMpAction(
     const promo = await promosDeVenta(tenantId, itemsValidos, 'mercado_pago', opciones.omitirIds);
 
     // 1. Persistir sesión + pedido + transacción pendiente (con el total ya descontado).
-    const { sesionId, transactionId, pedidoId, subtotal, descuento, total } = await db.transaction(async (tx) => {
+    const { sesionId, transactionId, pedidoId, subtotal, descuento, total } = await withTenant(claimsFromSession(session), async (tx) => {
       const [sesion] = await tx
         .insert(sesionesMesa)
         .values({ restauranteId: tenantId, mesaId: null, tipo: 'mostrador', estado: 'Activa' })
@@ -408,16 +409,18 @@ export async function estadoVentaMostradorAction(
   try {
     const session = await requireCaja();
     if (!session) return { estado: null };
-    const [trx] = await db
-      .select({ estado: transaccionesPago.estado })
-      .from(transaccionesPago)
-      .where(
-        and(
-          eq(transaccionesPago.id, transactionId),
-          eq(transaccionesPago.restauranteId, session.restauranteId),
-        ),
-      )
-      .limit(1);
+    const [trx] = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .select({ estado: transaccionesPago.estado })
+        .from(transaccionesPago)
+        .where(
+          and(
+            eq(transaccionesPago.id, transactionId),
+            eq(transaccionesPago.restauranteId, session.restauranteId),
+          ),
+        )
+        .limit(1)
+    );
     return { estado: trx?.estado ?? null };
   } catch (error) {
     console.error('[estadoVentaMostradorAction]', error);

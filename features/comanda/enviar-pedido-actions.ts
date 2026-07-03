@@ -4,6 +4,7 @@ import { db } from '@/shared/db';
 import { itemsBorradorMesa, transaccionesPago } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { withPublicTenant } from '@/shared/db/secure-wrapper';
 import { crearPedidoConItems } from '@/features/pedidos/crearPedidoCore';
 
 type ModificadorSnapshot = {
@@ -33,8 +34,8 @@ export async function enviarPedidoAction(
       return { success: false, message: 'El carrito está vacío' };
     }
 
-    // 2. Process within a transaction
-    const resultado = await db.transaction(async (tx) => {
+    // 2. Process within a transaction (RLS activo: rol anon + tenant del subdominio)
+    const resultado = await withPublicTenant(tenantId, async (tx) => {
       const { pedidoId, totalPedido } = await crearPedidoConItems(tx, {
         tenantId,
         sesionMesaId,

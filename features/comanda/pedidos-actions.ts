@@ -1,10 +1,10 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { pedidos } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 
 export async function cambiarEstadoPedido(pedidoId: string, nuevoEstado: 'Pendiente' | 'En Preparación' | 'Listo' | 'Entregado') {
   try {
@@ -16,15 +16,17 @@ export async function cambiarEstadoPedido(pedidoId: string, nuevoEstado: 'Pendie
       return { success: false, message: 'No autorizado' };
     }
 
-    await db
-      .update(pedidos)
-      .set({ estado: nuevoEstado, updatedAt: new Date() })
-      .where(
-        and(
-          eq(pedidos.id, pedidoId),
-          eq(pedidos.restauranteId, session.restauranteId)
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(pedidos)
+        .set({ estado: nuevoEstado, updatedAt: new Date() })
+        .where(
+          and(
+            eq(pedidos.id, pedidoId),
+            eq(pedidos.restauranteId, session.restauranteId)
+          )
         )
-      );
+    );
 
     return { success: true, message: 'Estado actualizado' };
   } catch (error) {

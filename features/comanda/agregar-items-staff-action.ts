@@ -1,10 +1,10 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { transaccionesPago } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { crearPedidoConItemsStaff, esItemLibre, type StaffItemInput } from '@/features/pedidos/crearPedidoCore';
 
@@ -36,7 +36,7 @@ export async function agregarItemsStaffAction(
       return { success: false, message: 'No hay productos para agregar' };
     }
 
-    const resultado = await db.transaction(async (tx) => {
+    const resultado = await withTenant(claimsFromSession(session), async (tx) => {
       const { pedidoId, totalPedido } = await crearPedidoConItemsStaff(tx, {
         tenantId,
         sesionMesaId,

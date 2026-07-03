@@ -1,11 +1,11 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { sesionesMesa, datosEntrega } from '@/shared/db/schema';
 import { and, desc, eq } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
+import { withTenant, withPublicTenant } from '@/shared/db/secure-wrapper';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { revalidatePath } from 'next/cache';
 import {
@@ -108,7 +108,7 @@ export async function crearPedidoExternoAction(
       return { success: false, message: 'Esa modalidad de pedido no está disponible' };
     }
 
-    const { sesionId } = await db.transaction(async (tx) => {
+    const { sesionId } = await withPublicTenant(tenantId, async (tx) => {
       const [sesion] = await tx
         .insert(sesionesMesa)
         .values({ restauranteId: tenantId, mesaId: null, tipo, estado: 'Activa' })
@@ -165,24 +165,26 @@ export async function getOrdenesExternasAction() {
       return { success: false, message: 'No autorizado', ordenes: [] as const };
     }
 
-    const base = await db
-      .select({
-        sesionMesaId: sesionesMesa.id,
-        tipo: sesionesMesa.tipo,
-        estadoSesion: sesionesMesa.estado,
-        createdAt: sesionesMesa.createdAt,
-        nombreContacto: datosEntrega.nombreContacto,
-        telefono: datosEntrega.telefono,
-        direccion: datosEntrega.direccion,
-        referencia: datosEntrega.referencia,
-        costoEnvio: datosEntrega.costoEnvio,
-        estadoEntrega: datosEntrega.estadoEntrega,
-        horaEstimada: datosEntrega.horaEstimada,
-      })
-      .from(datosEntrega)
-      .innerJoin(sesionesMesa, eq(datosEntrega.sesionMesaId, sesionesMesa.id))
-      .where(eq(datosEntrega.restauranteId, session.restauranteId))
-      .orderBy(desc(sesionesMesa.createdAt));
+    const base = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .select({
+          sesionMesaId: sesionesMesa.id,
+          tipo: sesionesMesa.tipo,
+          estadoSesion: sesionesMesa.estado,
+          createdAt: sesionesMesa.createdAt,
+          nombreContacto: datosEntrega.nombreContacto,
+          telefono: datosEntrega.telefono,
+          direccion: datosEntrega.direccion,
+          referencia: datosEntrega.referencia,
+          costoEnvio: datosEntrega.costoEnvio,
+          estadoEntrega: datosEntrega.estadoEntrega,
+          horaEstimada: datosEntrega.horaEstimada,
+        })
+        .from(datosEntrega)
+        .innerJoin(sesionesMesa, eq(datosEntrega.sesionMesaId, sesionesMesa.id))
+        .where(eq(datosEntrega.restauranteId, session.restauranteId))
+        .orderBy(desc(sesionesMesa.createdAt))
+    );
 
     const sesionIds = base.map((o) => o.sesionMesaId);
     if (sesionIds.length === 0) {
@@ -191,17 +193,19 @@ export async function getOrdenesExternasAction() {
 
     // Detalle de lo pedido (pedidos no cancelados + items + modificadores) y los
     // pagos aprobados, en lotes (no N+1) para todas las sesiones del tablero.
-    const [pedidosData, pagosAprobados] = await Promise.all([
-      db.query.pedidos.findMany({
-        where: (t, { and, ne, inArray }) =>
-          and(inArray(t.sesionMesaId, sesionIds), ne(t.estado, 'Cancelado')),
-        with: { items: { with: { modificadores: true } } },
-      }),
-      db.query.transaccionesPago.findMany({
-        where: (t, { and, eq, inArray }) =>
-          and(inArray(t.sesionMesaId, sesionIds), eq(t.estado, 'Aprobado')),
-      }),
-    ]);
+    const [pedidosData, pagosAprobados] = await withTenant(claimsFromSession(session), (db) =>
+      Promise.all([
+        db.query.pedidos.findMany({
+          where: (t, { and, ne, inArray }) =>
+            and(inArray(t.sesionMesaId, sesionIds), ne(t.estado, 'Cancelado')),
+          with: { items: { with: { modificadores: true } } },
+        }),
+        db.query.transaccionesPago.findMany({
+          where: (t, { and, eq, inArray }) =>
+            and(inArray(t.sesionMesaId, sesionIds), eq(t.estado, 'Aprobado')),
+        }),
+      ])
+    );
 
     // Items agregados + total por sesión.
     const itemsPorSesion = new Map<string, OrdenExternaItem[]>();
@@ -265,7 +269,7 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
       return { success: false, message: 'Estado inválido' };
     }
 
-    await db.transaction(async (tx) => {
+    await withTenant(claimsFromSession(session), async (tx) => {
       await tx
         .update(datosEntrega)
         .set({ estadoEntrega: nuevoEstado, updatedAt: new Date() })
