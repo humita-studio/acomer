@@ -97,7 +97,7 @@ export function OperacionPanel({
       {canManage && !mesa.ocupada && !esSubMesa && mesa.capacidad >= 2 && (
         <button
           onClick={onDividir}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100"
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-primary border border-primary/40 bg-accent hover:bg-accent"
         >
           <Scissors size={15} /> Dividir mesa
         </button>
