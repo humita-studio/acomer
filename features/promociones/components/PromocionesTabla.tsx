@@ -65,13 +65,13 @@ export function PromocionesTabla({
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
                   p.activa
-                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                    ? 'bg-success-subtle text-success-foreground dark:bg-success dark:text-success-subtle'
                     : 'bg-muted text-muted-foreground'
                 }`}
               >
                 <span
                   className={`size-1.5 rounded-full ${
-                    p.activa ? 'bg-emerald-500' : 'bg-muted-foreground'
+                    p.activa ? 'bg-success' : 'bg-muted-foreground'
                   }`}
                 />
                 {p.activa ? 'Activa' : 'Pausada'}

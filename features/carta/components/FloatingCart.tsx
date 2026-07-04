@@ -126,7 +126,7 @@ export function FloatingCart({
             {/* Pedidos Confirmados */}
             {pedidosConfirmados.length > 0 && (
               <div>
-                <h3 className="mb-3 flex items-center gap-2 border-b pb-2 font-semibold text-green-600 dark:text-green-500">
+                <h3 className="mb-3 flex items-center gap-2 border-b pb-2 font-semibold text-success-foreground dark:text-success-foreground">
                   <CheckCircle2 className="size-4" />
                   En preparación
                 </h3>

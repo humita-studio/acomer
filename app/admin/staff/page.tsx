@@ -114,12 +114,12 @@ export default function StaffPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Formulario de Invitación */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-card p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-4">Invitar Empleado</h2>
 
           <form onSubmit={handleInvite} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Email del Empleado
               </label>
               <input
@@ -127,19 +127,19 @@ export default function StaffPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="empleado@example.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Rol
               </label>
               <select
                 value={rol}
                 onChange={(e) => setRol(e.target.value as RoleType)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {ROLES.map((r) => (
                   <option key={r.value} value={r.value}>
@@ -152,7 +152,7 @@ export default function StaffPage() {
             <button
               type="submit"
               disabled={inviteMutation.isPending}
-              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition"
+              className="w-full bg-primary text-white py-2 rounded-md hover:bg-primary/90 disabled:bg-muted-foreground transition"
             >
               {inviteMutation.isPending ? 'Enviando...' : 'Enviar Invitación'}
             </button>
@@ -161,8 +161,8 @@ export default function StaffPage() {
               <div
                 className={`p-3 rounded-md ${
                   message.includes('Error') || message.includes('No tienes')
-                    ? 'bg-red-50 text-red-700'
-                    : 'bg-green-50 text-green-700'
+                    ? 'bg-destructive-subtle text-destructive'
+                    : 'bg-success-subtle text-success-foreground'
                 }`}
               >
                 {message}
@@ -170,27 +170,27 @@ export default function StaffPage() {
             )}
 
             {credenciales && (
-              <div className="p-4 rounded-md border border-amber-300 bg-amber-50">
-                <p className="text-sm font-semibold text-amber-900 mb-2">
+              <div className="p-4 rounded-md border border-warning/40 bg-warning-subtle">
+                <p className="text-sm font-semibold text-warning-foreground mb-2">
                   Contraseña temporal (se muestra una sola vez)
                 </p>
-                <p className="text-xs text-amber-800 mb-3">
+                <p className="text-xs text-warning-foreground mb-3">
                   Copiala y entregásela al empleado. No se vuelve a mostrar. Que la cambie al ingresar.
                 </p>
                 <dl className="text-sm space-y-1 mb-3">
                   <div className="flex gap-2">
-                    <dt className="text-gray-600 w-24">Email</dt>
+                    <dt className="text-muted-foreground w-24">Email</dt>
                     <dd className="font-mono break-all">{credenciales.email}</dd>
                   </div>
                   <div className="flex gap-2">
-                    <dt className="text-gray-600 w-24">Contraseña</dt>
+                    <dt className="text-muted-foreground w-24">Contraseña</dt>
                     <dd className="font-mono font-bold tracking-wider">{credenciales.password}</dd>
                   </div>
                 </dl>
                 <button
                   type="button"
                   onClick={copiarCredenciales}
-                  className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded-md hover:bg-amber-700 transition"
+                  className="text-sm bg-warning text-white px-3 py-1.5 rounded-md hover:bg-warning transition"
                 >
                   {copiado ? 'Copiado ✓' : 'Copiar credenciales'}
                 </button>
@@ -200,29 +200,29 @@ export default function StaffPage() {
         </div>
 
         {/* Lista de Empleados */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-card p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">Empleados</h2>
             <button
               type="button"
               onClick={() => refetch()}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-primary hover:underline"
             >
               Actualizar
             </button>
           </div>
 
           {loadingList ? (
-            <p className="text-gray-600 text-sm">Cargando empleados...</p>
+            <p className="text-muted-foreground text-sm">Cargando empleados...</p>
           ) : empleados.length === 0 ? (
-            <p className="text-gray-600 text-sm">Todavía no hay empleados cargados.</p>
+            <p className="text-muted-foreground text-sm">Todavía no hay empleados cargados.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-border">
               {empleados.map((emp) => (
                 <li key={emp.id} className="py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{emp.email}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-foreground truncate">{emp.email}</p>
+                    <p className="text-sm text-muted-foreground">
                       {ROL_LABELS[emp.rol] ?? emp.rol}
                       {!emp.activo && ' · Inactivo'}
                     </p>
@@ -231,8 +231,8 @@ export default function StaffPage() {
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full ${
                         emp.activo
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-500'
+                          ? 'bg-success-subtle text-success-foreground'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {emp.activo ? 'Activo' : 'Inactivo'}
@@ -243,7 +243,7 @@ export default function StaffPage() {
                           type="button"
                           onClick={() => deactivateMutation.mutate(emp.id)}
                           disabled={deactivateMutation.isPending}
-                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                          className="text-xs text-destructive hover:underline disabled:opacity-50"
                         >
                           Desactivar
                         </button>
@@ -252,7 +252,7 @@ export default function StaffPage() {
                           type="button"
                           onClick={() => activateMutation.mutate(emp.id)}
                           disabled={activateMutation.isPending}
-                          className="text-xs text-green-600 hover:underline disabled:opacity-50"
+                          className="text-xs text-success-foreground hover:underline disabled:opacity-50"
                         >
                           Activar
                         </button>

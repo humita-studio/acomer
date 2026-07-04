@@ -136,7 +136,7 @@ async function ConfigContent() {
                                     ) : (
                                         <a
                                             href={mpConnectUrl}
-                                            className="block w-full text-center border border-[#009EE3] text-[#009EE3] hover:bg-blue-50 p-2 rounded-md transition-colors font-medium"
+                                            className="block w-full text-center border border-[#009EE3] text-[#009EE3] hover:bg-accent p-2 rounded-md transition-colors font-medium"
                                         >
                                             Reconectar Mercado Pago
                                         </a>

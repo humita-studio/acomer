@@ -124,8 +124,8 @@ export function SeguimientoPedido({
         <div
           className={`rounded-2xl border p-4 flex items-center gap-3 ${
             pagado
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-amber-50 border-amber-200 text-amber-800'
+              ? 'bg-success-subtle border-success/40 text-success-foreground'
+              : 'bg-warning-subtle border-warning/40 text-warning-foreground'
           }`}
         >
           {pagado ? <Check className="size-5 shrink-0" /> : <Clock className="size-5 shrink-0" />}
@@ -195,7 +195,7 @@ export function SeguimientoPedido({
                       <div
                         className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                           completado
-                            ? 'bg-green-600 border-green-600 text-white'
+                            ? 'bg-success border-success text-white'
                             : activo
                               ? 'bg-primary border-primary text-primary-foreground animate-pulse'
                               : 'bg-muted border-border text-muted-foreground'
@@ -205,7 +205,7 @@ export function SeguimientoPedido({
                       </div>
                       {!esUltimo && (
                         <div
-                          className={`w-0.5 flex-1 min-h-8 ${completado ? 'bg-green-600' : 'bg-border'}`}
+                          className={`w-0.5 flex-1 min-h-8 ${completado ? 'bg-success' : 'bg-border'}`}
                         />
                       )}
                     </div>
@@ -253,7 +253,7 @@ export function SeguimientoPedido({
                 <span>Subtotal</span>
                 <span className="tabular-nums">${pedido.total.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm text-green-600">
+              <div className="flex justify-between text-sm text-success-foreground">
                 <span>Descuento</span>
                 <span className="tabular-nums">−${pedido.descuento.toFixed(2)}</span>
               </div>

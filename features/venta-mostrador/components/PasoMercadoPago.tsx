@@ -30,7 +30,7 @@ export function PasoMercadoPago({
       </div>
 
       <div className="flex justify-center">
-        <div className="rounded-2xl border bg-white p-4">
+        <div className="rounded-2xl border bg-card p-4">
           <QRCodeSVG value={mp.paymentUrl} size={200} />
         </div>
       </div>
