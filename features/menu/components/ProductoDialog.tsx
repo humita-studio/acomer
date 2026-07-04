@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
+import { usePrompt } from '@/shared/ui/confirm-dialog';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -87,6 +88,8 @@ export function ProductoDialog({
   const [stagedAdicionales, setStagedAdicionales] = useState<StagedAdicional[]>([]);
   const [stagedVariantes, setStagedVariantes] = useState<StagedVariante[]>([]);
 
+  const { prompt: pedirPrecio, dialog: precioDialog } = usePrompt();
+
   const crearProducto = useCrearProducto();
   const editarProducto = useEditarProducto();
   const modificarPrecio = useModificarPrecioProducto();
@@ -131,8 +134,15 @@ export function ProductoDialog({
     form.reset();
   };
 
-  const handleEditarPrecioAdicional = (id: string, nombreAd: string, precioActual: number) => {
-    const nuevo = prompt(`Nuevo precio extra para ${nombreAd}. Actual: $${precioActual}.`);
+  const handleEditarPrecioAdicional = async (id: string, nombreAd: string, precioActual: number) => {
+    const nuevo = await pedirPrecio({
+      titulo: 'Nuevo precio extra',
+      descripcion: `${nombreAd} — actual $${precioActual}`,
+      label: 'Precio extra',
+      tipo: 'number',
+      defaultValue: String(precioActual),
+      confirmLabel: 'Guardar',
+    });
     if (nuevo === null) return;
     if (isNaN(Number(nuevo)) || Number(nuevo) < 0) return;
     editarPrecioAdicional.mutate({ modificadorId: id, nuevoPrecio: Number(nuevo) });
@@ -159,8 +169,15 @@ export function ProductoDialog({
     form.reset();
   };
 
-  const handleEditarPrecioVariante = (id: string, nombreVar: string, precioActual: number) => {
-    const nuevo = prompt(`Nuevo precio para ${nombreVar}. Actual: $${precioActual}.`);
+  const handleEditarPrecioVariante = async (id: string, nombreVar: string, precioActual: number) => {
+    const nuevo = await pedirPrecio({
+      titulo: 'Nuevo precio',
+      descripcion: `${nombreVar} — actual $${precioActual}`,
+      label: 'Precio',
+      tipo: 'number',
+      defaultValue: String(precioActual),
+      confirmLabel: 'Guardar',
+    });
     if (nuevo === null) return;
     if (isNaN(Number(nuevo)) || Number(nuevo) <= 0) return;
     editarPrecioVariante.mutate({ varianteId: id, nuevoPrecio: Number(nuevo) });
@@ -230,7 +247,9 @@ export function ProductoDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      {precioDialog}
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{esEditar ? 'Editar producto' : 'Nuevo producto'}</DialogTitle>
@@ -561,6 +580,7 @@ export function ProductoDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   );
 }

@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { liberarMesaAction } from '@/features/mesas/mesas-actions';
 import { useTicketMesa, useAgregarItemsStaff } from '@/features/comanda/use-ticket-mesa';
 import { queryKeys } from '@/shared/query/keys';
+import { useConfirm } from '@/shared/ui/confirm-dialog';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/carta/types';
 import type { TicketItem } from '@/features/pedidos/obtenerTicketMesa';
@@ -21,6 +22,7 @@ type Props = {
 export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos, ticketInicial }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [activeCategory, setActiveCategory] = useState<string>(categorias[0]?.id || '');
   const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
   const [cantidad, setCantidad] = useState(1);
@@ -153,7 +155,12 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
   const freeSubtotal = (parseFloat(freePrecio.replace(',', '.')) || 0) * freeCantidad;
 
   const handleLiberar = async () => {
-    if (!confirm('¿Liberar la mesa? Se cerrará la sesión actual.')) return;
+    if (!(await confirm({
+      titulo: '¿Liberar la mesa?',
+      descripcion: 'Se cerrará la sesión actual.',
+      confirmLabel: 'Liberar',
+      destructivo: true,
+    }))) return;
     setIsLiberating(true);
     setError(null);
     const res = await liberarMesaAction(mesaId);
@@ -168,6 +175,7 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {confirmDialog}
       {/* Ticket de la mesa */}
       <aside className="lg:col-span-1">
         <div className="bg-white rounded-lg shadow p-5 lg:sticky lg:top-6">

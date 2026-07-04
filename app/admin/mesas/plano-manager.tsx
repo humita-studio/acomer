@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
+import { useConfirm } from '@/shared/ui/confirm-dialog';
 import type { PlanoData } from '@/features/mesas/plano-data';
 import { getPlanoDataAction } from '@/features/mesas/plano-actions';
 import { PlanoCanvas } from './plano-canvas';
@@ -35,6 +36,7 @@ export function PlanoManager({
   const canManage = hasPermission(userRole as RoleType, 'canManageTables');
   const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
   const queryClient = useQueryClient();
+  const { confirm: confirmarSalida, dialog: salidaDialog } = useConfirm();
 
   // Estado de UI del editor (Zustand). Los datos del plano viven en TanStack Query.
   const {
@@ -123,8 +125,17 @@ export function PlanoManager({
   // ---- Transiciones de modo / selección (estado de UI) ----
   const entrarEdicion = () => iniciarEdicion(planoData);
 
-  const salirEdicion = () => {
-    if (dirty && !confirm('Tenés cambios sin guardar. ¿Salir y descartarlos?')) return;
+  const salirEdicion = async () => {
+    if (
+      dirty &&
+      !(await confirmarSalida({
+        titulo: 'Tenés cambios sin guardar',
+        descripcion: '¿Salir y descartarlos?',
+        confirmLabel: 'Descartar',
+        destructivo: true,
+      }))
+    )
+      return;
     terminarEdicion();
   };
 
@@ -146,6 +157,9 @@ export function PlanoManager({
 
   return (
     <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+      {acciones.confirmDialog}
+      {acciones.promptDialog}
+      {salidaDialog}
       {/* Alertas en vivo */}
       {avisos.length > 0 && (
         <div className="mb-4 space-y-2">

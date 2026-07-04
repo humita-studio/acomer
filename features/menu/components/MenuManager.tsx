@@ -27,6 +27,7 @@ import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Card } from '@/shared/ui/card';
+import { useConfirm } from '@/shared/ui/confirm-dialog';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Badge } from '@/shared/ui/badge';
@@ -140,19 +141,34 @@ export function MenuManager({
     });
   }, [productos, categoriaActiva, filtro, busqueda]);
 
+  const { confirm, dialog: confirmDialog } = useConfirm();
+
   const handleToggleDisponible = (producto: ProductoMenu, disponible: boolean) => {
     cambiarDisponibilidad.mutate({ productoId: producto.id, disponible });
   };
   const handleDuplicar = (producto: ProductoMenu) => {
     duplicarProducto.mutate(producto.id);
   };
-  const handleEliminar = (producto: ProductoMenu) => {
-    if (confirm(`¿Eliminar el producto ${producto.nombre}?`)) {
+  const handleEliminar = async (producto: ProductoMenu) => {
+    if (
+      await confirm({
+        titulo: `¿Eliminar ${producto.nombre}?`,
+        descripcion: 'El producto dejará de aparecer en la carta.',
+        confirmLabel: 'Eliminar',
+        destructivo: true,
+      })
+    ) {
       eliminarProducto.mutate(producto.id);
     }
   };
-  const handleEliminarCategoria = (c: CategoriaMenu) => {
-    if (confirm(`¿Eliminar la categoría ${c.nombre}?`)) {
+  const handleEliminarCategoria = async (c: CategoriaMenu) => {
+    if (
+      await confirm({
+        titulo: `¿Eliminar la categoría ${c.nombre}?`,
+        confirmLabel: 'Eliminar',
+        destructivo: true,
+      })
+    ) {
       eliminarCategoria.mutate(c.id);
       if (categoriaActiva === c.id) setCategoriaActiva('todos');
     }
@@ -160,6 +176,7 @@ export function MenuManager({
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {/* Encabezado */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">

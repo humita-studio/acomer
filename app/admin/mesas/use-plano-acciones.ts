@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { useConfirm, usePrompt } from '@/shared/ui/confirm-dialog';
 import {
   crearAmbiente,
   renombrarAmbiente,
@@ -46,6 +48,8 @@ export function usePlanoAcciones({
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  const { prompt: pedir, dialog: promptDialog } = usePrompt();
   const patchDraft = usePlanoStore((s) => s.patchDraft);
   const setSeleccion = usePlanoStore((s) => s.setSeleccion);
   const setAmbienteActivoId = usePlanoStore((s) => s.setAmbienteActivoId);
@@ -64,7 +68,7 @@ export function usePlanoAcciones({
   // ---- Acciones optimistas: la UI se actualiza al instante y reconcilia con
   // el id real cuando responde el server (o revierte si falla). ----
   const handleAddMesa = async () => {
-    const nombre = window.prompt('Identificador de la mesa (ej: Mesa 5):')?.trim();
+    const nombre = (await pedir({ titulo: 'Nueva mesa', label: 'Identificador', placeholder: 'ej: Mesa 5' }))?.trim();
     if (!nombre) return;
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimista: MesaPlano = {
@@ -93,12 +97,12 @@ export function usePlanoAcciones({
     } else {
       patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== tempId) }), false);
       setSeleccion((s) => (s?.tipo === 'mesa' && s.id === tempId ? null : s));
-      alert(res.message || 'No se pudo crear la mesa');
+      toast.error(res.message || 'No se pudo crear la mesa');
     }
   };
 
   const handleAddAmbiente = async () => {
-    const nombre = window.prompt('Nombre del ambiente (ej: Patio):')?.trim();
+    const nombre = (await pedir({ titulo: 'Nuevo ambiente', label: 'Nombre', placeholder: 'ej: Patio' }))?.trim();
     if (!nombre) return;
     const res = await crearAmbiente(nombre);
     if (res.success && res.ambiente) {
@@ -106,30 +110,40 @@ export function usePlanoAcciones({
       patchDraft((d) => ({ ...d, ambientes: [...d.ambientes, amb] }), false);
       setAmbienteActivoId(amb.id);
     } else {
-      alert(res.message || 'No se pudo crear el ambiente');
+      toast.error(res.message || 'No se pudo crear el ambiente');
     }
   };
 
   const handleRenameAmbiente = async (amb: AmbienteUI) => {
-    const nombre = window.prompt('Nuevo nombre del ambiente:', amb.nombre)?.trim();
+    const nombre = (await pedir({
+      titulo: 'Renombrar ambiente',
+      label: 'Nombre',
+      defaultValue: amb.nombre,
+      confirmLabel: 'Guardar',
+    }))?.trim();
     if (!nombre || nombre === amb.nombre) return;
     patchDraft(
       (d) => ({ ...d, ambientes: d.ambientes.map((a) => (a.id === amb.id ? { ...a, nombre } : a)) }),
       false
     );
     const res = await renombrarAmbiente(amb.id, nombre);
-    if (!res.success) alert(res.message || 'No se pudo renombrar');
+    if (!res.success) toast.error(res.message || 'No se pudo renombrar');
   };
 
   const handleDeleteAmbiente = async (amb: AmbienteUI) => {
     if (ambientes.length <= 1) {
-      alert('Tiene que quedar al menos un ambiente');
+      toast.error('Tiene que quedar al menos un ambiente');
       return;
     }
-    if (!confirm(`¿Eliminar el ambiente "${amb.nombre}"? Sus mesas quedarán sin asignar.`)) return;
+    if (!(await confirm({
+      titulo: `¿Eliminar el ambiente "${amb.nombre}"?`,
+      descripcion: 'Sus mesas quedarán sin asignar.',
+      confirmLabel: 'Eliminar',
+      destructivo: true,
+    }))) return;
     const res = await eliminarAmbiente(amb.id);
     if (!res.success) {
-      alert(res.message || 'No se pudo eliminar');
+      toast.error(res.message || 'No se pudo eliminar');
       return;
     }
     const restantes = ambientes.filter((a) => a.id !== amb.id);
@@ -148,7 +162,11 @@ export function usePlanoAcciones({
 
   const handleDeleteMesa = async (id: string) => {
     const mesa = mesas.find((m) => m.id === id);
-    if (!confirm(`¿Eliminar ${mesa?.identificador ?? 'la mesa'}?`)) return;
+    if (!(await confirm({
+      titulo: `¿Eliminar ${mesa?.identificador ?? 'la mesa'}?`,
+      confirmLabel: 'Eliminar',
+      destructivo: true,
+    }))) return;
     // Optimista: sacar al instante y restaurar si falla
     patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== id) }), false);
     setSeleccion(null);
@@ -156,7 +174,7 @@ export function usePlanoAcciones({
     const res = await eliminarMesaPlano(id);
     if (!res.success) {
       if (mesa) patchDraft((d) => ({ ...d, mesas: [...d.mesas, mesa] }), false);
-      alert(res.message || 'No se pudo eliminar');
+      toast.error(res.message || 'No se pudo eliminar');
     }
   };
 
@@ -197,7 +215,7 @@ export function usePlanoAcciones({
       patchDraft((d) => ({ ...d, elementos: d.elementos.map((e) => (e.id === tempId ? real : e)) }), false);
     } else {
       patchDraft((d) => ({ ...d, elementos: d.elementos.filter((e) => e.id !== tempId) }), false);
-      alert(res.message || 'No se pudo crear el elemento');
+      toast.error(res.message || 'No se pudo crear el elemento');
     }
   };
 
@@ -210,18 +228,23 @@ export function usePlanoAcciones({
     const res = await eliminarElementoPlano(id);
     if (!res.success) {
       if (elemento) patchDraft((d) => ({ ...d, elementos: [...d.elementos, elemento] }), false);
-      alert(res.message || 'No se pudo eliminar');
+      toast.error(res.message || 'No se pudo eliminar');
     }
   };
 
   // ---- Operación (modo ver) ----
   const handleLiberar = async (mesa: MesaPlano) => {
-    if (!confirm(`¿Liberar ${mesa.identificador}? Se cerrará la sesión actual.`)) return;
+    if (!(await confirm({
+      titulo: `¿Liberar ${mesa.identificador}?`,
+      descripcion: 'Se cerrará la sesión actual.',
+      confirmLabel: 'Liberar',
+      destructivo: true,
+    }))) return;
     setLiberandoId(mesa.id);
     const res = await liberarMesaAction(mesa.id);
     setLiberandoId(null);
     if (res.success) queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
-    else alert(res.message || 'No se pudo liberar la mesa');
+    else toast.error(res.message || 'No se pudo liberar la mesa');
   };
 
   // Abre la mesa (ocupa) sin que el cliente escanee y lleva al mozo a cargar el pedido.
@@ -233,20 +256,24 @@ export function usePlanoAcciones({
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
       router.push(`/admin/mesas/${mesa.id}`);
     } else {
-      alert(res.message || 'No se pudo abrir la mesa');
+      toast.error(res.message || 'No se pudo abrir la mesa');
     }
   };
 
   const handleDividir = async (mesa: MesaPlano) => {
     const def = Math.max(1, Math.floor(mesa.capacidad / 2));
-    const entrada = window.prompt(
-      `Dividir ${mesa.identificador} (${mesa.capacidad} lugares).\n¿Cuántos lugares para la nueva sub-mesa?`,
-      String(def)
-    );
+    const entrada = await pedir({
+      titulo: `Dividir ${mesa.identificador}`,
+      descripcion: `${mesa.capacidad} lugares. ¿Cuántos para la nueva sub-mesa?`,
+      label: 'Lugares',
+      tipo: 'number',
+      defaultValue: String(def),
+      confirmLabel: 'Dividir',
+    });
     if (entrada == null) return;
     const cap = parseInt(entrada, 10);
     if (!Number.isFinite(cap) || cap < 1 || cap >= mesa.capacidad) {
-      alert(`Tiene que ser un número entre 1 y ${mesa.capacidad - 1}.`);
+      toast.error(`Tiene que ser un número entre 1 y ${mesa.capacidad - 1}.`);
       return;
     }
     const res = await dividirMesaAction(mesa.id, cap);
@@ -254,18 +281,22 @@ export function usePlanoAcciones({
       if (res.mesa) setSeleccion({ tipo: 'mesa', id: (res.mesa as { id: string }).id });
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     } else {
-      alert(res.message || 'No se pudo dividir la mesa');
+      toast.error(res.message || 'No se pudo dividir la mesa');
     }
   };
 
   const handleUnir = async (mesa: MesaPlano) => {
-    if (!confirm(`¿Volver a unir ${mesa.identificador} con su mesa madre?`)) return;
+    if (!(await confirm({
+      titulo: `¿Volver a unir ${mesa.identificador}?`,
+      descripcion: 'Se une con su mesa madre.',
+      confirmLabel: 'Unir',
+    }))) return;
     const res = await unirMesaAction(mesa.id);
     if (res.success) {
       setSeleccion(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     } else {
-      alert(res.message || 'No se pudo unir la mesa');
+      toast.error(res.message || 'No se pudo unir la mesa');
     }
   };
 
@@ -302,7 +333,7 @@ export function usePlanoAcciones({
       // Sincroniza el plano para cuando se vuelva a modo operación.
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     } else {
-      alert(res.message || 'No se pudo guardar el plano');
+      toast.error(res.message || 'No se pudo guardar el plano');
     }
   };
 
@@ -321,5 +352,8 @@ export function usePlanoAcciones({
     handleDividir,
     handleUnir,
     guardar,
+    // Diálogos estilados (confirm/prompt) que el manager debe renderizar.
+    confirmDialog,
+    promptDialog,
   };
 }
