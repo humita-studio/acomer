@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -428,10 +429,10 @@ export function PedidosOnlineManager({
     },
     onError: (_e, _vars, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(ordenesKey, ctx.prev);
-      alert('No se pudo actualizar el pedido.');
+      toast.error('No se pudo actualizar el pedido.');
     },
     onSuccess: (res) => {
-      if (!res.success) alert(res.message);
+      if (!res.success) toast.error(res.message);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ordenesKey });

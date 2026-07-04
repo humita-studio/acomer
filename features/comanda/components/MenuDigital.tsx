@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { toast } from 'sonner';
 import { MenuView } from '@/features/carta/components/MenuView';
 import type { CategoriaMenu, ProductoMenu } from '@/features/carta/types';
 import type { CartApi, CartPromoDisponible, PedidoConfirmadoResumen } from '@/features/carta/cart';
@@ -74,7 +75,7 @@ export function MenuDigital({
         const res = await enviar.mutateAsync();
         if (res.success) {
             // Pedir ≠ pagar: el pedido va a la cocina; el comensal paga cuando quiera con "Pagar".
-            alert('¡Pedido enviado! Podés seguir pidiendo o tocar "Pagar" cuando quieras.');
+            toast.success('¡Pedido enviado! Podés seguir pidiendo o tocar "Pagar" cuando quieras.');
             return { success: true };
         }
         return { success: false, message: res.message ?? 'Error al enviar' };

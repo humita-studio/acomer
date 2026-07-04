@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Plus, Star, Trash2 } from 'lucide-react';
 import {
   useCrearProducto,
@@ -146,7 +147,7 @@ export function ProductoDialog({
     if (!nombreVar) return;
     const precioVar = Number(data.get('precio'));
     if (isNaN(precioVar) || precioVar <= 0) {
-      alert('Ingresá un precio válido para la variante.');
+      toast.error('Ingresá un precio válido para la variante.');
       return;
     }
 
@@ -169,13 +170,13 @@ export function ProductoDialog({
     const nombreLimpio = nombre.trim();
     if (!nombreLimpio) return;
     if (!categoriaId) {
-      alert('Elegí una categoría para el producto.');
+      toast.error('Elegí una categoría para el producto.');
       return;
     }
 
     const precioNum = Number(precio);
     if (!usarVariantes && (isNaN(precioNum) || precioNum <= 0)) {
-      alert('Ingresá un precio válido.');
+      toast.error('Ingresá un precio válido.');
       return;
     }
 
@@ -183,7 +184,7 @@ export function ProductoDialog({
       .filter((v) => v.nombre.trim() && v.precio > 0)
       .map((v) => ({ nombre: v.nombre, precio: v.precio }));
     if (!esEditar && usarVariantes && variantesAEnviar.length === 0) {
-      alert('Agregá al menos una variante con precio.');
+      toast.error('Agregá al menos una variante con precio.');
       return;
     }
 

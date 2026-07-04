@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import {
@@ -75,7 +76,7 @@ export function useAbrirCaja(tenantId: string) {
       return res;
     },
     onSuccess: () => invalidar(),
-    onError: (e) => alert(e instanceof Error ? e.message : 'No se pudo abrir la caja'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'No se pudo abrir la caja'),
   });
 }
 
@@ -93,7 +94,7 @@ export function useRegistrarMovimiento(tenantId: string) {
       return res;
     },
     onSuccess: () => invalidar(),
-    onError: (e) => alert(e instanceof Error ? e.message : 'No se pudo registrar el movimiento'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'No se pudo registrar el movimiento'),
   });
 }
 
@@ -106,6 +107,6 @@ export function useCerrarCaja(tenantId: string) {
       return res;
     },
     onSuccess: () => invalidar(),
-    onError: (e) => alert(e instanceof Error ? e.message : 'No se pudo cerrar la caja'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'No se pudo cerrar la caja'),
   });
 }

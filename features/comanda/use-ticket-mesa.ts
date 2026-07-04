@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { queryKeys } from '@/shared/query/keys';
 import { obtenerTicketMesaAction } from './ticket-mesa-actions';
 import { agregarItemsStaffAction, type StaffItemInput } from './agregar-items-staff-action';
@@ -46,7 +47,7 @@ export function useAgregarItemsStaff(sesionMesaId: string) {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al agregar productos');
+      toast.error(error instanceof Error ? error.message : 'Error al agregar productos');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });

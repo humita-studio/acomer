@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { Plus, Tag } from 'lucide-react';
+import { toast } from 'sonner';
 import { ProductModal } from './ProductModal';
 import { FloatingCart } from './FloatingCart';
 import { Button } from '@/shared/ui/button';
@@ -72,9 +73,9 @@ export function MenuView({
         setIsCalling(true);
         const res = await onLlamarMozo();
         if (res.success) {
-            alert('¡Mozo notificado! En breve se acercará a la mesa.');
+            toast.success('¡Mozo notificado! En breve se acercará a la mesa.');
         } else {
-            alert('Hubo un error al llamar al mozo.');
+            toast.error('Hubo un error al llamar al mozo.');
         }
         setIsCalling(false);
     };

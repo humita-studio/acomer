@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { queryKeys } from '@/shared/query/keys';
 import {
   obtenerAdicionalesMenu,
@@ -49,7 +50,7 @@ export function useAgregarAdicional() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al agregar el adicional');
+      toast.error(error instanceof Error ? error.message : 'Error al agregar el adicional');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
@@ -78,7 +79,7 @@ export function useEditarPrecioAdicional() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al actualizar el precio');
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar el precio');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
@@ -107,7 +108,7 @@ export function useEliminarAdicional() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al eliminar el adicional');
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar el adicional');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
