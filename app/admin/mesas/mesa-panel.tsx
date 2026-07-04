@@ -18,15 +18,15 @@ export function MesaPanel({
 }) {
   return (
     <div className="space-y-3">
-      <h3 className="font-bold text-gray-800">{mesa.identificador}</h3>
+      <h3 className="font-bold text-foreground">{mesa.identificador}</h3>
 
       <div>
-        <label className="text-xs font-semibold text-gray-500 uppercase">Forma</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase">Forma</label>
         <div className="flex gap-2 mt-1">
           <button
             onClick={() => onUpdate({ forma: 'cuadrada' })}
             className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-sm border ${
-              mesa.forma !== 'redonda' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200'
+              mesa.forma !== 'redonda' ? 'bg-primary text-white border-primary' : 'bg-card border-border'
             }`}
           >
             <Square size={14} /> Cuadrada
@@ -34,7 +34,7 @@ export function MesaPanel({
           <button
             onClick={() => onUpdate({ forma: 'redonda' })}
             className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-sm border ${
-              mesa.forma === 'redonda' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200'
+              mesa.forma === 'redonda' ? 'bg-primary text-white border-primary' : 'bg-card border-border'
             }`}
           >
             <Circle size={14} /> Redonda
@@ -66,17 +66,17 @@ export function MesaPanel({
 
       <button
         onClick={() => onUpdate({ rotacion: (mesa.rotacion + 90) % 360 })}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-gray-200 bg-white hover:bg-gray-100"
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-border bg-card hover:bg-muted"
       >
         <RotateCw size={14} /> Rotar 90°
       </button>
 
       <div>
-        <label className="text-xs font-semibold text-gray-500 uppercase">Ambiente</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase">Ambiente</label>
         <select
           value={mesa.ambienteId ?? ''}
           onChange={(e) => onUpdate({ ambienteId: e.target.value })}
-          className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded-md text-sm bg-white"
+          className="w-full mt-1 px-2 py-1.5 border border-border rounded-md text-sm bg-card"
         >
           {ambientes.map((a) => (
             <option key={a.id} value={a.id}>
@@ -88,7 +88,7 @@ export function MesaPanel({
 
       <button
         onClick={onDelete}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-destructive border border-destructive/40 bg-destructive-subtle hover:bg-destructive-subtle"
       >
         <Trash2 size={14} /> Eliminar mesa
       </button>

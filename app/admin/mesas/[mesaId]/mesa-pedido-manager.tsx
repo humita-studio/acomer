@@ -178,32 +178,32 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
       {confirmDialog}
       {/* Ticket de la mesa */}
       <aside className="lg:col-span-1">
-        <div className="bg-white rounded-lg shadow p-5 lg:sticky lg:top-6">
-          <h2 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">Cuenta de la mesa</h2>
+        <div className="bg-card rounded-lg shadow p-5 lg:sticky lg:top-6">
+          <h2 className="font-bold text-lg text-foreground mb-4 border-b pb-2">Cuenta de la mesa</h2>
 
           {ticket.items.length === 0 ? (
-            <p className="text-sm text-gray-500 py-6 text-center">Todavía no hay pedidos en esta mesa.</p>
+            <p className="text-sm text-muted-foreground py-6 text-center">Todavía no hay pedidos en esta mesa.</p>
           ) : (
             <div className="space-y-3">
               {ticket.items.map((item) => (
                 <div key={item.id} className="flex justify-between items-start text-sm">
                   <div>
-                    <p className="font-medium text-gray-800">
+                    <p className="font-medium text-foreground">
                       {item.cantidad}× {item.nombre}
                     </p>
                     {item.modificadores.length > 0 && (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         + {item.modificadores.map((m) => m.nombre).join(', ')}
                       </p>
                     )}
                   </div>
-                  <span className="font-semibold text-gray-700">${item.subtotal.toFixed(2)}</span>
+                  <span className="font-semibold text-foreground">${item.subtotal.toFixed(2)}</span>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="flex justify-between items-center mt-4 pt-3 border-t font-bold text-gray-800">
+          <div className="flex justify-between items-center mt-4 pt-3 border-t font-bold text-foreground">
             <span>Total</span>
             <span>${ticket.total.toFixed(2)}</span>
           </div>
@@ -211,32 +211,32 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
           <button
             onClick={handleLiberar}
             disabled={isLiberating}
-            className="w-full mt-5 text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 py-2 rounded-md transition text-sm font-bold disabled:opacity-50"
+            className="w-full mt-5 text-warning-foreground border border-warning/40 bg-warning-subtle hover:bg-warning-subtle py-2 rounded-md transition text-sm font-bold disabled:opacity-50"
           >
             {isLiberating ? 'Liberando...' : 'Liberar Mesa'}
           </button>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg mt-4 text-sm font-medium">{error}</div>
+            <div className="bg-destructive-subtle text-destructive p-3 rounded-lg mt-4 text-sm font-medium">{error}</div>
           )}
         </div>
       </aside>
 
       {/* Selector de productos */}
       <section className="lg:col-span-2">
-        <div className="bg-white rounded-lg shadow p-5">
+        <div className="bg-card rounded-lg shadow p-5">
           <div className="flex items-center justify-between mb-4 gap-3">
-            <h2 className="font-bold text-lg text-gray-800">Agregar al pedido</h2>
+            <h2 className="font-bold text-lg text-foreground">Agregar al pedido</h2>
             <button
               onClick={openFree}
-              className="shrink-0 text-sm font-semibold text-blue-600 border border-dashed border-blue-300 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-colors"
+              className="shrink-0 text-sm font-semibold text-primary border border-dashed border-primary/40 hover:bg-accent rounded-lg px-3 py-1.5 transition-colors"
             >
               + Ítem libre
             </button>
           </div>
 
           {categorias.length === 0 ? (
-            <p className="text-sm text-gray-500">No hay productos cargados en el menú.</p>
+            <p className="text-sm text-muted-foreground">No hay productos cargados en el menú.</p>
           ) : (
             <>
               <div className="overflow-x-auto whitespace-nowrap pb-3 mb-2">
@@ -247,8 +247,8 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
                       onClick={() => setActiveCategory(cat.id)}
                       className={`px-4 py-2 rounded-full font-medium text-sm transition-colors ${
                         activeCategory === cat.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-primary text-white'
+                          : 'bg-muted text-foreground hover:bg-accent'
                       }`}
                     >
                       {cat.nombre}
@@ -259,22 +259,22 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {activeProducts.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-6">No hay productos en esta categoría.</p>
+                  <p className="text-sm text-muted-foreground py-6">No hay productos en esta categoría.</p>
                 ) : (
                   activeProducts.map((prod) => (
                     <button
                       key={prod.id}
                       onClick={() => openProduct(prod)}
-                      className="text-left bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-300 transition-all flex justify-between items-center"
+                      className="text-left bg-card p-4 rounded-xl border border-border hover:border-primary/40 transition-all flex justify-between items-center"
                     >
                       <div>
-                        <h3 className="font-semibold text-gray-800">{prod.nombre}</h3>
-                        <p className="font-bold text-blue-600 mt-1">
-                          {prod.variantes.length > 0 && <span className="font-normal text-gray-500">desde </span>}
+                        <h3 className="font-semibold text-foreground">{prod.nombre}</h3>
+                        <p className="font-bold text-primary mt-1">
+                          {prod.variantes.length > 0 && <span className="font-normal text-muted-foreground">desde </span>}
                           ${prod.precio.toFixed(2)}
                         </p>
                       </div>
-                      <span className="bg-blue-50 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center shrink-0 ml-3 text-xl">
+                      <span className="bg-accent text-primary rounded-full w-8 h-8 flex items-center justify-center shrink-0 ml-3 text-xl">
                         +
                       </span>
                     </button>
@@ -289,10 +289,10 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
       {/* Modal de carga de producto */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
-          <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-xl">
+          <div className="bg-card w-full max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-xl">
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="font-bold text-xl">{selectedProduct.nombre}</h2>
-              <button onClick={() => setSelectedProduct(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+              <button onClick={() => setSelectedProduct(null)} className="p-2 bg-muted rounded-full hover:bg-accent">
                 ✕
               </button>
             </div>
@@ -304,24 +304,24 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
                   {selectedProduct.variantes.map((v) => (
                     <label
                       key={v.id}
-                      className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                      className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted"
                     >
                       <div className="flex items-center gap-3">
                         <input
                           type="radio"
                           name="variante-staff"
-                          className="w-5 h-5 text-blue-600 focus:ring-blue-500"
+                          className="w-5 h-5 text-primary focus:ring-ring"
                           checked={selectedVarianteId === v.id}
                           onChange={() => setSelectedVarianteId(v.id)}
                         />
                         <span className="font-medium">{v.nombre}</span>
                       </div>
-                      <span className="text-gray-600">${v.precio.toFixed(2)}</span>
+                      <span className="text-muted-foreground">${v.precio.toFixed(2)}</span>
                     </label>
                   ))}
                 </div>
               ) : (
-                <div className="font-medium text-gray-700">Precio base: ${selectedProduct.precio.toFixed(2)}</div>
+                <div className="font-medium text-foreground">Precio base: ${selectedProduct.precio.toFixed(2)}</div>
               )}
 
               {selectedProduct.modificadores.length > 0 && (
@@ -330,18 +330,18 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
                   {selectedProduct.modificadores.map((mod) => (
                     <label
                       key={mod.id}
-                      className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                      className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted"
                     >
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
-                          className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                          className="w-5 h-5 rounded text-primary focus:ring-ring"
                           checked={selectedModIds.includes(mod.id)}
                           onChange={() => toggleMod(mod)}
                         />
                         <span className="font-medium">{mod.nombre}</span>
                       </div>
-                      {mod.precioExtra > 0 && <span className="text-gray-600">+${mod.precioExtra.toFixed(2)}</span>}
+                      {mod.precioExtra > 0 && <span className="text-muted-foreground">+${mod.precioExtra.toFixed(2)}</span>}
                     </label>
                   ))}
                 </div>
@@ -350,24 +350,24 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
               <div className="flex items-center justify-center gap-6 py-2">
                 <button
                   onClick={() => setCantidad(Math.max(1, cantidad - 1))}
-                  className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-2xl hover:bg-gray-200"
+                  className="w-12 h-12 flex items-center justify-center bg-muted rounded-full text-2xl hover:bg-accent"
                 >
                   -
                 </button>
                 <span className="text-2xl font-bold w-8 text-center">{cantidad}</span>
                 <button
                   onClick={() => setCantidad(cantidad + 1)}
-                  className="w-12 h-12 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-2xl hover:bg-blue-200"
+                  className="w-12 h-12 flex items-center justify-center bg-accent text-primary rounded-full text-2xl hover:bg-accent"
                 >
                   +
                 </button>
               </div>
             </div>
 
-            <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
+            <div className="p-4 border-t bg-muted rounded-b-2xl">
               <button
                 onClick={handleAgregar}
-                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors flex justify-between px-6 items-center disabled:bg-blue-400"
+                className="w-full bg-primary text-white font-bold py-4 rounded-xl hover:bg-primary/90 transition-colors flex justify-between px-6 items-center disabled:bg-primary"
               >
                 <span>Agregar al pedido</span>
                 <span>${subtotalModal.toFixed(2)}</span>
@@ -380,46 +380,46 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
       {/* Modal de ítem libre */}
       {freeOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
-          <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col shadow-xl">
+          <div className="bg-card w-full max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col shadow-xl">
             <div className="flex justify-between items-center p-4 border-b">
               <div>
                 <h2 className="font-bold text-xl">Ítem libre</h2>
-                <p className="text-sm text-gray-500">Algo que no está en la carta</p>
+                <p className="text-sm text-muted-foreground">Algo que no está en la carta</p>
               </div>
-              <button onClick={() => setFreeOpen(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+              <button onClick={() => setFreeOpen(false)} className="p-2 bg-muted rounded-full hover:bg-accent">
                 ✕
               </button>
             </div>
 
             <div className="p-4 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                <label className="block text-sm font-semibold text-foreground mb-1">Nombre</label>
                 <input
                   value={freeNombre}
                   onChange={(e) => setFreeNombre(e.target.value)}
                   autoFocus
                   placeholder="Ej. Torta de la abuela"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Precio</label>
+                  <label className="block text-sm font-semibold text-foreground mb-1">Precio</label>
                   <input
                     value={freePrecio}
                     onChange={(e) => setFreePrecio(e.target.value)}
                     inputMode="decimal"
                     placeholder="0,00"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Cantidad</label>
+                  <label className="block text-sm font-semibold text-foreground mb-1">Cantidad</label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setFreeCantidad(Math.max(1, freeCantidad - 1))}
-                      className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg text-xl hover:bg-gray-200"
+                      className="w-10 h-10 flex items-center justify-center bg-muted rounded-lg text-xl hover:bg-accent"
                     >
                       -
                     </button>
@@ -427,21 +427,21 @@ export function MesaPedidoManager({ mesaId, sesionMesaId, categorias, productos,
                     <button
                       type="button"
                       onClick={() => setFreeCantidad(freeCantidad + 1)}
-                      className="w-10 h-10 flex items-center justify-center bg-blue-100 text-blue-600 rounded-lg text-xl hover:bg-blue-200"
+                      className="w-10 h-10 flex items-center justify-center bg-accent text-primary rounded-lg text-xl hover:bg-accent"
                     >
                       +
                     </button>
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-gray-500">Se suma solo a esta venta. No se guarda en la carta.</p>
-              {freeError && <p className="text-sm text-red-600 font-medium">{freeError}</p>}
+              <p className="text-xs text-muted-foreground">Se suma solo a esta venta. No se guarda en la carta.</p>
+              {freeError && <p className="text-sm text-destructive font-medium">{freeError}</p>}
             </div>
 
-            <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
+            <div className="p-4 border-t bg-muted rounded-b-2xl">
               <button
                 onClick={handleAgregarLibre}
-                className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors flex justify-between px-6 items-center"
+                className="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-primary/90 transition-colors flex justify-between px-6 items-center"
               >
                 <span>Agregar al pedido</span>
                 <span>${freeSubtotal.toFixed(2)}</span>

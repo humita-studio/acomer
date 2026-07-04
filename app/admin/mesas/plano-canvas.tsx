@@ -215,12 +215,12 @@ export function PlanoCanvas({
   const dibujando = editando && herramienta !== 'seleccionar';
 
   return (
-    <div ref={wrapperRef} className="relative w-full overflow-hidden rounded-lg border border-gray-200">
+    <div ref={wrapperRef} className="relative w-full overflow-hidden rounded-lg border border-border">
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={surfaceRef}
           onPointerDown={onSurfacePointerDown}
-          className="relative bg-white touch-none"
+          className="relative bg-card touch-none"
           style={{
             width: COLS * cell,
             height: ROWS * cell,
@@ -268,7 +268,7 @@ export function PlanoCanvas({
           {/* Vista previa mientras se dibuja */}
           {draft && (
             <div
-              className="absolute bg-blue-400/30 border-2 border-dashed border-blue-500 rounded-sm pointer-events-none"
+              className="absolute bg-primary/30 border-2 border-dashed border-primary rounded-sm pointer-events-none"
               style={{
                 left: draft.posX * cell,
                 top: draft.posY * cell,

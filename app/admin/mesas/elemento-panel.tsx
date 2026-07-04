@@ -16,17 +16,17 @@ export function ElementoPanel({
 }) {
   return (
     <div className="space-y-3">
-      <h3 className="font-bold text-gray-800 capitalize">{elemento.tipo}</h3>
+      <h3 className="font-bold text-foreground capitalize">{elemento.tipo}</h3>
 
       {elemento.tipo === 'barra' && (
         <div>
-          <label className="text-xs font-semibold text-gray-500 uppercase">Etiqueta</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Etiqueta</label>
           <input
             type="text"
             value={elemento.etiqueta ?? ''}
             onChange={(e) => onUpdate({ etiqueta: e.target.value })}
             placeholder="Ej: Barra"
-            className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded-md text-sm bg-white"
+            className="w-full mt-1 px-2 py-1.5 border border-border rounded-md text-sm bg-card"
           />
         </div>
       )}
@@ -48,14 +48,14 @@ export function ElementoPanel({
 
       <button
         onClick={() => onUpdate({ rotacion: (elemento.rotacion + 90) % 360 })}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-gray-200 bg-white hover:bg-gray-100"
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-border bg-card hover:bg-muted"
       >
         <RotateCw size={14} /> Rotar 90°
       </button>
 
       <button
         onClick={onDelete}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-destructive border border-destructive/40 bg-destructive-subtle hover:bg-destructive-subtle"
       >
         <Trash2 size={14} /> Eliminar elemento
       </button>

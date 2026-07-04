@@ -36,24 +36,24 @@ export function OperacionPanel({
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-bold text-gray-800">{mesa.identificador}</h3>
+        <h3 className="font-bold text-foreground">{mesa.identificador}</h3>
         <span
           className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-            mesa.ocupada ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+            mesa.ocupada ? 'bg-warning-subtle text-warning-foreground' : 'bg-success-subtle text-success-foreground'
           }`}
         >
           {mesa.ocupada ? 'Ocupada' : 'Libre'}
         </span>
       </div>
 
-      <p className="flex items-center gap-1 text-xs text-gray-500">
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
         <Users size={12} /> {mesa.capacidad} lugares
       </p>
 
       {mesa.ocupada && canTakeOrders && (
         <Link
           href={`/admin/mesas/${mesa.id}`}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100"
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-primary border border-primary/40 bg-accent hover:bg-accent"
         >
           <ClipboardList size={15} /> Ver / Agregar pedido
         </Link>
@@ -63,7 +63,7 @@ export function OperacionPanel({
         <button
           onClick={onLiberar}
           disabled={liberando}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 disabled:opacity-50"
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-warning-foreground border border-warning/40 bg-warning-subtle hover:bg-warning-subtle disabled:opacity-50"
         >
           <DoorOpen size={15} /> {liberando ? 'Liberando...' : 'Liberar mesa'}
         </button>
@@ -73,14 +73,14 @@ export function OperacionPanel({
         <button
           onClick={onAbrir}
           disabled={abriendo}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-green-700 border border-green-200 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-success-foreground border border-success/40 bg-success-subtle hover:bg-success-subtle disabled:opacity-50"
         >
           <ClipboardList size={15} /> {abriendo ? 'Abriendo...' : 'Abrir mesa y tomar pedido'}
         </button>
       )}
 
       {!mesa.ocupada && (
-        <p className="text-xs text-gray-500 bg-white border border-gray-200 rounded-md p-2">
+        <p className="text-xs text-muted-foreground bg-card border border-border rounded-md p-2">
           También se abre sola cuando el cliente escanea el QR.
         </p>
       )}
@@ -89,7 +89,7 @@ export function OperacionPanel({
       {canManage && !mesa.ocupada && esSubMesa && (
         <button
           onClick={onUnir}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-gray-700 border border-gray-300 bg-white hover:bg-gray-100"
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-md text-sm font-bold text-foreground border border-border bg-card hover:bg-muted"
         >
           <Combine size={15} /> Volver a unir
         </button>
@@ -103,11 +103,11 @@ export function OperacionPanel({
         </button>
       )}
 
-      <div className="pt-2 border-t border-gray-200">
-        <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase mb-1">
+      <div className="pt-2 border-t border-border">
+        <label className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase mb-1">
           <QrCode size={12} /> QR de la comanda
         </label>
-        <div className="bg-white p-2 border border-gray-200 rounded-lg flex justify-center">
+        <div className="bg-card p-2 border border-border rounded-lg flex justify-center">
           <QRCodeSVG value={url} size={148} level="H" />
         </div>
         <input
@@ -119,11 +119,11 @@ export function OperacionPanel({
             navigator.clipboard?.writeText(url);
           }}
           title="Clic para copiar"
-          className="w-full mt-2 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full mt-2 text-xs text-muted-foreground bg-card border border-border rounded px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
-      <button onClick={onClose} className="w-full py-1.5 rounded-md text-sm text-gray-500 hover:bg-gray-100">
+      <button onClick={onClose} className="w-full py-1.5 rounded-md text-sm text-muted-foreground hover:bg-muted">
         Cerrar
       </button>
     </div>

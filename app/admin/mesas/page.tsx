@@ -51,7 +51,7 @@ async function PlanoContent() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Plano del local</h1>
+      <h1 className="text-3xl font-bold text-foreground mb-6">Plano del local</h1>
       <PlanoManager
         ambientes={planoData.ambientes}
         mesas={planoData.mesas}

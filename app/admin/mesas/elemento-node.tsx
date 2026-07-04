@@ -32,17 +32,17 @@ export function ElementoNode({
   let estilo: string;
   switch (elemento.tipo) {
     case 'barra':
-      estilo = 'bg-amber-700/80 border border-amber-900 text-amber-50';
+      estilo = 'bg-warning/80 border border-warning/40 text-warning-subtle';
       break;
     case 'contorno':
-      estilo = 'bg-transparent border-2 border-gray-400';
+      estilo = 'bg-transparent border-2 border-border-strong';
       break;
     case 'decoracion':
-      estilo = 'bg-emerald-200/60 border border-emerald-500';
+      estilo = 'bg-success-subtle/60 border border-success';
       break;
     case 'pared':
     default:
-      estilo = 'bg-gray-500 border border-gray-700';
+      estilo = 'bg-muted-foreground border border-border-strong';
       break;
   }
 
@@ -66,7 +66,7 @@ export function ElementoNode({
         onClick={editando ? onClick : undefined}
         className={`w-full h-full flex items-center justify-center overflow-hidden rounded-sm ${estilo} ${
           puedeArrastrar ? 'cursor-move' : 'cursor-default'
-        } ${seleccionado ? 'ring-2 ring-blue-400' : ''}`}
+        } ${seleccionado ? 'ring-2 ring-ring' : ''}`}
       >
         {elemento.etiqueta && (
           <span className="text-[10px] font-semibold px-1 truncate max-w-full">
@@ -81,7 +81,7 @@ export function ElementoNode({
             e.stopPropagation();
             onResizePointerDown(e);
           }}
-          className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize shadow"
+          className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-primary border-2 border-white rounded-full cursor-nwse-resize shadow"
           title="Redimensionar"
         />
       )}

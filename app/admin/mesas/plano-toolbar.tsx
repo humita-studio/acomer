@@ -67,7 +67,7 @@ export function PlanoToolbar({
                 onClick={() => onCambiarAmbiente(amb.id)}
                 onDoubleClick={() => editando && onRenameAmbiente(amb)}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-                  activo ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  activo ? 'bg-primary text-white' : 'bg-muted text-foreground hover:bg-accent'
                 }`}
                 title={editando ? 'Doble clic para renombrar' : undefined}
               >
@@ -78,7 +78,7 @@ export function PlanoToolbar({
           {editando && (
             <button
               onClick={onAddAmbiente}
-              className="px-2.5 py-1.5 rounded-md text-sm text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 flex items-center gap-1"
+              className="px-2.5 py-1.5 rounded-md text-sm text-primary border border-primary/40 bg-accent hover:bg-accent flex items-center gap-1"
             >
               <Plus size={14} /> Ambiente
             </button>
@@ -91,8 +91,8 @@ export function PlanoToolbar({
               onClick={onToggleMostrarLista}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition border ${
                 mostrarLista
-                  ? 'bg-blue-50 border-blue-200 text-blue-700'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-accent border-primary/40 text-primary'
+                  : 'bg-card border-border text-muted-foreground hover:bg-muted'
               }`}
             >
               <ListIcon size={16} /> Lista
@@ -102,7 +102,7 @@ export function PlanoToolbar({
             <button
               onClick={onToggleModo}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-bold transition ${
-                editando ? 'bg-gray-700 text-white hover:bg-gray-800' : 'bg-blue-600 text-white hover:bg-blue-700'
+                editando ? 'bg-foreground text-white hover:bg-foreground/90' : 'bg-primary text-white hover:bg-primary/90'
               }`}
             >
               {editando ? (
@@ -121,7 +121,7 @@ export function PlanoToolbar({
 
       {/* Barra de herramientas (solo edición) */}
       {editando && (
-        <div className="flex flex-wrap items-center gap-2 mb-4 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-2 bg-muted border border-border rounded-lg">
           <ToolButton active={herramienta === 'seleccionar'} onClick={() => onSetHerramienta('seleccionar')}>
             <MousePointer2 size={14} /> Mover
           </ToolButton>
@@ -134,28 +134,28 @@ export function PlanoToolbar({
           <ToolButton active={herramienta === 'barra'} onClick={() => onSetHerramienta('barra')}>
             <Square size={14} /> Barra
           </ToolButton>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
+          <div className="w-px h-6 bg-muted mx-1" />
           <button
             onClick={onAddMesa}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-green-700 border border-green-200 bg-green-50 hover:bg-green-100"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-success-foreground border border-success/40 bg-success-subtle hover:bg-success-subtle"
           >
             <Plus size={14} /> Mesa
           </button>
           {ambienteActivo && ambientes.length > 1 && (
             <button
               onClick={() => onDeleteAmbiente(ambienteActivo)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-destructive border border-destructive/40 bg-destructive-subtle hover:bg-destructive-subtle"
               title="Eliminar el ambiente actual"
             >
               <Trash2 size={14} /> Ambiente
             </button>
           )}
           <div className="flex-1" />
-          {dirty && <span className="text-xs text-amber-600 font-medium">Cambios sin guardar</span>}
+          {dirty && <span className="text-xs text-warning-foreground font-medium">Cambios sin guardar</span>}
           <button
             onClick={onGuardar}
             disabled={!dirty || guardando}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-40"
           >
             <Save size={15} /> {guardando ? 'Guardando...' : 'Guardar cambios'}
           </button>
@@ -178,7 +178,7 @@ function ToolButton({
     <button
       onClick={onClick}
       className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition ${
-        active ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
+        active ? 'bg-primary text-white' : 'bg-card border border-border text-foreground hover:bg-muted'
       }`}
     >
       {children}

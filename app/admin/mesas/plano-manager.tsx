@@ -156,7 +156,7 @@ export function PlanoManager({
   const mostrarPanel = editando ? !!(selMesa || selElemento) : !!selMesa;
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+    <div className="bg-card rounded-lg shadow p-4 sm:p-6">
       {acciones.confirmDialog}
       {acciones.promptDialog}
       {salidaDialog}
@@ -166,12 +166,12 @@ export function PlanoManager({
           {avisos.map((a) => (
             <div
               key={a.id}
-              className="flex justify-between items-center bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-lg text-sm font-medium"
+              className="flex justify-between items-center bg-warning-subtle border border-warning/40 text-warning-foreground px-4 py-2 rounded-lg text-sm font-medium"
             >
               <span>{a.texto}</span>
               <button
                 onClick={() => removeAviso(a.id)}
-                className="text-amber-500 hover:text-amber-700 ml-3"
+                className="text-warning-foreground/60 hover:text-warning-foreground ml-3"
               >
                 ✕
               </button>
@@ -217,12 +217,12 @@ export function PlanoManager({
               onCreateElemento={acciones.handleCreateElemento}
             />
           ) : (
-            <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg text-gray-500">
+            <div className="text-center py-12 border-2 border-dashed border-border rounded-lg text-muted-foreground">
               No hay ambientes. {canManage && 'Creá uno para empezar.'}
             </div>
           )}
           {!editando && (
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="mt-2 text-xs text-muted-foreground">
               Verde = libre · Naranja = ocupada · Tocá una mesa para ver su pedido, QR o liberarla.
             </p>
           )}
@@ -230,7 +230,7 @@ export function PlanoManager({
 
         {/* Panel lateral */}
         {mostrarPanel && (
-          <div className="lg:w-72 shrink-0 border border-gray-200 rounded-lg p-4 bg-gray-50 h-fit">
+          <div className="lg:w-72 shrink-0 border border-border rounded-lg p-4 bg-muted h-fit">
             {editando && selMesa && (
               <MesaPanel
                 mesa={selMesa}

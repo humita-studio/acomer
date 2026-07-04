@@ -70,10 +70,10 @@ async function MesaDetalleContent({ mesaId }: { mesaId: string }) {
   return (
     <div>
       <div className="mb-6">
-        <Link href="/admin/mesas" className="text-sm text-blue-600 hover:underline">
+        <Link href="/admin/mesas" className="text-sm text-primary hover:underline">
           ← Volver a Mesas
         </Link>
-        <h1 className="text-3xl font-bold text-gray-800 mt-1">{mesa.identificador}</h1>
+        <h1 className="text-3xl font-bold text-foreground mt-1">{mesa.identificador}</h1>
       </div>
 
       {!sesion ? (

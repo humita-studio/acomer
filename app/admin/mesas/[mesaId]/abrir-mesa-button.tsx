@@ -26,20 +26,20 @@ export function AbrirMesaButton({ mesaId }: { mesaId: string }) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-8 text-center">
-      <p className="text-gray-500 mb-5">
+    <div className="bg-card rounded-lg shadow p-8 text-center">
+      <p className="text-muted-foreground mb-5">
         Esta mesa no tiene una sesión activa. Podés abrirla vos para tomar el pedido, o se abre
         sola cuando un comensal escanea el QR.
       </p>
       <button
         onClick={handleAbrir}
         disabled={loading}
-        className="bg-green-600 text-white font-bold px-6 py-3 rounded-md hover:bg-green-700 transition disabled:opacity-50"
+        className="bg-success text-white font-bold px-6 py-3 rounded-md hover:bg-success/90 transition disabled:opacity-50"
       >
         {loading ? 'Abriendo...' : 'Abrir mesa y tomar pedido'}
       </button>
       {error && (
-        <div className="bg-red-50 text-red-600 p-3 rounded-lg mt-4 text-sm font-medium">{error}</div>
+        <div className="bg-destructive-subtle text-destructive p-3 rounded-lg mt-4 text-sm font-medium">{error}</div>
       )}
     </div>
   );

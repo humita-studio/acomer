@@ -36,16 +36,16 @@ export function MesaNode({
   let estilo: string;
   if (editando) {
     estilo = seleccionada
-      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-300'
-      : 'border-gray-400 bg-white';
+      ? 'border-primary bg-accent ring-2 ring-ring'
+      : 'border-border-strong bg-card';
   } else if (seleccionada) {
     estilo = ocupada
-      ? 'border-orange-500 bg-orange-100 ring-2 ring-orange-300'
-      : 'border-green-500 bg-green-100 ring-2 ring-green-300';
+      ? 'border-warning bg-warning-subtle ring-2 ring-warning/50'
+      : 'border-success bg-success-subtle ring-2 ring-success/50';
   } else if (ocupada) {
-    estilo = 'border-orange-400 bg-orange-50 hover:bg-orange-100';
+    estilo = 'border-warning bg-warning-subtle hover:bg-warning-subtle';
   } else {
-    estilo = 'border-green-400 bg-green-50 hover:bg-green-100';
+    estilo = 'border-success bg-success-subtle hover:bg-success-subtle';
   }
 
   // Durante el arrastre, dnd-kit nos da un translate en px de pantalla; como el
@@ -73,17 +73,17 @@ export function MesaNode({
         } ${puedeArrastrar ? 'cursor-move' : 'cursor-pointer'}`}
         title={mesa.identificador}
       >
-        <span className="text-[11px] font-bold text-gray-800 leading-tight px-1 text-center truncate max-w-full">
+        <span className="text-[11px] font-bold text-foreground leading-tight px-1 text-center truncate max-w-full">
           {mesa.identificador}
         </span>
-        <span className="flex items-center gap-0.5 text-[10px] text-gray-500">
+        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
           <Users size={10} />
           {mesa.capacidad}
         </span>
         {!editando && (
           <span
             className={`mt-0.5 text-[8px] font-bold uppercase tracking-wide ${
-              ocupada ? 'text-orange-600' : 'text-green-600'
+              ocupada ? 'text-warning-foreground' : 'text-success-foreground'
             }`}
           >
             {ocupada ? 'Ocupada' : 'Libre'}
@@ -98,7 +98,7 @@ export function MesaNode({
             e.stopPropagation();
             onResizePointerDown(e);
           }}
-          className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize shadow"
+          className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-primary border-2 border-white rounded-full cursor-nwse-resize shadow"
           title="Redimensionar"
         />
       )}
