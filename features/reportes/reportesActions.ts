@@ -30,7 +30,6 @@ const TZ = 'America/Argentina/Buenos_Aires';
  * Las fronteras se calculan en horario de Buenos Aires.
  */
 export async function getReporteAction(
-  tenantId: string,
   desde: string,
   hasta: string
 ): Promise<ReporteData> {
@@ -38,7 +37,7 @@ export async function getReporteAction(
   if (!session || !hasPermission(session.role, 'canViewReports')) {
     return REPORTE_VACIO;
   }
-  tenantId = session.restauranteId;
+  const tenantId = session.restauranteId;
   try {
     // Render the timezone as a literal, not a bind param: Drizzle would emit a
     // fresh parameter ($1, $7, $8…) for each ${TZ} interpolation, and Postgres

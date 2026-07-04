@@ -7,14 +7,14 @@ import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
 import type { TransaccionCobro } from './types';
 
-// El `tenantId` que llega del cliente NUNCA es de confianza: el restaurante se
-// deriva de la sesión y, además, todo el trabajo de base corre bajo `withTenant`
-// (RLS activo), de modo que la propia base impide leer o tocar filas de otro
-// restaurante aunque la capa de aplicación tuviera un bug.
-export async function getTransaccionesPendientesAction(tenantId?: string): Promise<TransaccionCobro[]> {
+// El restaurante se deriva siempre de la sesión (nunca del cliente) y todo el
+// trabajo de base corre bajo `withTenant` (RLS activo), de modo que la propia
+// base impide leer o tocar filas de otro restaurante aunque la capa de
+// aplicación tuviera un bug.
+export async function getTransaccionesPendientesAction(): Promise<TransaccionCobro[]> {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canProcessPayments')) return [];
-    tenantId = session.restauranteId;
+    const tenantId = session.restauranteId;
     try {
         return await withTenant(claimsFromSession(session), async (db) => {
             const txs = await db.query.transaccionesPago.findMany({
@@ -48,10 +48,10 @@ export async function getTransaccionesPendientesAction(tenantId?: string): Promi
 }
 
 /** Devuelve las transacciones del día agrupables por estado (Pendiente, Aprobado, Rechazado). */
-export async function getTransaccionesTableroAction(tenantId?: string): Promise<TransaccionCobro[]> {
+export async function getTransaccionesTableroAction(): Promise<TransaccionCobro[]> {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canProcessPayments')) return [];
-    tenantId = session.restauranteId;
+    const tenantId = session.restauranteId;
     try {
         return await withTenant(claimsFromSession(session), async (db) => {
             const txs = await db.query.transaccionesPago.findMany({
@@ -92,14 +92,13 @@ type AprobarOpts = {
 
 export async function aprobarPagoPresencialAction(
     transactionId: string,
-    tenantId?: string,
     opts: AprobarOpts = {}
 ) {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canProcessPayments')) {
         return { success: false, message: 'No autorizado' };
     }
-    tenantId = session.restauranteId;
+    const tenantId = session.restauranteId;
     try {
         return await withTenant(claimsFromSession(session), async (db) => {
             const tx = await db.query.transaccionesPago.findFirst({
@@ -144,12 +143,12 @@ export async function aprobarPagoPresencialAction(
     }
 }
 
-export async function rechazarPagoPresencialAction(transactionId: string, tenantId?: string) {
+export async function rechazarPagoPresencialAction(transactionId: string) {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canProcessPayments')) {
         return { success: false, message: 'No autorizado' };
     }
-    tenantId = session.restauranteId;
+    const tenantId = session.restauranteId;
     try {
         return await withTenant(claimsFromSession(session), async (db) => {
             const tx = await db.query.transaccionesPago.findFirst({

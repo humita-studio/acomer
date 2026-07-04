@@ -18,7 +18,7 @@ export function useReporte(
 ) {
   return useQuery({
     queryKey: queryKeys.reportes(tenantId, desde, hasta),
-    queryFn: () => getReporteAction(tenantId, desde, hasta),
+    queryFn: () => getReporteAction(desde, hasta),
     initialData: desde === initial.desde && hasta === initial.hasta ? initial.data : undefined,
     placeholderData: keepPreviousData,
   });

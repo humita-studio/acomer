@@ -43,7 +43,7 @@ async function DashboardContent() {
   const session = await getCurrentSession();
 
   const metrics = session
-    ? await getDashboardMetricsAction(session.restauranteId)
+    ? await getDashboardMetricsAction()
     : null;
 
   const ahora = new Date();

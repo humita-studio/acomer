@@ -37,7 +37,7 @@ async function CobrosContent() {
     redirect('/unauthorized');
   }
 
-  const initialTransacciones = await getTransaccionesTableroAction(session.restauranteId);
+  const initialTransacciones = await getTransaccionesTableroAction();
 
   return (
     <CobrosManager

@@ -63,7 +63,7 @@ async function ReportesContent() {
   const hoy = fechaBA(ahora);
   const desde = fechaBA(new Date(ahora.getTime() - 6 * 24 * 60 * 60 * 1000));
 
-  const initialData = await getReporteAction(session.restauranteId, desde, hoy);
+  const initialData = await getReporteAction(desde, hoy);
 
   return (
     <ReportesManager

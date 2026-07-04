@@ -11,7 +11,7 @@ import type { DashboardMetrics, Periodo } from '../types';
 export function useDashboardMetrics(tenantId: string, periodo: Periodo, initial: DashboardMetrics) {
   return useQuery({
     queryKey: [...queryKeys.dashboard(tenantId), periodo],
-    queryFn: () => getDashboardMetricsAction(tenantId, periodo),
+    queryFn: () => getDashboardMetricsAction(periodo),
     initialData: periodo === initial.periodo ? initial : undefined,
     placeholderData: (prev) => prev,
     refetchInterval: 30 * 1000,

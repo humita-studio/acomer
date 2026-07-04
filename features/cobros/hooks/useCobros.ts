@@ -16,7 +16,7 @@ import type { TransaccionCobro } from '../types';
 export function useCobrosTablero(tenantId: string, initial: TransaccionCobro[]) {
   return useQuery({
     queryKey: queryKeys.cobros(tenantId),
-    queryFn: () => getTransaccionesTableroAction(tenantId),
+    queryFn: () => getTransaccionesTableroAction(),
     initialData: initial,
   });
 }
@@ -75,7 +75,7 @@ export function useAprobarCobro(tenantId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, montoRecibido }: AprobarVars) =>
-      aprobarPagoPresencialAction(id, tenantId, { montoRecibido }),
+      aprobarPagoPresencialAction(id, { montoRecibido }),
     onMutate: ({ id }) => moverCobroOptimista(queryClient, tenantId, id, 'Aprobado'),
     onError: (_err, _vars, context) => {
       revertirCobros(queryClient, tenantId, context);
@@ -98,7 +98,7 @@ export function useAprobarCobro(tenantId: string) {
 export function useRechazarCobro(tenantId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => rechazarPagoPresencialAction(id, tenantId),
+    mutationFn: (id: string) => rechazarPagoPresencialAction(id),
     onMutate: (id) => moverCobroOptimista(queryClient, tenantId, id, 'Rechazado'),
     onError: (_err, _vars, context) => {
       revertirCobros(queryClient, tenantId, context);

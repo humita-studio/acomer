@@ -134,13 +134,12 @@ function construirSerie(
 }
 
 export async function getDashboardMetricsAction(
-  tenantId: string,
   periodo: Periodo = 'hoy'
 ): Promise<DashboardMetrics> {
-  // El tenant se toma de la sesión, nunca del parámetro del cliente.
+  // El tenant se toma de la sesión, nunca del cliente.
   const session = await getCurrentSession();
   if (!session) return metricasVacias(periodo);
-  tenantId = session.restauranteId;
+  const tenantId = session.restauranteId;
 
   const { inicio, prevInicio, prevCorte, modo, dias } = ventanaPeriodo(periodo);
 
