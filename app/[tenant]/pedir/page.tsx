@@ -98,7 +98,9 @@ export default async function PedirPage({
     ]);
     return (
       <main className="min-h-screen bg-muted/30">
-        <header className="bg-background p-4 border-b text-center sticky top-0 z-20 shadow-sm">
+        {/* Header no-sticky: las categorías del menú ya son sticky en MenuView.
+            Si ambos son sticky top-0, el título tapa los tabs al scrollear. */}
+        <header className="bg-background p-4 border-b text-center shadow-sm">
           <h1 className="font-bold text-xl">Hacé tu pedido</h1>
           <p className="text-sm text-muted-foreground">Elegí del menú y, al terminar, cómo lo querés recibir</p>
         </header>
@@ -197,7 +199,7 @@ export default async function PedirPage({
     <main className="min-h-screen bg-muted/30">
       <RealtimeMesaSync sesionMesaId={sesionId} tenantId={tenantId} />
 
-      <header className="bg-background p-4 border-b text-center sticky top-0 z-20 shadow-sm">
+      <header className="relative bg-background p-4 border-b text-center shadow-sm">
         {modoAgregar && (
           <Link
             href={`/pedir?sesion=${sesionId}`}

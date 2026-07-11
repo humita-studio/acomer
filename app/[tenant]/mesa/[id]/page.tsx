@@ -111,7 +111,8 @@ export default async function ComandaPage({
         tenantId={tenantId}
       />
 
-      <header className="bg-background p-4 border-b text-center sticky top-0 z-20 shadow-sm">
+      {/* No sticky: MenuView ya fija las categorías. Dos sticky top-0 se pisan. */}
+      <header className="bg-background p-4 border-b text-center shadow-sm">
         <h1 className="font-bold text-xl">Mesa {mesaIdentificador}</h1>
         <p className="text-sm text-muted-foreground">Sesión Compartida • Todos ven el mismo pedido</p>
       </header>

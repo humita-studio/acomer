@@ -81,7 +81,9 @@ export function MenuView({
 
     return (
         <div className="pb-24 max-w-2xl mx-auto w-full relative min-h-screen bg-muted/30">
-            {/* Category Tabs & Actions */}
+            {/* Sólo tabs/acciones van sticky. La lista de productos queda afuera:
+                si el sticky envuelve todo el catálogo (cientos de ítems), supera el
+                viewport y el sticky deja de funcionar — las categorías se van al scrollear. */}
             <div className="sticky top-0 z-10 bg-background border-b shadow-sm">
                 {showQuickActions && (
                     <div className="p-4 flex justify-between items-center bg-muted/40 border-b">
@@ -148,61 +150,61 @@ export function MenuView({
                         </div>
                     </div>
                 )}
-
-                {/* Product List */}
-                <div className="p-4 space-y-3">
-                    {activeProducts.length === 0 ? (
-                        <p className="text-center text-muted-foreground py-10">No hay productos en esta categoría.</p>
-                    ) : (
-                        activeProducts.map((prod) => (
-                            <button
-                                key={prod.id}
-                                type="button"
-                                onClick={() => setSelectedProduct(prod)}
-                                className="w-full text-left bg-card text-card-foreground p-4 rounded-xl shadow-sm border cursor-pointer hover:border-primary/40 hover:shadow-md transition-all flex justify-between items-center gap-4"
-                            >
-                                <div>
-                                    <h3 className="font-semibold text-lg">{prod.nombre}</h3>
-                                    {prod.descripcion && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{prod.descripcion}</p>}
-                                    <p className="font-bold mt-2 tabular-nums">
-                                        {prod.variantes.length > 0 && <span className="font-normal text-muted-foreground">desde </span>}
-                                        ${prod.precio.toFixed(2)}
-                                    </p>
-                                </div>
-                                <div className="bg-primary/10 text-primary p-2 rounded-full shrink-0">
-                                    <Plus className="size-5" />
-                                </div>
-                            </button>
-                        ))
-                    )}
-                </div>
-
-                {/* Product Modal */}
-                {selectedProduct && (
-                    <ProductModal
-                        product={selectedProduct}
-                        cart={cart}
-                        onClose={() => setSelectedProduct(null)}
-                    />
-                )}
-
-                {/* Floating Cart */}
-                <FloatingCart
-                    cart={cart}
-                    pedidosConfirmados={pedidosConfirmados}
-                    confirmLabel={confirmLabel}
-                    onConfirm={onConfirm}
-                    confirming={confirming}
-                    titulo={drawerTitulo}
-                    promoResumen={promoResumen}
-                />
-
-                {/* Modal de pago inyectado por el caller (sólo cuando hay sesión) */}
-                {renderPagoModal?.({
-                    open: showPaymentModal,
-                    onClose: () => setShowPaymentModal(false),
-                })}
             </div>
+
+            {/* Product List */}
+            <div className="p-4 space-y-3">
+                {activeProducts.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-10">No hay productos en esta categoría.</p>
+                ) : (
+                    activeProducts.map((prod) => (
+                        <button
+                            key={prod.id}
+                            type="button"
+                            onClick={() => setSelectedProduct(prod)}
+                            className="w-full text-left bg-card text-card-foreground p-4 rounded-xl shadow-sm border cursor-pointer hover:border-primary/40 hover:shadow-md transition-all flex justify-between items-center gap-4"
+                        >
+                            <div>
+                                <h3 className="font-semibold text-lg">{prod.nombre}</h3>
+                                {prod.descripcion && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{prod.descripcion}</p>}
+                                <p className="font-bold mt-2 tabular-nums">
+                                    {prod.variantes.length > 0 && <span className="font-normal text-muted-foreground">desde </span>}
+                                    ${Number(prod.precio).toFixed(2)}
+                                </p>
+                            </div>
+                            <div className="bg-primary/10 text-primary p-2 rounded-full shrink-0">
+                                <Plus className="size-5" />
+                            </div>
+                        </button>
+                    ))
+                )}
+            </div>
+
+            {/* Product Modal */}
+            {selectedProduct && (
+                <ProductModal
+                    product={selectedProduct}
+                    cart={cart}
+                    onClose={() => setSelectedProduct(null)}
+                />
+            )}
+
+            {/* Floating Cart */}
+            <FloatingCart
+                cart={cart}
+                pedidosConfirmados={pedidosConfirmados}
+                confirmLabel={confirmLabel}
+                onConfirm={onConfirm}
+                confirming={confirming}
+                titulo={drawerTitulo}
+                promoResumen={promoResumen}
+            />
+
+            {/* Modal de pago inyectado por el caller (sólo cuando hay sesión) */}
+            {renderPagoModal?.({
+                open: showPaymentModal,
+                onClose: () => setShowPaymentModal(false),
+            })}
         </div>
     );
 }
