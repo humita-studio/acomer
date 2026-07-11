@@ -5,10 +5,10 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/shared/ui/sideb
 import { Separator } from '@/shared/ui/separator';
 import { ModeToggle } from '@/shared/ui/mode-toggle';
 import { Input } from '@/shared/ui/input';
-import { Button } from '@/shared/ui/button';
-import { Bell, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
+import { StaffNotifications } from '@/features/notificaciones/components/StaffNotifications';
 
 export default async function AdminLayout({
     children,
@@ -49,10 +49,7 @@ export default async function AdminLayout({
                         <Input placeholder="Buscar pedidos, mesas…" className="pl-9" aria-label="Buscar" />
                     </div>
 
-                    {/* Notificaciones */}
-                    <Button variant="secondary" size="icon" aria-label="Notificaciones">
-                        <Bell />
-                    </Button>
+                    <StaffNotifications tenantId={session.restauranteId} />
 
                     {/* Nueva venta, a la derecha del buscador */}
                     {hasPermission(session.role as RoleType, 'canProcessPayments') && (

@@ -215,18 +215,18 @@ export function PlanoCanvas({
   const dibujando = editando && herramienta !== 'seleccionar';
 
   return (
-    <div ref={wrapperRef} className="relative w-full overflow-hidden rounded-lg border border-gray-200">
+    <div ref={wrapperRef} className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/20">
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={surfaceRef}
           onPointerDown={onSurfacePointerDown}
-          className="relative bg-white touch-none"
+          className="relative touch-none bg-card"
           style={{
             width: COLS * cell,
             height: ROWS * cell,
             // Grilla tenue, sólo como guía mientras se edita
             backgroundImage: editando
-              ? 'linear-gradient(to right, #f1f5f9 1px, transparent 1px), linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)'
+              ? 'linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)'
               : undefined,
             backgroundSize: editando ? `${cell}px ${cell}px` : undefined,
             cursor: dibujando ? 'crosshair' : 'default',

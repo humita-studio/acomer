@@ -2,6 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { Users } from 'lucide-react';
+import { cn } from '@/shared/lib/utils';
 import { type MesaPlano, type Modo } from './plano-types';
 
 export function MesaNode({
@@ -32,24 +33,19 @@ export function MesaNode({
     data: { kind: 'mesa', posX: mesa.posX, posY: mesa.posY, ancho: mesa.ancho, alto: mesa.alto },
   });
 
-  // Colores: en modo operación reflejan ocupación; en edición, neutro
-  let estilo: string;
-  if (editando) {
-    estilo = seleccionada
-      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-300'
-      : 'border-gray-400 bg-white';
-  } else if (seleccionada) {
-    estilo = ocupada
-      ? 'border-orange-500 bg-orange-100 ring-2 ring-orange-300'
-      : 'border-green-500 bg-green-100 ring-2 ring-green-300';
-  } else if (ocupada) {
-    estilo = 'border-orange-400 bg-orange-50 hover:bg-orange-100';
-  } else {
-    estilo = 'border-green-400 bg-green-50 hover:bg-green-100';
-  }
+  // Colores del Figma: ocupada = terracota, libre = verde, edición = neutro.
+  const estilo = editando
+    ? seleccionada
+      ? 'border-primary bg-accent ring-2 ring-primary/30 text-foreground'
+      : 'border-border-strong bg-card text-foreground hover:border-primary/40'
+    : ocupada
+      ? seleccionada
+        ? 'border-primary bg-accent ring-2 ring-primary/35 text-primary'
+        : 'border-primary/50 bg-accent text-primary hover:bg-accent/80'
+      : seleccionada
+        ? 'border-success bg-success-subtle ring-2 ring-success/30 text-success-foreground'
+        : 'border-success/45 bg-success-subtle text-success-foreground hover:bg-success-subtle/80';
 
-  // Durante el arrastre, dnd-kit nos da un translate en px de pantalla; como el
-  // lienzo ya no usa scale CSS, esos px coinciden 1:1 con el lienzo.
   const translate = transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) ` : '';
 
   return (
@@ -68,37 +64,30 @@ export function MesaNode({
       <div
         {...(puedeArrastrar ? { ...listeners, ...attributes } : {})}
         onClick={onClick}
-        className={`w-full h-full border-2 shadow-sm flex flex-col items-center justify-center overflow-hidden transition-colors ${estilo} ${
-          esRedonda ? 'rounded-full' : 'rounded-lg'
-        } ${puedeArrastrar ? 'cursor-move' : 'cursor-pointer'}`}
-        title={mesa.identificador}
+        className={cn(
+          'flex h-full w-full flex-col items-center justify-center overflow-hidden border-2 shadow-sm transition-colors',
+          esRedonda ? 'rounded-full' : 'rounded-xl',
+          puedeArrastrar ? 'cursor-move' : 'cursor-pointer',
+          estilo,
+        )}
+        title={`${mesa.identificador} · ${ocupada ? 'Ocupada' : 'Libre'}`}
       >
-        <span className="text-[11px] font-bold text-gray-800 leading-tight px-1 text-center truncate max-w-full">
+        <span className="max-w-full truncate px-1 text-center text-sm font-semibold leading-tight">
           {mesa.identificador}
         </span>
-        <span className="flex items-center gap-0.5 text-[10px] text-gray-500">
-          <Users size={10} />
+        <span className="mt-0.5 flex items-center gap-0.5 text-[11px] opacity-80">
+          <Users size={11} />
           {mesa.capacidad}
         </span>
-        {!editando && (
-          <span
-            className={`mt-0.5 text-[8px] font-bold uppercase tracking-wide ${
-              ocupada ? 'text-orange-600' : 'text-green-600'
-            }`}
-          >
-            {ocupada ? 'Ocupada' : 'Libre'}
-          </span>
-        )}
       </div>
 
-      {/* Tirador de redimensionar (solo seleccionada en edición) */}
       {editando && seleccionada && onResizePointerDown && (
         <div
           onPointerDown={(e) => {
             e.stopPropagation();
             onResizePointerDown(e);
           }}
-          className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize shadow"
+          className="absolute -right-1.5 -bottom-1.5 size-3.5 cursor-nwse-resize rounded-full border-2 border-card bg-primary shadow"
           title="Redimensionar"
         />
       )}

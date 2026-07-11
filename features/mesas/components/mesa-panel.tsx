@@ -1,6 +1,8 @@
 'use client';
 
 import { Circle, RotateCw, Square, Trash2 } from 'lucide-react';
+import { Button } from '@/shared/ui/button';
+import { cn } from '@/shared/lib/utils';
 import { Stepper } from './plano-stepper';
 import { type AmbienteUI, type MesaPlano } from './plano-types';
 
@@ -17,25 +19,42 @@ export function MesaPanel({
   onDelete: () => void;
 }) {
   return (
-    <div className="space-y-3">
-      <h3 className="font-bold text-gray-800">{mesa.identificador}</h3>
+    <div className="space-y-4">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Propiedades
+        </p>
+        <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
+          {mesa.identificador}
+        </h3>
+      </div>
 
       <div>
-        <label className="text-xs font-semibold text-gray-500 uppercase">Forma</label>
-        <div className="flex gap-2 mt-1">
+        <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Forma
+        </label>
+        <div className="mt-1.5 flex gap-2">
           <button
+            type="button"
             onClick={() => onUpdate({ forma: 'cuadrada' })}
-            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-sm border ${
-              mesa.forma !== 'redonda' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200'
-            }`}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-sm font-medium transition',
+              mesa.forma !== 'redonda'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-secondary-foreground hover:bg-muted',
+            )}
           >
             <Square size={14} /> Cuadrada
           </button>
           <button
+            type="button"
             onClick={() => onUpdate({ forma: 'redonda' })}
-            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-sm border ${
-              mesa.forma === 'redonda' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200'
-            }`}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-sm font-medium transition',
+              mesa.forma === 'redonda'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-secondary-foreground hover:bg-muted',
+            )}
           >
             <Circle size={14} /> Redonda
           </button>
@@ -64,19 +83,24 @@ export function MesaPanel({
         />
       </div>
 
-      <button
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
         onClick={() => onUpdate({ rotacion: (mesa.rotacion + 90) % 360 })}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-gray-200 bg-white hover:bg-gray-100"
       >
-        <RotateCw size={14} /> Rotar 90°
-      </button>
+        <RotateCw />
+        Rotar 90°
+      </Button>
 
       <div>
-        <label className="text-xs font-semibold text-gray-500 uppercase">Ambiente</label>
+        <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Ambiente
+        </label>
         <select
           value={mesa.ambienteId ?? ''}
           onChange={(e) => onUpdate({ ambienteId: e.target.value })}
-          className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded-md text-sm bg-white"
+          className="mt-1.5 w-full rounded-md border border-border bg-card px-2.5 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
         >
           {ambientes.map((a) => (
             <option key={a.id} value={a.id}>
@@ -86,12 +110,10 @@ export function MesaPanel({
         </select>
       </div>
 
-      <button
-        onClick={onDelete}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
-      >
-        <Trash2 size={14} /> Eliminar mesa
-      </button>
+      <Button type="button" variant="destructive" className="w-full" onClick={onDelete}>
+        <Trash2 />
+        Eliminar mesa
+      </Button>
     </div>
   );
 }

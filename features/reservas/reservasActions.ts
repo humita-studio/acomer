@@ -196,10 +196,19 @@ type DatosReserva = {
 /** Flujo público: crea una reserva en estado Pendiente. */
 export async function crearReservaAction(tenantSlug: string, datos: DatosReserva) {
   try {
+    if (!tenantSlug?.trim() || tenantSlug.length > 64) {
+      return { success: false, message: 'Restaurante inválido' };
+    }
     const tenantId = await getTenantBySlug(tenantSlug);
     if (!tenantId) return { success: false, message: 'Restaurante no encontrado' };
     if (!datos.nombreContacto?.trim() || !datos.telefono?.trim()) {
       return { success: false, message: 'Nombre y teléfono son obligatorios' };
+    }
+    if (datos.nombreContacto.trim().length > 120 || datos.telefono.trim().length > 40) {
+      return { success: false, message: 'Datos de contacto inválidos' };
+    }
+    if (datos.personas > 50) {
+      return { success: false, message: 'Cantidad de personas inválida' };
     }
     const inicio = new Date(datos.inicioISO);
     if (Number.isNaN(inicio.getTime())) return { success: false, message: 'Fecha inválida' };

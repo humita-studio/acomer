@@ -35,6 +35,7 @@ import {
   useDetalleCierre,
 } from '@/features/caja/hooks/useCaja';
 import type { CajaActual, CajaCerrada, TipoMovimiento } from '@/features/caja/types';
+import { CajaHistorial } from '@/features/caja/components/CajaHistorial';
 
 const TIPO_LABEL: Record<TipoMovimiento, string> = {
   ingreso: 'Ingreso',
@@ -99,7 +100,7 @@ export function CajaManager({
         <AbrirCajaCard tenantId={tenantId} />
       )}
 
-      <HistorialCierres historial={historial} onSelect={setDetalleId} />
+      <CajaHistorial historial={historial} onSelect={setDetalleId} />
 
       {caja && (
         <CerrarCajaDialog
@@ -290,68 +291,6 @@ function AbrirCajaCard({ tenantId }: { tenantId: string }) {
             {abrirMutation.isPending ? 'Abriendo…' : 'Abrir caja'}
           </Button>
         </form>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* ------------------------------ Historial ------------------------------ */
-
-function HistorialCierres({
-  historial,
-  onSelect,
-}: {
-  historial: CajaCerrada[];
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Historial de cierres</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {historial.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay cierres registrados.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <Th>Cierre</Th>
-                <Th align="right">Inicial</Th>
-                <Th align="right">Esperado</Th>
-                <Th align="right">Contado</Th>
-                <Th align="right">Diferencia</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {historial.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => onSelect(c.id)}
-                  className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/50"
-                >
-                  <td className="py-3 font-medium">
-                    {c.cerradaAt
-                      ? `${formatFechaCorta(c.cerradaAt)} · ${formatHora(c.cerradaAt)}`
-                      : '—'}
-                  </td>
-                  <td className="py-3 text-right text-muted-foreground">
-                    {formatPeso(c.montoInicial)}
-                  </td>
-                  <td className="py-3 text-right text-muted-foreground">
-                    {formatPeso(c.montoEsperado)}
-                  </td>
-                  <td className="py-3 text-right text-muted-foreground">
-                    {formatPeso(c.montoFinalContado)}
-                  </td>
-                  <td className="py-3 text-right">
-                    <DiferenciaText valor={c.diferencia} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </CardContent>
     </Card>
   );

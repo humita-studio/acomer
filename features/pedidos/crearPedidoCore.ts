@@ -36,10 +36,8 @@ export type StaffItemInput = {
   precioLibre?: number;
 };
 
-/** Un ítem libre no referencia un producto: trae nombre + precio propios. */
-export function esItemLibre(i: StaffItemInput): boolean {
-  return !i.productoId && typeof i.nombreLibre === 'string' && i.nombreLibre.trim().length > 0;
-}
+import { esItemLibre } from './item-libre';
+export { esItemLibre };
 
 /**
  * Resuelve nombre, precio unitario y variante de una línea de producto de carta,

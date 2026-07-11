@@ -24,6 +24,8 @@ export type AgregarItemsStaffVars = {
   items: StaffItemInput[];
   /** Items ya armados para el update optimista (con snapshot de nombre/precio). */
   optimisticItems: TicketItem[];
+  /** Nota para cocina del pedido (Figma: “Nota para cocina”). */
+  notas?: string | null;
 };
 
 export function useAgregarItemsStaff(sesionMesaId: string) {
@@ -32,7 +34,7 @@ export function useAgregarItemsStaff(sesionMesaId: string) {
 
   return useMutation({
     mutationFn: async (vars: AgregarItemsStaffVars) => {
-      const res = await agregarItemsStaffAction(sesionMesaId, vars.items);
+      const res = await agregarItemsStaffAction(sesionMesaId, vars.items, vars.notas);
       if (!res.success) throw new Error(res.message);
       return res;
     },

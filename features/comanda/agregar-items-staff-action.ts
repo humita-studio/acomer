@@ -21,6 +21,7 @@ export type { StaffItemInput };
 export async function agregarItemsStaffAction(
   sesionMesaId: string,
   items: StaffItemInput[],
+  notas?: string | null,
 ) {
   try {
     const session = await getCurrentSession();
@@ -41,6 +42,7 @@ export async function agregarItemsStaffAction(
         tenantId,
         sesionMesaId,
         items: itemsValidos,
+        notas: notas?.trim() || null,
       });
 
       // Si hay una cuenta presencial pendiente, actualizar su monto.
@@ -67,13 +69,18 @@ export async function agregarItemsStaffAction(
       return { pedidoId, totalPedido };
     });
 
-    // Avisar al dispositivo del comensal para que refresque su ticket en vivo
+    // Avisar al comensal (ticket) y al panel (cocina / campana).
     try {
       const supabase = await createSupabaseServerClient();
       await supabase.channel(`mesa_${sesionMesaId}`).send({
         type: 'broadcast',
         event: 'ticket_actualizado',
         payload: { sesionMesaId },
+      });
+      await supabase.channel(`admin_restaurant_${session.restauranteId}`).send({
+        type: 'broadcast',
+        event: 'nuevo_pedido',
+        payload: { sesionMesaId, pedidoId: resultado.pedidoId },
       });
     } catch (realtimeError) {
       console.warn('[agregarItemsStaffAction] Error notificando realtime:', realtimeError);

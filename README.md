@@ -39,6 +39,12 @@ bun run lint       # eslint
 | `NEXT_PUBLIC_APP_URL` | URL base de la app (links y webhooks) |
 | `NEXT_PUBLIC_MP_CLIENT_ID` | Client ID de Mercado Pago (OAuth) |
 | `MP_CLIENT_SECRET` | Client secret de Mercado Pago (OAuth) |
+| `MP_WEBHOOK_SECRET` | (Opcional en local) Secret de firma de webhooks MP (`x-signature`) |
+
+```bash
+bun run test       # unit tests (vitest)
+bun run typecheck  # tsc --noEmit
+```
 
 ## Estructura
 

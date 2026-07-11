@@ -1,12 +1,17 @@
 'use server';
 
 import { randomInt } from 'crypto';
-import { db } from '@/shared/db';
 import { perfilesEmpleados } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createSupabaseAdminClient } from '@/shared/supabase/admin';
-import { getCurrentSession } from '@/features/auth/session';
+import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import type { RoleType } from '@/features/authorization/roles';
+import { withTenant } from '@/shared/db/secure-wrapper';
+import {
+  inviteEmployeeSchema,
+  updateEmployeeRoleSchema,
+  perfilIdSchema,
+} from './validation';
 
 export interface InviteEmployeeInput {
   email: string;
@@ -62,10 +67,18 @@ export async function inviteEmployee(
       };
     }
 
+    const parsed = inviteEmployeeSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: parsed.error.issues[0]?.message ?? 'Datos inválidos',
+      };
+    }
+
     // El cliente admin usa la secret key: las operaciones auth.admin requieren
     // privilegios elevados que la publishable key no tiene.
     const supabase = createSupabaseAdminClient();
-    const email = input.email.trim().toLowerCase();
+    const email = parsed.data.email.trim().toLowerCase();
     const tempPassword = generateTempPassword();
 
     // 1. Buscar o crear el usuario en Supabase Auth
@@ -95,16 +108,18 @@ export async function inviteEmployee(
       }
 
       // Verificar si ya tiene un perfil en este restaurante
-      const existingPerfil = await db
-        .select()
-        .from(perfilesEmpleados)
-        .where(
-          and(
-            eq(perfilesEmpleados.userId, existingUser.id),
-            eq(perfilesEmpleados.restauranteId, session.restauranteId)
+      const existingPerfil = await withTenant(claimsFromSession(session), (tx) =>
+        tx
+          .select()
+          .from(perfilesEmpleados)
+          .where(
+            and(
+              eq(perfilesEmpleados.userId, existingUser.id),
+              eq(perfilesEmpleados.restauranteId, session.restauranteId),
+            ),
           )
-        )
-        .limit(1);
+          .limit(1),
+      );
 
       if (existingPerfil[0]) {
         return {
@@ -121,21 +136,21 @@ export async function inviteEmployee(
     }
 
     // 2. Crear el perfil del empleado en la tabla perfiles_empleados
-    await db
-      .insert(perfilesEmpleados)
-      .values({
-        userId: finalUserId,
+    await withTenant(claimsFromSession(session), (tx) =>
+      tx.insert(perfilesEmpleados).values({
+        userId: finalUserId!,
         restauranteId: session.restauranteId,
-        rol: input.rol,
+        rol: parsed.data.rol,
         activo: true,
-      });
+      }),
+    );
 
     // 3. Devolver la contraseña temporal solo si creamos la cuenta. Si el
     // usuario ya existía en Auth, conserva su contraseña y debe usar esa.
     if (createdNewUser) {
       return {
         success: true,
-        message: `${email} fue agregado como ${input.rol}. Entregale la contraseña temporal.`,
+        message: `${email} fue agregado como ${parsed.data.rol}. Entregale la contraseña temporal.`,
         userId: finalUserId,
         tempPassword,
       };
@@ -143,7 +158,7 @@ export async function inviteEmployee(
 
     return {
       success: true,
-      message: `${email} ya tenía cuenta y fue agregado como ${input.rol}. Que ingrese con su contraseña actual.`,
+      message: `${email} ya tenía cuenta y fue agregado como ${parsed.data.rol}. Que ingrese con su contraseña actual.`,
       userId: finalUserId,
     };
   } catch (error) {
@@ -172,27 +187,34 @@ export async function updateEmployeeRole(
       };
     }
 
+    const parsed = updateEmployeeRoleSchema.safeParse({ perfilId, nuevoRol });
+    if (!parsed.success) {
+      return { success: false, message: parsed.error.issues[0]?.message ?? 'Datos inválidos' };
+    }
+
     // Solo owner puede cambiar el rol de admin
-    if (nuevoRol === 'admin' && session.role !== 'owner') {
+    if (parsed.data.nuevoRol === 'admin' && session.role !== 'owner') {
       return {
         success: false,
         message: 'Solo el propietario puede crear administradores',
       };
     }
 
-    await db
-      .update(perfilesEmpleados)
-      .set({ rol: nuevoRol, updatedAt: new Date() })
-      .where(
-        and(
-          eq(perfilesEmpleados.id, perfilId),
-          eq(perfilesEmpleados.restauranteId, session.restauranteId)
-        )
-      );
+    await withTenant(claimsFromSession(session), (tx) =>
+      tx
+        .update(perfilesEmpleados)
+        .set({ rol: parsed.data.nuevoRol, updatedAt: new Date() })
+        .where(
+          and(
+            eq(perfilesEmpleados.id, parsed.data.perfilId),
+            eq(perfilesEmpleados.restauranteId, session.restauranteId),
+          ),
+        ),
+    );
 
     return {
       success: true,
-      message: `Rol actualizado a ${nuevoRol}`,
+      message: `Rol actualizado a ${parsed.data.nuevoRol}`,
     };
   } catch (error) {
     console.error('[updateEmployeeRole] Error:', error);
@@ -219,15 +241,22 @@ export async function deactivateEmployee(
       };
     }
 
-    await db
-      .update(perfilesEmpleados)
-      .set({ activo: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(perfilesEmpleados.id, perfilId),
-          eq(perfilesEmpleados.restauranteId, session.restauranteId)
-        )
-      );
+    const parsed = perfilIdSchema.safeParse({ perfilId });
+    if (!parsed.success) {
+      return { success: false, message: parsed.error.issues[0]?.message ?? 'Datos inválidos' };
+    }
+
+    await withTenant(claimsFromSession(session), (tx) =>
+      tx
+        .update(perfilesEmpleados)
+        .set({ activo: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(perfilesEmpleados.id, parsed.data.perfilId),
+            eq(perfilesEmpleados.restauranteId, session.restauranteId),
+          ),
+        ),
+    );
 
     return {
       success: true,
@@ -258,15 +287,22 @@ export async function activateEmployee(
       };
     }
 
-    await db
-      .update(perfilesEmpleados)
-      .set({ activo: true, updatedAt: new Date() })
-      .where(
-        and(
-          eq(perfilesEmpleados.id, perfilId),
-          eq(perfilesEmpleados.restauranteId, session.restauranteId)
-        )
-      );
+    const parsed = perfilIdSchema.safeParse({ perfilId });
+    if (!parsed.success) {
+      return { success: false, message: parsed.error.issues[0]?.message ?? 'Datos inválidos' };
+    }
+
+    await withTenant(claimsFromSession(session), (tx) =>
+      tx
+        .update(perfilesEmpleados)
+        .set({ activo: true, updatedAt: new Date() })
+        .where(
+          and(
+            eq(perfilesEmpleados.id, parsed.data.perfilId),
+            eq(perfilesEmpleados.restauranteId, session.restauranteId),
+          ),
+        ),
+    );
 
     return {
       success: true,
@@ -303,17 +339,19 @@ export async function listEmployees(): Promise<EmployeeListItem[]> {
       return [];
     }
 
-    const empleados = await db
-      .select({
-        id: perfilesEmpleados.id,
-        userId: perfilesEmpleados.userId,
-        rol: perfilesEmpleados.rol,
-        activo: perfilesEmpleados.activo,
-        createdAt: perfilesEmpleados.createdAt,
-        updatedAt: perfilesEmpleados.updatedAt,
-      })
-      .from(perfilesEmpleados)
-      .where(eq(perfilesEmpleados.restauranteId, session.restauranteId));
+    const empleados = await withTenant(claimsFromSession(session), (tx) =>
+      tx
+        .select({
+          id: perfilesEmpleados.id,
+          userId: perfilesEmpleados.userId,
+          rol: perfilesEmpleados.rol,
+          activo: perfilesEmpleados.activo,
+          createdAt: perfilesEmpleados.createdAt,
+          updatedAt: perfilesEmpleados.updatedAt,
+        })
+        .from(perfilesEmpleados)
+        .where(eq(perfilesEmpleados.restauranteId, session.restauranteId)),
+    );
 
     // El email no está en la tabla: lo resolvemos por userId contra Auth.
     const emailPorUserId = new Map<string, string>();

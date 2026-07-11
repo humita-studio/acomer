@@ -17,6 +17,8 @@ export interface PlanoDraft {
 
 type Aviso = { id: string; texto: string };
 
+export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
 type PlanoStore = {
   // --- Estado de UI del editor ---
   modo: Modo;
@@ -25,8 +27,13 @@ type PlanoStore = {
   ambienteActivoId: string;
   herramienta: Herramienta;
   seleccion: Seleccion | null;
-  dirty: boolean;
+  /** Monótono: sube con cada cambio de geometría del draft. */
+  layoutRevision: number;
+  /** Última revisión confirmada por el server. dirty = layoutRevision > savedRevision. */
+  savedRevision: number;
   guardando: boolean;
+  saveError: string | null;
+  lastSavedAt: number | null;
   liberandoId: string | null;
   abriendoId: string | null;
   mostrarLista: boolean;
@@ -37,13 +44,14 @@ type PlanoStore = {
   setAmbienteActivoId: (id: string) => void;
   setHerramienta: (h: Herramienta) => void;
   setSeleccion: (sel: Seleccion | null | ((prev: Seleccion | null) => Seleccion | null)) => void;
-  setDirty: (dirty: boolean) => void;
   setGuardando: (guardando: boolean) => void;
+  setSaveError: (err: string | null) => void;
+  markSaved: (revision: number) => void;
   setLiberandoId: (id: string | null) => void;
   setAbriendoId: (id: string | null) => void;
   setMostrarLista: (v: boolean | ((prev: boolean) => boolean)) => void;
 
-  /** Muta la copia de trabajo; por defecto marca cambios sin guardar. */
+  /** Muta la copia de trabajo; por defecto marca cambios sin guardar (sube layoutRevision). */
   patchDraft: (fn: (d: PlanoDraft) => PlanoDraft, marcarDirty?: boolean) => void;
 
   // --- Avisos en vivo (autodescartan a los 20s) ---
@@ -55,6 +63,10 @@ type PlanoStore = {
   terminarEdicion: () => void;
   /** Vuelve al estado inicial (al desmontar el editor). */
   reset: () => void;
+
+  /** Helpers derivados (no se suscriben solos; el caller los usa al leer estado). */
+  isDirty: () => boolean;
+  saveStatus: () => SaveStatus;
 };
 
 const initialState = {
@@ -63,8 +75,11 @@ const initialState = {
   ambienteActivoId: '',
   herramienta: 'seleccionar' as Herramienta,
   seleccion: null as Seleccion | null,
-  dirty: false,
+  layoutRevision: 0,
+  savedRevision: 0,
   guardando: false,
+  saveError: null as string | null,
+  lastSavedAt: null as number | null,
   liberandoId: null as string | null,
   abriendoId: null as string | null,
   mostrarLista: false,
@@ -81,18 +96,33 @@ export const usePlanoStore = create<PlanoStore>()((set, get) => ({
     set((s) => ({
       seleccion: typeof sel === 'function' ? sel(s.seleccion) : sel,
     })),
-  setDirty: (dirty) => set({ dirty }),
   setGuardando: (guardando) => set({ guardando }),
+  setSaveError: (saveError) => set({ saveError }),
+  markSaved: (revision) =>
+    set((s) => {
+      // Solo avanza si no hubo ediciones más nuevas durante el roundtrip.
+      if (revision !== s.layoutRevision) return { guardando: false };
+      return {
+        savedRevision: revision,
+        guardando: false,
+        saveError: null,
+        lastSavedAt: Date.now(),
+      };
+    }),
   setLiberandoId: (liberandoId) => set({ liberandoId }),
   setAbriendoId: (abriendoId) => set({ abriendoId }),
   setMostrarLista: (v) =>
     set((s) => ({ mostrarLista: typeof v === 'function' ? v(s.mostrarLista) : v })),
 
   patchDraft: (fn, marcarDirty = true) =>
-    set((s) => ({
-      draft: s.draft ? fn(s.draft) : s.draft,
-      dirty: marcarDirty ? true : s.dirty,
-    })),
+    set((s) => {
+      if (!s.draft) return s;
+      return {
+        draft: fn(s.draft),
+        layoutRevision: marcarDirty ? s.layoutRevision + 1 : s.layoutRevision,
+        saveError: marcarDirty ? null : s.saveError,
+      };
+    }),
 
   pushAviso: (texto) => {
     const id = crypto.randomUUID();
@@ -102,8 +132,41 @@ export const usePlanoStore = create<PlanoStore>()((set, get) => ({
   removeAviso: (id) => set((s) => ({ avisos: s.avisos.filter((a) => a.id !== id) })),
 
   iniciarEdicion: (base) =>
-    set({ draft: base, dirty: false, seleccion: null, mostrarLista: false, modo: 'editar' }),
+    set({
+      draft: base,
+      layoutRevision: 0,
+      savedRevision: 0,
+      saveError: null,
+      lastSavedAt: null,
+      guardando: false,
+      seleccion: null,
+      mostrarLista: false,
+      modo: 'editar',
+    }),
   terminarEdicion: () =>
-    set({ draft: null, seleccion: null, herramienta: 'seleccionar', dirty: false, modo: 'ver' }),
+    set({
+      draft: null,
+      seleccion: null,
+      herramienta: 'seleccionar',
+      layoutRevision: 0,
+      savedRevision: 0,
+      saveError: null,
+      lastSavedAt: null,
+      guardando: false,
+      modo: 'ver',
+    }),
   reset: () => set({ ...initialState }),
+
+  isDirty: () => {
+    const s = get();
+    return s.layoutRevision > s.savedRevision;
+  },
+  saveStatus: () => {
+    const s = get();
+    if (s.guardando) return 'saving';
+    if (s.saveError) return 'error';
+    if (s.layoutRevision > s.savedRevision) return 'dirty';
+    if (s.lastSavedAt) return 'saved';
+    return 'idle';
+  },
 }));

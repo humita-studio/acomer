@@ -86,20 +86,25 @@ export async function enviarPedidoAction(
       return { pedidoId, totalPedido, updatedPendingTx };
     });
 
-    if (resultado.updatedPendingTx) {
-      try {
-        const supabase = await createSupabaseServerClient();
-        const channel = supabase.channel(`admin_restaurant_${tenantId}`);
+    // Siempre avisamos al panel (cocina + campana). Si además se tocó un cobro
+    // pendiente, reutilizamos el evento de cuenta para refrescar cobros.
+    try {
+      const supabase = await createSupabaseServerClient();
+      const channel = supabase.channel(`admin_restaurant_${tenantId}`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'nuevo_pedido',
+        payload: { sesionMesaId, pedidoId: resultado.pedidoId },
+      });
+      if (resultado.updatedPendingTx) {
         await channel.send({
           type: 'broadcast',
-          event: 'cuenta_solicitada', // Reusing this event to trigger a refresh on admin panel
-          payload: {
-            sesionMesaId,
-          },
+          event: 'cuenta_solicitada',
+          payload: { sesionMesaId },
         });
-      } catch (realtimeError) {
-        console.warn('[enviarPedidoAction] Error enviando notificación realtime:', realtimeError);
       }
+    } catch (realtimeError) {
+      console.warn('[enviarPedidoAction] Error enviando notificación realtime:', realtimeError);
     }
 
     return { success: true, ...resultado };

@@ -76,6 +76,7 @@ tener doble CDN y problemas de SSL (errores `525` / `526`), y el plan free de Cl
 | `DATABASE_URL` | Connection string de Postgres (pooler de Supabase) | `postgresql://...:6543/postgres` |
 | `NEXT_PUBLIC_MP_CLIENT_ID` | Client ID de Mercado Pago Connect (OAuth) | `5430330461934441` |
 | `MP_CLIENT_SECRET` | Client secret de Mercado Pago | `...` |
+| `MP_WEBHOOK_SECRET` | Secret de firma de webhooks MP (panel → Webhooks → `x-signature`) | `...` |
 
 > **No commitees secretos.** El `.env` local no debe subirse al repo; cargá estos valores
 > directamente en el panel de Vercel.

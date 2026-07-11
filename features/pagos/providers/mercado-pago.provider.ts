@@ -50,10 +50,6 @@ export class MercadoPagoProvider implements PaymentProvider {
         ...(isLocalhostSubdomain ? {} : { auto_return: 'approved' as const }),
       };
 
-      console.log('--- MP PREFERENCE BODY ---');
-      console.log(JSON.stringify(body, null, 2));
-      console.log('--------------------------');
-
       const result = await preference.create({ body });
 
       return {

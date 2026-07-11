@@ -40,7 +40,7 @@ type Contacto = {
 /** Avisa al panel admin que entró/cambió un pedido externo. */
 async function broadcastOrdenExterna(
   tenantId: string,
-  event: 'orden_externa_nueva' | 'orden_externa_actualizada',
+  event: 'orden_externa_nueva' | 'orden_externa_actualizada' | 'nuevo_pedido',
   payload: Record<string, unknown>,
 ) {
   try {
@@ -65,6 +65,9 @@ export async function crearPedidoExternoAction(
   items: PedidoItemInput[],
 ) {
   try {
+    if (!tenantSlug?.trim() || tenantSlug.length > 64) {
+      return { success: false, message: 'Restaurante inválido' };
+    }
     const tenantId = await getTenantBySlug(tenantSlug);
     if (!tenantId) {
       return { success: false, message: 'Restaurante no encontrado' };
@@ -73,12 +76,26 @@ export async function crearPedidoExternoAction(
       return { success: false, message: 'Tipo de pedido inválido' };
     }
 
-    const itemsLimpios = (items ?? []).filter((i) => i.productoId && i.cantidad > 0);
+    const itemsLimpios = (items ?? [])
+      .filter((i) => i.productoId && i.cantidad > 0)
+      .slice(0, 50)
+      .map((i) => ({
+        ...i,
+        cantidad: Math.min(99, Math.max(1, Math.floor(Number(i.cantidad) || 0))),
+      }))
+      .filter((i) => i.cantidad > 0);
     if (itemsLimpios.length === 0) {
       return { success: false, message: 'El carrito está vacío' };
     }
     if (!contacto.nombreContacto?.trim() || !contacto.telefono?.trim()) {
       return { success: false, message: 'Nombre y teléfono son obligatorios' };
+    }
+    if (
+      contacto.nombreContacto.trim().length > 120 ||
+      contacto.telefono.trim().length > 40 ||
+      (contacto.direccion?.trim().length ?? 0) > 300
+    ) {
+      return { success: false, message: 'Datos de contacto inválidos' };
     }
     if (tipo === 'delivery' && !contacto.direccion?.trim()) {
       return { success: false, message: 'La dirección es obligatoria para envíos' };
@@ -138,6 +155,11 @@ export async function crearPedidoExternoAction(
     // Fire-and-forget: el broadcast no afecta al comensal y no debe alargar el
     // tiempo de respuesta percibido. Los errores se loguean dentro de la función.
     void broadcastOrdenExterna(tenantId, 'orden_externa_nueva', { sesionMesaId: sesionId, tipo });
+    // Misma señal que el salón: cocina y campana del panel escuchan `nuevo_pedido`.
+    void broadcastOrdenExterna(tenantId, 'nuevo_pedido', {
+      sesionMesaId: sesionId,
+      etiqueta: tipo === 'delivery' ? 'Delivery' : 'Takeaway',
+    });
 
     return { success: true, sesionId, tenantId };
   } catch (error) {

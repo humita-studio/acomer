@@ -168,7 +168,16 @@ export async function eliminarAmbiente(id: string) {
 
 export async function crearMesaEnPlano(
   ambienteId: string,
-  identificador: string
+  identificador: string,
+  layout?: {
+    posX?: number;
+    posY?: number;
+    ancho?: number;
+    alto?: number;
+    forma?: string;
+    capacidad?: number;
+    rotacion?: number;
+  },
 ): Promise<{ success: boolean; message?: string; mesa?: typeof mesas.$inferSelect }> {
   try {
     const session = await getCurrentSession();
@@ -194,13 +203,13 @@ export async function crearMesaEnPlano(
           restauranteId: session.restauranteId,
           identificador: limpio,
           ambienteId,
-          posX: 1,
-          posY: 1,
-          ancho: 2,
-          alto: 2,
-          forma: 'cuadrada',
-          capacidad: 4,
-          rotacion: 0,
+          posX: clampNum(layout?.posX, 0, 1),
+          posY: clampNum(layout?.posY, 0, 1),
+          ancho: clampNum(layout?.ancho, 0.5, 2),
+          alto: clampNum(layout?.alto, 0.5, 2),
+          forma: layout?.forma === 'redonda' ? 'redonda' : 'cuadrada',
+          capacidad: clampInt(layout?.capacidad, 1, 4),
+          rotacion: normalizarRotacion(layout?.rotacion ?? 0),
         })
         .returning();
       return { success: true, mesa: creada };
@@ -339,10 +348,16 @@ export interface ElementoLayout {
   etiqueta?: string | null;
 }
 
-export async function guardarLayoutAction(payload: {
-  mesas: MesaLayout[];
-  elementos: ElementoLayout[];
-}) {
+export async function guardarLayoutAction(
+  payload: {
+    mesas: MesaLayout[];
+    elementos: ElementoLayout[];
+  },
+  options?: {
+    /** Por defecto true. En autosave del editor lo desactivamos para no invalidar RSC a cada drag. */
+    revalidate?: boolean;
+  },
+) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageTables')) {
@@ -386,7 +401,9 @@ export async function guardarLayoutAction(payload: {
       })
     );
 
-    revalidatePath('/admin/mesas');
+    if (options?.revalidate !== false) {
+      revalidatePath('/admin/mesas');
+    }
     return { success: true };
   } catch (error) {
     console.error('[guardarLayoutAction]', error);

@@ -1,6 +1,8 @@
 'use client';
 
 import { RotateCw, Trash2 } from 'lucide-react';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
 import { Stepper } from './plano-stepper';
 import { type ElementoPlanoUI } from './plano-types';
 
@@ -15,18 +17,27 @@ export function ElementoPanel({
   onDelete: () => void;
 }) {
   return (
-    <div className="space-y-3">
-      <h3 className="font-bold text-gray-800 capitalize">{elemento.tipo}</h3>
+    <div className="space-y-4">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Propiedades
+        </p>
+        <h3 className="font-display text-lg font-semibold capitalize tracking-tight text-foreground">
+          {elemento.tipo}
+        </h3>
+      </div>
 
       {elemento.tipo === 'barra' && (
         <div>
-          <label className="text-xs font-semibold text-gray-500 uppercase">Etiqueta</label>
-          <input
+          <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Etiqueta
+          </label>
+          <Input
             type="text"
             value={elemento.etiqueta ?? ''}
             onChange={(e) => onUpdate({ etiqueta: e.target.value })}
             placeholder="Ej: Barra"
-            className="w-full mt-1 px-2 py-1.5 border border-gray-200 rounded-md text-sm bg-white"
+            className="mt-1.5"
           />
         </div>
       )}
@@ -46,19 +57,20 @@ export function ElementoPanel({
         />
       </div>
 
-      <button
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
         onClick={() => onUpdate({ rotacion: (elemento.rotacion + 90) % 360 })}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm border border-gray-200 bg-white hover:bg-gray-100"
       >
-        <RotateCw size={14} /> Rotar 90°
-      </button>
+        <RotateCw />
+        Rotar 90°
+      </Button>
 
-      <button
-        onClick={onDelete}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-sm font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100"
-      >
-        <Trash2 size={14} /> Eliminar elemento
-      </button>
+      <Button type="button" variant="destructive" className="w-full" onClick={onDelete}>
+        <Trash2 />
+        Eliminar elemento
+      </Button>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   Banknote,
   Bike,
   CalendarDays,
+  ChefHat,
   ChevronsUpDown,
   LayoutGrid,
   LogOut,
@@ -69,6 +70,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Operación',
     links: [
+      { href: '/admin/cocina', label: 'Cocina', section: 'kitchen', icon: ChefHat },
       { href: '/admin/caja', label: 'Caja', section: 'cashier', icon: Wallet },
       { href: '/admin/cobros', label: 'Cobros', section: 'cashier', icon: Banknote },
       { href: '/admin/pedidos-online', label: 'Pedidos online', section: 'delivery', icon: Bike },
