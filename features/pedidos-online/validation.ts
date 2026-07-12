@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-const uuid = z.string().uuid();
+// guid (hex 8-4-4-4-12): Postgres acepta UUIDs no-RFC (p.ej. tenant demo).
+const uuid = z.guid();
 
 export const cartItemSchema = z.object({
   productoId: uuid,

@@ -43,7 +43,7 @@ export function ResumenPago({ ticket }: ResumenPagoProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [ticket.transaccion.id, ticket.transaccion.estado, router]);
+  }, [ticket.transaccion.id, ticket.transaccion.estado, ticket.transaccion.monto, router]);
 
   const handleVolver = () => {
     // Al limpiar los searchParams, se recarga la página de la mesa,

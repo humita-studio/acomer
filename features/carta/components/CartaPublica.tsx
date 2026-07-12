@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import Fuse from 'fuse.js';
 import { ArrowLeft, Search, X } from 'lucide-react';
 import { formatPeso } from '@/shared/lib/format';
 import { Input } from '@/shared/ui/input';
@@ -12,6 +11,7 @@ import {
   ICONOS_CATEGORIA_MAP,
   resolveIconoCategoria,
 } from '@/features/menu/categoriaVisual';
+import { filtrarProductosPorBusqueda } from '../buscarProductos';
 import type { CategoriaMenu, ProductoMenu } from '../types';
 
 /**
@@ -37,32 +37,10 @@ export function CartaPublica({
     [categorias],
   );
 
-  const fuse = useMemo(
-    () =>
-      new Fuse(productos, {
-        keys: [
-          { name: 'nombre', weight: 0.7 },
-          { name: 'descripcion', weight: 0.3 },
-        ],
-        threshold: 0.4,
-        ignoreLocation: true,
-        minMatchCharLength: 2,
-      }),
-    [productos],
+  const productosFiltrados = useMemo(
+    () => filtrarProductosPorBusqueda(productos, query),
+    [productos, query],
   );
-
-  const productosFiltrados = useMemo(() => {
-    if (!buscando) return productos;
-    if (query.length < 2) {
-      const q = query.toLowerCase();
-      return productos.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(q) ||
-          (p.descripcion ?? '').toLowerCase().includes(q),
-      );
-    }
-    return fuse.search(query).map((r) => r.item);
-  }, [buscando, query, productos, fuse]);
 
   // Productos agrupados por categoría, respetando el orden de las categorías y
   // descartando las que quedan vacías.

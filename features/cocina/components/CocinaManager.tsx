@@ -285,7 +285,9 @@ export function CocinaManager({
   /** Pedidos con mutación en vuelo: no pisar su estado optimista con un refresh. */
   const inflightRef = useRef<Map<string, PedidoCocina[]>>(new Map());
   const pedidosRef = useRef(pedidos);
-  pedidosRef.current = pedidos;
+  useEffect(() => {
+    pedidosRef.current = pedidos;
+  }, [pedidos]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),

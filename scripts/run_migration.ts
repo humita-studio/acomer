@@ -33,19 +33,19 @@ async function main() {
   
   try {
     await db.execute(sql`ALTER TABLE "configuracion_pagos" ADD CONSTRAINT "configuracion_pagos_restaurant_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurantes"("id") ON DELETE cascade ON UPDATE no action;`);
-  } catch (e) {
+  } catch {
     console.log('FK configuracion_pagos_restaurant_id_fk might already exist');
   }
 
   try {
     await db.execute(sql`ALTER TABLE "transacciones_pago" ADD CONSTRAINT "transacciones_pago_restaurant_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurantes"("id") ON DELETE cascade ON UPDATE no action;`);
-  } catch (e) {
+  } catch {
     console.log('FK transacciones_pago_restaurant_id_fk might already exist');
   }
 
   try {
     await db.execute(sql`ALTER TABLE "transacciones_pago" ADD CONSTRAINT "transacciones_pago_sesion_mesa_id_fk" FOREIGN KEY ("sesion_mesa_id") REFERENCES "public"."sesiones_mesa"("id") ON DELETE cascade ON UPDATE no action;`);
-  } catch (e) {
+  } catch {
     console.log('FK transacciones_pago_sesion_mesa_id_fk might already exist');
   }
 

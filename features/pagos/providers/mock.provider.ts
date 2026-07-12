@@ -10,7 +10,8 @@ export class MockProvider implements PaymentProvider {
     transactionId: string,
     metadata: PaymentMetadata
   ): Promise<PaymentIntentResult> {
-    
+    void metadata; // requerido por la interfaz; el mock no lo usa
+
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 500));
 

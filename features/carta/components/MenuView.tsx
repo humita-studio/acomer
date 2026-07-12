@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import Fuse from 'fuse.js';
 import { CheckCircle2, CircleAlert, Plus, Search, Tag, X } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { FloatingCart } from './FloatingCart';
+import { filtrarProductosPorBusqueda } from '../buscarProductos';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import {
@@ -165,32 +165,10 @@ export function MenuView({
     [categorias],
   );
 
-  const fuse = useMemo(
-    () =>
-      new Fuse(productos, {
-        keys: [
-          { name: 'nombre', weight: 0.7 },
-          { name: 'descripcion', weight: 0.3 },
-        ],
-        threshold: 0.4,
-        ignoreLocation: true,
-        minMatchCharLength: 2,
-      }),
-    [productos],
+  const productosFiltrados = useMemo(
+    () => filtrarProductosPorBusqueda(productos, query),
+    [productos, query],
   );
-
-  const productosFiltrados = useMemo(() => {
-    if (!buscando) return productos;
-    if (query.length < 2) {
-      const q = query.toLowerCase();
-      return productos.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(q) ||
-          (p.descripcion ?? '').toLowerCase().includes(q),
-      );
-    }
-    return fuse.search(query).map((r) => r.item);
-  }, [buscando, query, productos, fuse]);
 
   const secciones = useMemo(() => {
     const byCat = new Map<string, ProductoMenu[]>();

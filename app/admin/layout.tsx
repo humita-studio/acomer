@@ -35,8 +35,8 @@ export default async function AdminLayout({
                 nombreRestaurante={session.nombreRestaurante}
                 email={session.user.email}
             />
-            <SidebarInset className="min-w-0">
-                <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <SidebarInset className="h-svh min-h-0 min-w-0 overflow-hidden">
+                <header className="z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                     <SidebarTrigger className="-ml-1" />
                     <Separator orientation="vertical" className="mr-2 !h-4" />
                     <h1 className="text-sm font-medium text-muted-foreground md:hidden">
@@ -61,7 +61,7 @@ export default async function AdminLayout({
                         <ModeToggle />
                     </div>
                 </header>
-                <main className="min-w-0 flex-1 overflow-auto p-6">{children}</main>
+                <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">{children}</main>
             </SidebarInset>
         </SidebarProvider>
     );

@@ -1,12 +1,16 @@
 import { z } from 'zod';
 
-/** UUID v4-ish (acepta cualquier uuid string de la app). */
-export const uuidSchema = z.string().uuid('ID inválido');
+/**
+ * IDs de Postgres (`uuid`). Usamos `guid` (hex 8-4-4-4-12) y no `uuid` RFC:
+ * Zod 4 rechaza IDs válidos en PG como el tenant demo
+ * `11111111-1111-1111-1111-111111111111` (variante no RFC).
+ */
+export const uuidSchema = z.guid({ error: 'ID inválido' });
 
 export const pedirCuentaSchema = z.object({
   sesionMesaId: uuidSchema,
   tenantId: uuidSchema,
-  currentUrl: z.string().url('URL de retorno inválida').max(2000),
+  currentUrl: z.url({ error: 'URL de retorno inválida' }).max(2000),
 });
 
 export const pedirCuentaPresencialSchema = z.object({

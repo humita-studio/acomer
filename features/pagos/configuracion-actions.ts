@@ -16,18 +16,10 @@ export async function guardarConfiguracionPagosAction(formData: FormData) {
   }
 
   const proveedor = formData.get('proveedor') as string;
-  const accessToken = formData.get('accessToken') as string;
+  const accessToken = (formData.get('accessToken') as string | null)?.trim() || '';
 
   if (!proveedor) {
     throw new Error('Falta el proveedor');
-  }
-
-  let credenciales = {};
-  if (proveedor === 'mercado_pago') {
-    if (!accessToken) {
-      throw new Error('Access Token es requerido para Mercado Pago');
-    }
-    credenciales = { access_token: accessToken };
   }
 
   await withTenant(claimsFromSession(session), async (db) => {
@@ -35,6 +27,21 @@ export async function guardarConfiguracionPagosAction(formData: FormData) {
     const existingConfig = await db.query.configuracionPagos.findFirst({
       where: (t, { eq }) => eq(t.restauranteId, session.restauranteId)
     });
+
+    // No pisar las credenciales OAuth al solo cambiar de proveedor o "Guardar".
+    // Antes se mandaba `credenciales: {}` y se borraba el access_token vinculado.
+    const prevCreds =
+      (existingConfig?.credenciales as Record<string, unknown> | null) ?? {};
+
+    let credenciales: Record<string, unknown> = prevCreds;
+    if (proveedor === 'mercado_pago') {
+      if (accessToken) {
+        credenciales = { ...prevCreds, access_token: accessToken };
+      } else if (!prevCreds.access_token) {
+        throw new Error('Access Token es requerido para Mercado Pago');
+      }
+    }
+    // mercado_pago_oauth y mock: conservar token por si vuelven a MP sin re-vincular.
 
     if (existingConfig) {
       await db.update(configuracionPagos)
@@ -46,10 +53,13 @@ export async function guardarConfiguracionPagosAction(formData: FormData) {
         })
         .where(eq(configuracionPagos.id, existingConfig.id));
     } else {
+      if (proveedor === 'mercado_pago' && !accessToken) {
+        throw new Error('Access Token es requerido para Mercado Pago');
+      }
       await db.insert(configuracionPagos).values({
         restauranteId: session.restauranteId,
         proveedor,
-        credenciales,
+        credenciales: proveedor === 'mercado_pago' ? { access_token: accessToken } : {},
         activo: true,
       });
     }

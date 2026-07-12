@@ -25,10 +25,13 @@ function parsearHorarios(raw: unknown): HorarioDia[] {
     
     let turnos: { desde: string; hasta: string }[] = [];
     if (Array.isArray(o.turnos)) {
-      turnos = o.turnos.map((t: any) => ({
-        desde: normalizarHora(t?.desde) ?? '12:00',
-        hasta: normalizarHora(t?.hasta) ?? '00:00',
-      }));
+      turnos = o.turnos.map((t) => {
+        const turno = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>;
+        return {
+          desde: normalizarHora(turno.desde) ?? '12:00',
+          hasta: normalizarHora(turno.hasta) ?? '00:00',
+        };
+      });
     } else {
       // Compatibilidad con versión anterior (desde/hasta únicos)
       const desde = normalizarHora(o.desde) ?? LANDING_CONFIG_DEFAULT.horarios[i].turnos[0].desde;

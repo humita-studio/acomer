@@ -1,6 +1,44 @@
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import type { PaymentProvider, PaymentMetadata, PaymentIntentResult, PaymentVerificationResult } from '../core/payment-provider.interface';
 
+/** Mercado Pago exige HTTPS público para auto_return; localhost/http lo rechaza con 400. */
+function canUseAutoReturn(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1') {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function formatMpError(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return error instanceof Error ? error.message : 'Error al comunicarse con Mercado Pago';
+  }
+  const e = error as {
+    message?: string;
+    cause?: unknown;
+    error?: string;
+    status?: number;
+  };
+  // El SDK a veces mete el body de la API en `cause` o anidado.
+  const cause = e.cause;
+  if (cause && typeof cause === 'object') {
+    const c = cause as { message?: string; error?: string; status?: number };
+    if (c.message) {
+      return `Mercado Pago: ${c.message}${c.error ? ` (${c.error})` : ''}`;
+    }
+  }
+  if (typeof cause === 'string' && cause.trim()) return `Mercado Pago: ${cause}`;
+  if (e.message) return e.message;
+  return 'Error al comunicarse con Mercado Pago';
+}
+
 export class MercadoPagoProvider implements PaymentProvider {
   private client: MercadoPagoConfig;
 
@@ -15,6 +53,14 @@ export class MercadoPagoProvider implements PaymentProvider {
     metadata: PaymentMetadata
   ): Promise<PaymentIntentResult> {
     try {
+      const monto = Number(amount);
+      if (!Number.isFinite(monto) || monto <= 0) {
+        return {
+          success: false,
+          error: 'El monto a cobrar debe ser mayor a 0',
+        };
+      }
+
       const preference = new Preference(this.client);
 
       const items = metadata.items.length > 0 
@@ -31,12 +77,11 @@ export class MercadoPagoProvider implements PaymentProvider {
             title: `Consumo en ${metadata.restaurantName}`,
             description: 'Pago por el total de la mesa',
             quantity: 1,
-            unit_price: Number(amount),
+            unit_price: monto,
             currency_id: 'ARS',
           }];
 
-      const isLocalhostSubdomain = metadata.successUrl.startsWith('http://') && metadata.successUrl.includes('localhost') && !metadata.successUrl.startsWith('http://localhost');
-      
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
       const body = {
         items,
         back_urls: {
@@ -45,12 +90,25 @@ export class MercadoPagoProvider implements PaymentProvider {
           pending: metadata.pendingUrl,
         },
         external_reference: transactionId, // Fundamental: conectamos MP con nuestra DB
-        notification_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/webhooks/pagos/mercado_pago?tenantId=${this.tenantId}`,
-        // auto_return solo con back_urls públicas válidas (MP lo rechaza en localhost).
-        ...(isLocalhostSubdomain ? {} : { auto_return: 'approved' as const }),
+        ...(appUrl
+          ? {
+              notification_url: `${appUrl}/api/webhooks/pagos/mercado_pago?tenantId=${this.tenantId}`,
+            }
+          : {}),
+        // auto_return solo con HTTPS público (MP lo rechaza en http/localhost).
+        ...(canUseAutoReturn(metadata.successUrl)
+          ? { auto_return: 'approved' as const }
+          : {}),
       };
 
       const result = await preference.create({ body });
+
+      if (!result.init_point) {
+        return {
+          success: false,
+          error: 'Mercado Pago no devolvió el link de pago',
+        };
+      }
 
       return {
         success: true,
@@ -61,7 +119,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       console.error('Error creating MP Preference:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Error al comunicarse con Mercado Pago',
+        error: formatMpError(error),
       };
     }
   }

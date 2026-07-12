@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { DialogDescription, DialogTitle } from '@/shared/ui/dialog';
 import type { CategoriaMenu, ProductoMenu } from '@/features/carta/types';
+import { filtrarProductosPorBusqueda } from '@/features/carta/buscarProductos';
 import {
   colorCategoriaMeta,
   ICONOS_CATEGORIA_MAP,
@@ -64,9 +65,9 @@ export function PasoArmar({
   // Derivado en render (sin effect) para no disparar renders en cascada.
   const catActiva = catActivaSel || categorias[0]?.id || '';
 
-  const q = busqueda.trim().toLowerCase();
+  const q = busqueda.trim();
   const visibles = q
-    ? productos.filter((p) => p.nombre.toLowerCase().includes(q))
+    ? filtrarProductosPorBusqueda(productos, q)
     : productos.filter((p) => p.categoriaId === catActiva);
 
   return (

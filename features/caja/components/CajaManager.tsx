@@ -6,7 +6,6 @@ import { Check, Lock, Printer } from 'lucide-react';
 import {
   formatPeso,
   formatHora,
-  formatFechaCorta,
   formatFechaLarga,
 } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
@@ -545,19 +544,6 @@ function MontoInput({
         {...props}
       />
     </div>
-  );
-}
-
-function Th({ children, align }: { children: React.ReactNode; align?: 'right' }) {
-  return (
-    <th
-      className={cn(
-        'pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-        align === 'right' ? 'text-right' : 'text-left'
-      )}
-    >
-      {children}
-    </th>
   );
 }
 

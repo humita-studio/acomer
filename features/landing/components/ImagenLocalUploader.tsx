@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Image from 'next/image';
 import { ImagePlus, Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,15 +41,17 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [preview, setPreview] = useState(initialUrl || '');
+  // Sincronizar preview cuando el server manda una URL nueva (p. ej. tras guardar).
+  // Ajuste de state durante render (patrón recomendado por React) evita setState en effect.
+  const [prevInitialUrl, setPrevInitialUrl] = useState(initialUrl);
+  if (initialUrl !== prevInitialUrl) {
+    setPrevInitialUrl(initialUrl);
+    setPreview(initialUrl || '');
+  }
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
-
-  // Si el server refresca con una URL nueva (p. ej. tras guardar), sincronizar preview.
-  useEffect(() => {
-    setPreview(initialUrl || '');
-  }, [initialUrl]);
 
   const resetInput = () => {
     if (inputRef.current) inputRef.current.value = '';

@@ -32,7 +32,7 @@ export default function LoginPage() {
 
       // Redirigir al panel admin
       router.push('/admin');
-    } catch (err) {
+    } catch {
       setError('Error al iniciar sesión');
     } finally {
       setLoading(false);

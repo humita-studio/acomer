@@ -198,9 +198,9 @@ export function MenuManager({
         )}
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        {/* Rail de categorías */}
-        <Card className="flex h-fit max-h-[min(70vh,40rem)] flex-col gap-0 overflow-hidden py-0 lg:sticky lg:top-20">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
+        {/* Rail de categorías: sticky mientras se scrollea el listado de productos */}
+        <Card className="flex max-h-[min(70vh,40rem)] flex-col gap-0 overflow-hidden py-0 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-3.5rem-3rem)]">
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Categorías
@@ -216,7 +216,7 @@ export function MenuManager({
               </Button>
             )}
           </div>
-          <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
+          <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain p-2">
             <li>
               <CategoriaItem
                 nombre="Todos"
@@ -299,22 +299,22 @@ export function MenuManager({
                 : 'No hay productos que coincidan con la búsqueda.'}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[40rem] table-fixed text-sm">
+            <div className="w-full min-w-0 overflow-x-hidden">
+              <table className="w-full table-fixed text-sm">
                 <colgroup>
-                  <col />
-                  <col className="w-[10rem]" />
-                  <col className="w-[7.5rem]" />
-                  <col className="w-[7rem]" />
-                  <col className="w-12" />
+                  <col className="w-auto" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[6.5rem]" />
+                  <col className="w-[5.5rem]" />
+                  <col className="w-11" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
-                    <th className="px-4 py-2.5 font-medium">Producto</th>
-                    <th className="px-4 py-2.5 font-medium">Categoría</th>
-                    <th className="px-4 py-2.5 font-medium">Precio</th>
-                    <th className="px-4 py-2.5 font-medium">Disponible</th>
-                    <th className="px-2 py-2.5" aria-label="Acciones" />
+                    <th className="px-3 py-2.5 font-medium sm:px-4">Producto</th>
+                    <th className="px-2 py-2.5 font-medium sm:px-4">Categoría</th>
+                    <th className="px-2 py-2.5 font-medium sm:px-4">Precio</th>
+                    <th className="px-2 py-2.5 font-medium sm:px-4">Disp.</th>
+                    <th className="px-1 py-2.5 sm:px-2" aria-label="Acciones" />
                   </tr>
                 </thead>
                 <tbody>
@@ -467,11 +467,11 @@ function ProductoRow({
       : formatPeso(producto.precio);
   return (
     <tr className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
-      <td className="min-w-0 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
+      <td className="min-w-0 overflow-hidden px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <span
             className={cn(
-              'flex size-9 shrink-0 items-center justify-center rounded-lg',
+              'flex size-8 shrink-0 items-center justify-center rounded-lg sm:size-9',
               disponible
                 ? 'bg-success-subtle text-success-foreground'
                 : 'bg-muted text-muted-foreground'
@@ -479,7 +479,7 @@ function ProductoRow({
           >
             <Utensils className="size-4" />
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <p className="truncate font-medium text-foreground" title={producto.nombre}>
               {producto.nombre}
             </p>
@@ -494,10 +494,10 @@ function ProductoRow({
           </div>
         </div>
       </td>
-      <td className="min-w-0 px-4 py-3">
+      <td className="min-w-0 overflow-hidden px-2 py-3 sm:px-4">
         <Badge
           variant="secondary"
-          className="max-w-full min-w-0 shrink gap-1.5 font-medium"
+          className="max-w-full min-w-0 gap-1 font-medium sm:gap-1.5"
           style={{ backgroundColor: catMeta.soft, color: catMeta.hex, borderColor: 'transparent' }}
           title={categoriaNombre}
         >
@@ -505,10 +505,12 @@ function ProductoRow({
           <span className="min-w-0 truncate">{categoriaNombre}</span>
         </Badge>
       </td>
-      <td className="px-4 py-3 font-medium tabular-nums whitespace-nowrap">
-        {precioLabel}
+      <td className="min-w-0 overflow-hidden px-2 py-3 font-medium tabular-nums sm:px-4">
+        <span className="block truncate" title={precioLabel}>
+          {precioLabel}
+        </span>
       </td>
-      <td className="px-4 py-3">
+      <td className="min-w-0 px-2 py-3 sm:px-4">
         <div className="flex items-center gap-2">
           <Switch
             checked={disponible}
@@ -519,7 +521,7 @@ function ProductoRow({
           />
           <span
             className={cn(
-              'hidden text-sm sm:inline',
+              'hidden text-sm lg:inline',
               disponible ? 'text-muted-foreground' : 'font-medium text-destructive'
             )}
           >
@@ -527,7 +529,7 @@ function ProductoRow({
           </span>
         </div>
       </td>
-      <td className="px-2 py-3 text-right">
+      <td className="w-11 px-1 py-3 text-right sm:px-2">
         {canManage && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

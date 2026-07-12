@@ -8,10 +8,10 @@ export const inviteEmployeeSchema = z.object({
 });
 
 export const updateEmployeeRoleSchema = z.object({
-  perfilId: z.string().uuid('ID de perfil inválido'),
+  perfilId: z.guid({ error: 'ID de perfil inválido' }),
   nuevoRol: roleSchema,
 });
 
 export const perfilIdSchema = z.object({
-  perfilId: z.string().uuid('ID de perfil inválido'),
+  perfilId: z.guid({ error: 'ID de perfil inválido' }),
 });

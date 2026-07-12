@@ -177,8 +177,11 @@ export function usePlanoAcciones({
     }));
 
   // ---- Guardado (autosave + flush al salir) ----
+  // Named function expression para permitir reintento recursivo si sigue dirty.
   const guardar = useCallback(
-    async (opts?: { revalidate?: boolean; revision?: number }): Promise<boolean> => {
+    async function guardar(
+      opts?: { revalidate?: boolean; revision?: number },
+    ): Promise<boolean> {
       const state = usePlanoStore.getState();
       const d = state.draft;
       if (!d) return true;
