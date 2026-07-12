@@ -1,7 +1,13 @@
+import type { Metadata } from 'next';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { obtenerReservasConfig } from '@/features/reservas/reservasConfigActions';
 import { turnosConSlots } from '@/features/reservas/reservasConfig';
 import { ReservarForm } from '@/features/reservas/components/ReservarForm';
+
+export const metadata: Metadata = {
+  title: 'Reservar',
+  description: 'Reservá tu mesa online de forma simple.',
+};
 
 export default async function ReservarPage({
   params,

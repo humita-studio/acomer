@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { db } from '@/shared/db';
 import { itemsBorradorMesa, sesionesMesa, datosEntrega } from '@/shared/db/schema';
@@ -18,6 +19,11 @@ import { SeguimientoPedido } from '@/features/pedidos-online/components/Seguimie
 import { obtenerDeliveryConfig } from '@/features/pedidos-online/deliveryConfigActions';
 import { modosPermitidos, puedeAgregar } from '@/features/pedidos-online/deliveryConfig';
 import { obtenerPromocionesPublicas } from '@/features/promociones/promosPublicasActions';
+
+export const metadata: Metadata = {
+  title: 'Pedir online',
+  description: 'Hacé tu pedido para takeaway o delivery.',
+};
 
 type ModificadorSnapshot = {
   id: string;
