@@ -23,7 +23,10 @@ type FloatingCartProps = {
   /** Texto del botón de confirmación (ej: "Confirmar Pedido" | "Finalizar pedido"). */
   confirmLabel: string;
   /** Acción al confirmar. Devolver { success:false } muestra el error y deja el cart abierto. */
-  onConfirm: () => Promise<{ success: boolean; message?: string } | void>;
+  onConfirm: () => Promise<
+    | { success: boolean; message?: string; notice?: { title: string; description?: string } }
+    | void
+  >;
   confirming: boolean;
   /** Título del drawer (ej: "Resumen de tu Mesa" | "Tu pedido"). */
   titulo?: string;
@@ -89,12 +92,15 @@ export function FloatingCart({
     <>
       {/* Botón flotante siempre visible cuando hay items pero el cart está cerrado */}
       {!isOpen && (items.length > 0 || pedidosConfirmados.length > 0) && (
-        <div className="fixed inset-x-0 bottom-6 z-40 px-4 duration-300 animate-in fade-in slide-in-from-bottom-10">
-          <div className="mx-auto max-w-2xl">
+        <div
+          className="fixed inset-x-0 z-40 px-3 duration-300 animate-in fade-in slide-in-from-bottom-10"
+          style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="mx-auto max-w-lg">
             <Button
               onClick={() => setIsOpen(true)}
               size="lg"
-              className="h-14 w-full justify-between rounded-2xl px-6 text-base shadow-lg"
+              className="h-14 w-full justify-between rounded-2xl px-5 text-base shadow-lg touch-manipulation active:scale-[0.99]"
             >
               <span className="flex items-center gap-3">
                 <span className="flex size-7 items-center justify-center rounded-full bg-primary-foreground/20 text-sm tabular-nums">
@@ -112,7 +118,7 @@ export function FloatingCart({
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent
           side="bottom"
-          className="mx-auto flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-2xl sm:rounded-t-2xl"
+          className="mx-auto flex max-h-[min(90dvh,90vh)] flex-col gap-0 p-0 pb-[env(safe-area-inset-bottom,0px)] sm:max-w-lg sm:rounded-t-2xl"
         >
           <SheetHeader className="flex-row items-center gap-2 space-y-0 border-b p-4">
             <SheetTitle className="text-xl">{titulo}</SheetTitle>

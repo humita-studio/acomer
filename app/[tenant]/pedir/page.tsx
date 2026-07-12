@@ -103,12 +103,12 @@ export default async function PedirPage({
       getMetodosPago(tenantId),
     ]);
     return (
-      <main className="min-h-screen bg-muted/30">
-        {/* Header no-sticky: las categorías del menú ya son sticky en MenuView.
-            Si ambos son sticky top-0, el título tapa los tabs al scrollear. */}
-        <header className="bg-background p-4 border-b text-center shadow-sm">
-          <h1 className="font-bold text-xl">Hacé tu pedido</h1>
-          <p className="text-sm text-muted-foreground">Elegí del menú y, al terminar, cómo lo querés recibir</p>
+      <main className="min-h-dvh bg-muted/30">
+        <header  className="border-b bg-background px-4 py-3 text-center sr-only">
+          <h1 className="text-lg font-bold leading-tight">Menú de {tenant}</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Elegí del menú y, al terminar, cómo lo querés recibir
+          </p>
         </header>
         <MenuExterno
           tenantSlug={tenant}

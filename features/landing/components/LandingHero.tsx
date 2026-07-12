@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { Clock, MapPin } from 'lucide-react';
 import { GRADIENTE_MARCA, type ColorMarca } from '../landingConfig';
 
@@ -15,8 +16,8 @@ function BadgeEstado({ abierto }: { abierto: boolean }) {
 }
 
 /**
- * Hero de la landing del local: gradiente cálido según el color de marca, con el
- * nombre en Fraunces, la descripción y la fila de horario + dirección.
+ * Hero de la landing del local: foto de portada (si hay) o gradiente de marca,
+ * con el nombre en Fraunces, la descripción y la fila de horario + dirección.
  */
 export function LandingHero({
   nombre,
@@ -25,6 +26,7 @@ export function LandingHero({
   abierto,
   horarioTexto,
   colorMarca,
+  imagenUrl,
 }: {
   nombre: string;
   descripcion: string;
@@ -32,14 +34,44 @@ export function LandingHero({
   abierto: boolean;
   horarioTexto: string;
   colorMarca: ColorMarca;
+  /** URL optimizada de Cloudinary; vacío = solo gradiente de marca. */
+  imagenUrl?: string;
 }) {
+  const hasImage = Boolean(imagenUrl);
+
   return (
     <header
-      className="relative flex min-h-[58vh] flex-col justify-between px-6 pb-7 pt-6 text-white"
-      style={{ background: GRADIENTE_MARCA[colorMarca] }}
+      className="relative flex min-h-[58vh] flex-col justify-between overflow-hidden px-6 pb-7 pt-6 text-white"
+      style={hasImage ? undefined : { background: GRADIENTE_MARCA[colorMarca] }}
     >
+      {hasImage ? (
+        <>
+          <Image
+            key={imagenUrl}
+            src={imagenUrl!}
+            alt=""
+            fill
+            priority
+            sizes="(max-width: 448px) 100vw, 448px"
+            className="object-cover"
+            // Cloudinary ya sirve f_auto/q_auto; evitamos doble optimización de Next.
+            unoptimized
+          />
+          {/* Velos: legibilidad del texto + tinte de marca sutil */}
+          <div
+            className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/25"
+            aria-hidden
+          />
+          <div
+            className="absolute inset-0 opacity-30 mix-blend-multiply"
+            style={{ background: GRADIENTE_MARCA[colorMarca] }}
+            aria-hidden
+          />
+        </>
+      ) : null}
+
       {/* Barra superior: marca de la plataforma + estado */}
-      <div className="flex items-center justify-between">
+      <div className="relative z-10 flex items-center justify-between">
         <span className="flex items-center gap-2 text-sm font-medium text-white/90">
           <span className="size-2 rounded-full bg-white/90" aria-hidden />
           acomer
@@ -48,7 +80,7 @@ export function LandingHero({
       </div>
 
       {/* Bloque de identidad del local */}
-      <div className="space-y-3">
+      <div className="relative z-10 space-y-3">
         <h1 className="font-display text-5xl font-semibold leading-none tracking-tight">{nombre}</h1>
         {descripcion ? <p className="text-base text-white/85">{descripcion}</p> : null}
 

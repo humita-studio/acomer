@@ -8,6 +8,11 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { DialogDescription, DialogTitle } from '@/shared/ui/dialog';
 import type { CategoriaMenu, ProductoMenu } from '@/features/carta/types';
+import {
+  colorCategoriaMeta,
+  ICONOS_CATEGORIA_MAP,
+  resolveIconoCategoria,
+} from '@/features/menu/categoriaVisual';
 import type { CartLine } from '../types';
 import { QtyStepper } from './QtyStepper';
 import { ProductoConfigDialog } from './ProductoConfigDialog';
@@ -162,21 +167,30 @@ export function PasoArmar({
 
           {!q && categorias.length > 0 && (
             <div className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1">
-              {categorias.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCatActiva(c.id)}
-                  className={cn(
-                    'shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-                    catActiva === c.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {c.nombre}
-                </button>
-              ))}
+              {categorias.map((c) => {
+                const activa = catActiva === c.id;
+                const meta = colorCategoriaMeta(c.color);
+                const Icon = ICONOS_CATEGORIA_MAP[resolveIconoCategoria(c.icono)];
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCatActiva(c.id)}
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
+                      !activa && 'hover:opacity-90',
+                    )}
+                    style={
+                      activa
+                        ? { backgroundColor: meta.hex, color: '#fff' }
+                        : { backgroundColor: meta.soft, color: meta.hex }
+                    }
+                  >
+                    <Icon className="size-3.5" aria-hidden />
+                    {c.nombre}
+                  </button>
+                );
+              })}
             </div>
           )}
 

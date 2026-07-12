@@ -73,9 +73,15 @@ export function MenuDigital({
     const onConfirm = async () => {
         const res = await enviar.mutateAsync();
         if (res.success) {
-            // Pedir ≠ pagar: el pedido va a la cocina; el comensal paga cuando quiera con "Pagar".
-            alert('¡Pedido enviado! Podés seguir pidiendo o tocar "Pagar" cuando quieras.');
-            return { success: true };
+            // Pedir ≠ pagar: va a cocina; el comensal paga con "Pagar".
+            // notice → snackbar mobile en MenuView (no alert/toast).
+            return {
+                success: true,
+                notice: {
+                    title: 'Pedido enviado a cocina',
+                    description: 'Podés seguir pidiendo o tocar Pagar cuando quieras.',
+                },
+            };
         }
         return { success: false, message: res.message ?? 'Error al enviar' };
     };

@@ -37,6 +37,10 @@ export type LandingConfig = {
   acciones: AccionesLanding;
   colorMarca: ColorMarca;
   redes: RedesLanding;
+  /** URL optimizada de la portada (Cloudinary f_auto,q_auto). Vacío = solo gradiente. */
+  imagenUrl: string;
+  /** public_id en Cloudinary para reemplazar/borrar. */
+  imagenPublicId: string;
 };
 
 const HORARIO_DIA_DEFAULT: HorarioDia = { cerrado: false, turnos: [{ desde: '12:00', hasta: '00:00' }] };
@@ -49,6 +53,8 @@ export const LANDING_CONFIG_DEFAULT: LandingConfig = {
   acciones: { verCarta: true, pedirOnline: true, reservar: true, qr: true },
   colorMarca: 'terracota',
   redes: { whatsapp: '', instagram: '', telefono: '' },
+  imagenUrl: '',
+  imagenPublicId: '',
 };
 
 export const COLORES_MARCA: { value: ColorMarca; label: string }[] = [

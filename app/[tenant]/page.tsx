@@ -38,6 +38,7 @@ export default async function TenantPage({ params }: { params: Promise<{ tenant:
           abierto={abierto}
           horarioTexto={horarioDeHoy(config.horarios, ahora)}
           colorMarca={config.colorMarca}
+          imagenUrl={config.imagenUrl}
         />
         <LandingAcciones
           acciones={config.acciones}

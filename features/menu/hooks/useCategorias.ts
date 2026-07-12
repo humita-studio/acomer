@@ -2,8 +2,15 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/shared/query/keys';
-import { obtenerCategoriasMenu, crearCategoria, eliminarCategoria } from '../categoriasActions';
+import {
+  obtenerCategoriasMenu,
+  crearCategoria,
+  editarCategoria,
+  eliminarCategoria,
+  type CategoriaInput,
+} from '../categoriasActions';
 import type { CategoriaMenu } from '../types';
+import { normalizarVisualCategoria } from '../categoriaVisual';
 
 export function useCategorias(initial?: CategoriaMenu[]) {
   return useQuery({
@@ -18,23 +25,68 @@ export function useCrearCategoria() {
   const key = queryKeys.categoriasMenu();
 
   return useMutation({
-    mutationFn: async (nombre: string) => {
-      const res = await crearCategoria(nombre);
+    mutationFn: async (input: CategoriaInput) => {
+      const res = await crearCategoria(input);
       if (!res.success) throw new Error(res.message);
       return res;
     },
-    onMutate: async (nombre) => {
+    onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<CategoriaMenu[]>(key) ?? [];
+      const visual = normalizarVisualCategoria(input);
       queryClient.setQueryData<CategoriaMenu[]>(key, [
         ...previous,
-        { id: `temp-${crypto.randomUUID()}`, nombre },
+        {
+          id: `temp-${crypto.randomUUID()}`,
+          nombre: input.nombre.trim(),
+          color: visual.color,
+          icono: visual.icono,
+        },
       ]);
       return { previous };
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       alert(error instanceof Error ? error.message : 'Error al crear la categoría');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
+}
+
+export function useEditarCategoria() {
+  const queryClient = useQueryClient();
+  const key = queryKeys.categoriasMenu();
+
+  return useMutation({
+    mutationFn: async ({ id, ...input }: CategoriaInput & { id: string }) => {
+      const res = await editarCategoria(id, input);
+      if (!res.success) throw new Error(res.message);
+      return res;
+    },
+    onMutate: async ({ id, ...input }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<CategoriaMenu[]>(key) ?? [];
+      const visual = normalizarVisualCategoria(input);
+      queryClient.setQueryData<CategoriaMenu[]>(
+        key,
+        previous.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                nombre: input.nombre.trim(),
+                color: visual.color,
+                icono: visual.icono,
+              }
+            : c
+        )
+      );
+      return { previous };
+    },
+    onError: (error, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
+      alert(error instanceof Error ? error.message : 'Error al actualizar la categoría');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });

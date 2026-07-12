@@ -79,6 +79,8 @@ export async function obtenerLandingConfig(tenantId: string): Promise<LandingCon
     acciones: parsearAcciones(row.acciones),
     colorMarca: COLORES_VALIDOS.includes(color) ? color : 'terracota',
     redes: parsearRedes(row.redes),
+    imagenUrl: row.imagenUrl ?? '',
+    imagenPublicId: row.imagenPublicId ?? '',
   };
 }
 
@@ -114,8 +116,11 @@ function sanearHorarios(horarios: HorarioDia[]): HorarioDia[] {
   });
 }
 
+/** Campos que edita el form de landing (la imagen va por actions dedicadas). */
+export type LandingConfigFormData = Omit<LandingConfig, 'imagenUrl' | 'imagenPublicId'>;
+
 /** Admin: crea o actualiza la config de landing (upsert por restaurante). */
-export async function guardarLandingConfigAction(datos: LandingConfig) {
+export async function guardarLandingConfigAction(datos: LandingConfigFormData) {
   try {
     const session = await getCurrentSession();
     if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
@@ -124,6 +129,8 @@ export async function guardarLandingConfigAction(datos: LandingConfig) {
 
     const color: ColorMarca = COLORES_VALIDOS.includes(datos.colorMarca) ? datos.colorMarca : 'terracota';
 
+    // La imagen se gestiona con actions dedicadas (subida a Cloudinary);
+    // este guardado no toca imagen_url / imagen_public_id.
     const valores = {
       restauranteId: session.restauranteId,
       descripcion: (datos.descripcion ?? '').trim().slice(0, 200),

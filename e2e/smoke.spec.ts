@@ -50,7 +50,7 @@ test.describe('Tenant público — Nonna Raffaela', () => {
 
     const notFound = page.getByText(/Restaurante no encontrado|Local no encontrado/i);
     const offline = page.getByText(/no está tomando pedidos online/i);
-    const search = page.getByPlaceholder(/Buscar en el menú/i);
+    const search = page.getByRole('searchbox', { name: /Buscar en el menú/i });
 
     await Promise.race([
       search.waitFor({ state: 'visible', timeout: 45_000 }),

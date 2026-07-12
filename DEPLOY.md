@@ -77,6 +77,9 @@ tener doble CDN y problemas de SSL (errores `525` / `526`), y el plan free de Cl
 | `NEXT_PUBLIC_MP_CLIENT_ID` | Client ID de Mercado Pago Connect (OAuth) | `5430330461934441` |
 | `MP_CLIENT_SECRET` | Client secret de Mercado Pago | `...` |
 | `MP_WEBHOOK_SECRET` | Secret de firma de webhooks MP (panel → Webhooks → `x-signature`) | `...` |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Cloud name de Cloudinary (subida de fotos del local) | `mi-cloud` |
+| `CLOUDINARY_API_KEY` | API Key de Cloudinary (firma de uploads) | `123456789012345` |
+| `CLOUDINARY_API_SECRET` | API Secret de Cloudinary (**solo server**) | `...` |
 
 > **No commitees secretos.** El `.env` local no debe subirse al repo; cargá estos valores
 > directamente en el panel de Vercel.

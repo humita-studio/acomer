@@ -11,6 +11,11 @@ import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/carta/types';
+import {
+  colorCategoriaMeta,
+  ICONOS_CATEGORIA_MAP,
+  resolveIconoCategoria,
+} from '@/features/menu/categoriaVisual';
 import type { TicketItem } from '@/features/pedidos/obtenerTicketMesa';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
@@ -289,21 +294,30 @@ export function MesaPedidoManager({
               <>
                 <div className="mb-4 overflow-x-auto pb-1">
                   <div className="flex gap-2">
-                    {categorias.map((cat) => (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => setActiveCategory(cat.id)}
-                        className={cn(
-                          'shrink-0 rounded-full px-3.5 py-2 text-sm font-medium transition-colors',
-                          activeCategory === cat.id
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-secondary-foreground hover:bg-muted/80',
-                        )}
-                      >
-                        {cat.nombre}
-                      </button>
-                    ))}
+                    {categorias.map((cat) => {
+                      const activa = activeCategory === cat.id;
+                      const meta = colorCategoriaMeta(cat.color);
+                      const Icon = ICONOS_CATEGORIA_MAP[resolveIconoCategoria(cat.icono)];
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setActiveCategory(cat.id)}
+                          className={cn(
+                            'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition-colors',
+                            !activa && 'hover:opacity-90',
+                          )}
+                          style={
+                            activa
+                              ? { backgroundColor: meta.hex, color: '#fff' }
+                              : { backgroundColor: meta.soft, color: meta.hex }
+                          }
+                        >
+                          <Icon className="size-3.5" aria-hidden />
+                          {cat.nombre}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

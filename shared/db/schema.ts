@@ -73,6 +73,10 @@ export const categorias = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull(),
     nombre: text('nombre').notNull(),
+    /** Clave de la paleta (p. ej. terracota, verde). Ver features/menu/categoriaVisual. */
+    color: text('color').notNull().default('terracota'),
+    /** Nombre de icono Lucide (p. ej. utensils, coffee). Ver features/menu/categoriaVisual. */
+    icono: text('icono').notNull().default('utensils'),
     activo: boolean('activo').default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -562,6 +566,10 @@ export const landingConfig = pgTable(
     colorMarca: text('color_marca').notNull().default('terracota'), // terracota | ambar | verde
     // Contacto/redes: { whatsapp, instagram, telefono }.
     redes: jsonb('redes').notNull().default({ whatsapp: '', instagram: '', telefono: '' }),
+    // Portada del local en Cloudinary. URL de entrega ya optimizada (f_auto,q_auto).
+    imagenUrl: text('imagen_url').notNull().default(''),
+    // public_id en Cloudinary para borrar/reemplazar sin dejar huérfanos.
+    imagenPublicId: text('imagen_public_id').notNull().default(''),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

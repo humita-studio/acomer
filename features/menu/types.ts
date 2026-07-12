@@ -1,7 +1,14 @@
 // Modelo de dominio del menú. Fuente única de tipos compartidos entre
 // hooks, actions y componentes de la feature.
 
-export type CategoriaMenu = { id: string; nombre: string };
+export type CategoriaMenu = {
+  id: string;
+  nombre: string;
+  /** Clave de paleta (features/menu/categoriaVisual). */
+  color: string;
+  /** Nombre de icono Lucide (features/menu/categoriaVisual). */
+  icono: string;
+};
 
 export type ProductoMenu = {
   id: string;

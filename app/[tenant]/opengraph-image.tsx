@@ -34,10 +34,12 @@ export default async function Image({
   let descripcion = 'Carta digital, pedidos online y reservas.';
   let direccion = '';
   let colorMarca: ColorMarca = 'terracota';
+  let imagenUrl = '';
 
   if (rest && !rest.deletedAt) {
     const config = await obtenerLandingConfig(rest.id);
     colorMarca = config.colorMarca;
+    imagenUrl = config.imagenUrl?.trim() ?? '';
     if (config.descripcion.trim()) {
       descripcion = truncar(config.descripcion, 140);
     } else {
@@ -62,28 +64,58 @@ export default async function Image({
           overflow: 'hidden',
         }}
       >
+        {imagenUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- ImageResponse no usa next/image
+          <img
+            src={imagenUrl}
+            alt=""
+            width={1200}
+            height={630}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+        ) : null}
+        {/* Velo oscuro si hay foto; sin foto quedan los orbes del gradiente */}
         <div
           style={{
             position: 'absolute',
-            top: '-100px',
-            right: '-60px',
-            width: '480px',
-            height: '480px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%)',
+            inset: 0,
+            background: imagenUrl
+              ? 'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.4) 55%, rgba(0,0,0,0.25) 100%)'
+              : 'transparent',
           }}
         />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '-140px',
-            left: '-80px',
-            width: '420px',
-            height: '420px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0) 70%)',
-          }}
-        />
+        {!imagenUrl ? (
+          <>
+            <div
+              style={{
+                position: 'absolute',
+                top: '-100px',
+                right: '-60px',
+                width: '480px',
+                height: '480px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%)',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '-140px',
+                left: '-80px',
+                width: '420px',
+                height: '420px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0) 70%)',
+              }}
+            />
+          </>
+        ) : null}
 
         {/* Marca plataforma */}
         <div

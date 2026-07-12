@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/shared/ui/select';
 import { guardarLandingConfigAction } from '../landingConfigActions';
+import { ImagenLocalUploader } from './ImagenLocalUploader';
 import {
   COLORES_MARCA,
   DIAS_SEMANA,
@@ -114,6 +115,8 @@ export function LandingConfigForm({
         {/* Columna Izquierda: Identidad y Básicos */}
         <div className="space-y-6">
           {identidadSuperior}
+
+          <ImagenLocalUploader imagenUrl={initial.imagenUrl} />
           
           {/* Identidad */}
           <Card>
