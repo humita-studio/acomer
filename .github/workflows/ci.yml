@@ -27,3 +27,26 @@ jobs:
 
       - name: Unit tests
         run: bun run test
+
+  # Smoke e2e (landing + redirect). Sin secrets de DB no valida el tenant real.
+  e2e-smoke:
+    name: E2E smoke
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: E2E (landing + admin redirect)
+        run: bunx playwright test e2e/smoke.spec.ts --grep "Landing|protegidas"
+        env:
+          CI: 'true'

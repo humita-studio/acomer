@@ -1,7 +1,7 @@
 'use server';
 
-import { sesionesMesa, datosEntrega } from '@/shared/db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { sesionesMesa, datosEntrega, pedidos } from '@/shared/db/schema';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
@@ -13,6 +13,7 @@ import {
   inserirPedidoDesdeLineas,
   type PedidoItemInput,
 } from '@/features/pedidos/crearPedidoCore';
+import { entregaACocina } from '@/features/pedidos/estadoSync';
 import { obtenerDeliveryConfig } from './deliveryConfigActions';
 import { modosPermitidos } from './deliveryConfig';
 
@@ -291,6 +292,8 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
       return { success: false, message: 'Estado inválido' };
     }
 
+    const estadoCocina = entregaACocina(nuevoEstado);
+
     await withTenant(claimsFromSession(session), async (tx) => {
       await tx
         .update(datosEntrega)
@@ -301,6 +304,20 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
             eq(datosEntrega.restauranteId, session.restauranteId),
           ),
         );
+
+      // Espejo en KDS: el tablero de cocina lee `pedidos.estado`.
+      if (estadoCocina) {
+        await tx
+          .update(pedidos)
+          .set({ estado: estadoCocina, updatedAt: new Date() })
+          .where(
+            and(
+              eq(pedidos.sesionMesaId, sesionMesaId),
+              eq(pedidos.restauranteId, session.restauranteId),
+              ne(pedidos.estado, 'Cancelado'),
+            ),
+          );
+      }
 
       // Entregado/Cancelado cierran la sesión; volver a un estado en curso (p. ej.
       // arrastrando la tarjeta hacia atrás en el tablero) la reabre.
@@ -320,6 +337,13 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
       sesionMesaId,
       estadoEntrega: nuevoEstado,
     });
+    // Cocina escucha `pedido_estado` / `nuevo_pedido` para refrescar el KDS.
+    if (estadoCocina) {
+      await broadcastOrdenExterna(session.restauranteId, 'nuevo_pedido', {
+        sesionMesaId,
+        estado: estadoCocina,
+      });
+    }
 
     // Avisar al cliente que está siguiendo su pedido (canal de su sesión), para
     // que la pantalla de seguimiento avance el estado sin recargar.

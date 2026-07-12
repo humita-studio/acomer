@@ -43,7 +43,14 @@ bun run lint       # eslint
 
 ```bash
 bun run test       # unit tests (vitest)
+bun run test:e2e   # smoke e2e (Playwright; levanta `next dev` si hace falta)
 bun run typecheck  # tsc --noEmit
+```
+
+Los e2e públicos usan el tenant `demo` por defecto (`http://demo.localhost:3000`). Override:
+
+```bash
+PLAYWRIGHT_TENANT_URL=http://mi-local.localhost:3000 bun run test:e2e
 ```
 
 ## Estructura

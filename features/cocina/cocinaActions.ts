@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import {
   comandaItemModificadores,
   comandaItems,
+  datosEntrega,
   mesas,
   pedidos,
   sesionesMesa,
@@ -12,6 +13,7 @@ import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { cocinaAEntrega } from '@/features/pedidos/estadoSync';
 import type { EstadoPedidoCocina, PedidoCocina } from './types';
 
 const ESTADOS_ACTIVOS: EstadoPedidoCocina[] = ['Pendiente', 'En Preparación', 'Listo'];
@@ -192,17 +194,60 @@ export async function avanzarPedidoCocinaAction(
           ),
         );
 
+      // Flujo e2e online: al mover en cocina, el seguimiento del comensal y el
+      // tablero de pedidos-online leen `datos_entrega.estado_entrega`.
+      const [sesion] = await db
+        .select({ tipo: sesionesMesa.tipo })
+        .from(sesionesMesa)
+        .where(
+          and(eq(sesionesMesa.id, pedido.sesionMesaId), eq(sesionesMesa.restauranteId, tenantId)),
+        )
+        .limit(1);
+
+      let estadoEntrega: string | null = null;
+      const esExterno = sesion?.tipo === 'takeaway' || sesion?.tipo === 'delivery';
+      if (esExterno) {
+        estadoEntrega = cocinaAEntrega(nuevoEstado);
+        if (estadoEntrega) {
+          await db
+            .update(datosEntrega)
+            .set({ estadoEntrega, updatedAt: new Date() })
+            .where(
+              and(
+                eq(datosEntrega.sesionMesaId, pedido.sesionMesaId),
+                eq(datosEntrega.restauranteId, tenantId),
+              ),
+            );
+
+          // Entregado/Cancelado cierran la sesión externa (mismo criterio que delivery).
+          if (estadoEntrega === 'Entregado' || estadoEntrega === 'Cancelado') {
+            await db
+              .update(sesionesMesa)
+              .set({ estado: 'Cerrada', updatedAt: new Date() })
+              .where(
+                and(
+                  eq(sesionesMesa.id, pedido.sesionMesaId),
+                  eq(sesionesMesa.restauranteId, tenantId),
+                ),
+              );
+          }
+        }
+      }
+
       return {
         success: true,
         message: 'Estado actualizado',
         sesionMesaId: pedido.sesionMesaId,
+        estadoEntrega,
+        esExterno,
       };
     });
 
     if (result.success && 'sesionMesaId' in result) {
       try {
         const supabase = await createSupabaseServerClient();
-        await supabase.channel(`admin_restaurant_${tenantId}`).send({
+        const adminChannel = supabase.channel(`admin_restaurant_${tenantId}`);
+        await adminChannel.send({
           type: 'broadcast',
           event: 'pedido_estado',
           payload: {
@@ -211,6 +256,21 @@ export async function avanzarPedidoCocinaAction(
             sesionMesaId: result.sesionMesaId,
           },
         });
+        if (result.esExterno && result.estadoEntrega) {
+          await adminChannel.send({
+            type: 'broadcast',
+            event: 'orden_externa_actualizada',
+            payload: {
+              sesionMesaId: result.sesionMesaId,
+              estadoEntrega: result.estadoEntrega,
+            },
+          });
+          await supabase.channel(`mesa_${result.sesionMesaId}`).send({
+            type: 'broadcast',
+            event: 'estado_entrega_actualizado',
+            payload: { estadoEntrega: result.estadoEntrega },
+          });
+        }
       } catch {
         // best-effort
       }

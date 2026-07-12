@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { extractTenantSlug } from '@/shared/lib/tenant-host';
 
 export const config = {
   matcher: [
@@ -74,28 +75,10 @@ export async function proxy(req: NextRequest) {
       ? 'acomer.com.ar' // Dominio principal en producción
       : 'localhost:3000');
 
-  // Los dominios de Vercel (preview/producción de pruebas) no tienen subdominios
-  // de tenant: hay que tratarlos como dominio principal, no como un restaurante.
-  if (hostname.endsWith('.vercel.app')) {
+  // Apex / www / app / vercel → sin tenant. Subdominio válido → rewrite a /[slug]/...
+  const tenantSlug = extractTenantSlug(hostname, mainDomain);
+  if (!tenantSlug) {
     return response;
-  }
-
-  // Excluir el dominio principal, el `www` y el panel de administración genérico
-  if (
-    hostname === mainDomain ||
-    hostname === `www.${mainDomain}` ||
-    hostname === `app.${mainDomain}`
-  ) {
-    return response;
-  }
-
-  // Si llegamos acá, es un subdominio de un restaurante.
-  // Extraemos el slug (ej: "pizzeria" de "pizzeria.acomer.com.ar")
-  const tenantSlug = hostname.replace(`.${mainDomain}`, '');
-
-  // Validar que el slug es válido (alphanumeric, no vacío)
-  if (!tenantSlug || !/^[a-z0-9-]+$/.test(tenantSlug)) {
-    return NextResponse.rewrite(new URL('/404', req.url));
   }
 
   // Reescribimos internamente la ruta.
