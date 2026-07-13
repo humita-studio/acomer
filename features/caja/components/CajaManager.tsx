@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { Badge } from '@/shared/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import {
@@ -191,10 +192,10 @@ function CajaAbierta({ caja, tenantId }: { caja: CajaActual; tenantId: string })
 
               <div className="space-y-1.5">
                 <Label htmlFor="monto-mov">Monto</Label>
-                <MontoInput
+                <MoneyInput
                   id="monto-mov"
                   value={montoMov}
-                  onChange={setMontoMov}
+                  onValueChange={setMontoMov}
                   placeholder="0,00"
                   required
                 />
@@ -290,10 +291,10 @@ function AbrirCajaCard({ tenantId }: { tenantId: string }) {
         >
           <div className="space-y-1.5">
             <Label htmlFor="monto-inicial">Monto inicial en efectivo</Label>
-            <MontoInput
+            <MoneyInput
               id="monto-inicial"
               value={montoInicial}
-              onChange={setMontoInicial}
+              onValueChange={setMontoInicial}
               placeholder="0,00"
               required
               autoFocus
@@ -373,10 +374,10 @@ function CerrarCajaDialog({
             >
               Efectivo contado
             </Label>
-            <MontoInput
+            <MoneyInput
               id="monto-contado"
               value={montoContado}
-              onChange={setMontoContado}
+              onValueChange={setMontoContado}
               placeholder="0,00"
               className="text-base font-semibold"
               autoFocus
@@ -531,34 +532,6 @@ function ResumenCard({
         {titulo}
       </span>
       <span className="text-lg font-semibold tracking-tight">{valor}</span>
-    </div>
-  );
-}
-
-function MontoInput({
-  value,
-  onChange,
-  className,
-  ...props
-}: {
-  value: string;
-  onChange: (value: string) => void;
-} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>) {
-  return (
-    <div className="relative">
-      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground">
-        $
-      </span>
-      <Input
-        type="number"
-        min="0"
-        step="0.01"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn('pl-7', className)}
-        {...props}
-      />
     </div>
   );
 }

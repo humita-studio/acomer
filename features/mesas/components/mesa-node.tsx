@@ -1,7 +1,7 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Users } from 'lucide-react';
+import { RotateCw, Users } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { type MesaPlano, type Modo } from './plano-types';
 
@@ -14,6 +14,7 @@ export function MesaNode({
   puedeArrastrar,
   mozoNombre,
   onResizePointerDown,
+  onRotatePointerDown,
   onClick,
 }: {
   mesa: MesaPlano;
@@ -25,6 +26,7 @@ export function MesaNode({
   /** Nombre corto del mozo asignado (null si no hay). */
   mozoNombre?: string | null;
   onResizePointerDown?: (e: React.PointerEvent) => void;
+  onRotatePointerDown?: (e: React.PointerEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const editando = modo === 'editar';
@@ -36,11 +38,11 @@ export function MesaNode({
     data: { kind: 'mesa', posX: mesa.posX, posY: mesa.posY, ancho: mesa.ancho, alto: mesa.alto },
   });
 
-  // Colores del Figma: ocupada = terracota, libre = verde, edición = neutro.
+  // Colores: edición neutra madera; operación ocupada/libre.
   const estilo = editando
     ? seleccionada
-      ? 'border-primary bg-accent ring-2 ring-primary/30 text-foreground'
-      : 'border-border-strong bg-card text-foreground hover:border-primary/40'
+      ? 'border-primary bg-[#d4b896] ring-2 ring-primary/35 text-foreground shadow-md'
+      : 'border-[#a68b6a]/70 bg-[#e8d4b8] text-foreground shadow-sm hover:border-primary/50'
     : ocupada
       ? seleccionada
         ? 'border-primary bg-accent ring-2 ring-primary/35 text-primary'
@@ -50,6 +52,7 @@ export function MesaNode({
         : 'border-success/45 bg-success-subtle text-success-foreground hover:bg-success-subtle/80';
 
   const translate = transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) ` : '';
+  const showHandles = editando && seleccionada && puedeArrastrar;
 
   return (
     <div
@@ -68,14 +71,15 @@ export function MesaNode({
         {...(puedeArrastrar ? { ...listeners, ...attributes } : {})}
         onClick={onClick}
         className={cn(
-          'flex h-full w-full flex-col items-center justify-center overflow-hidden border-2 shadow-sm transition-colors',
-          esRedonda ? 'rounded-full' : 'rounded-xl',
+          'flex h-full w-full flex-col items-center justify-center overflow-hidden border-2 transition-colors',
+          esRedonda ? 'rounded-full' : 'rounded-[28%]',
           puedeArrastrar ? 'cursor-move' : 'cursor-pointer',
           estilo,
         )}
         title={[
           mesa.identificador,
           ocupada ? 'Ocupada' : 'Libre',
+          mesa.rotacion ? `${Math.round(mesa.rotacion)}°` : null,
           mozoNombre ? `Mozo: ${mozoNombre}` : null,
         ]
           .filter(Boolean)
@@ -95,7 +99,27 @@ export function MesaNode({
         )}
       </div>
 
-      {editando && seleccionada && onResizePointerDown && (
+      {showHandles && onRotatePointerDown && (
+        <>
+          {/* Eje hacia el handle de rotación */}
+          <div className="pointer-events-none absolute left-1/2 top-0 h-3 w-px -translate-x-1/2 -translate-y-full bg-primary/50" />
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onRotatePointerDown(e);
+            }}
+            className="absolute left-1/2 top-0 flex size-5 -translate-x-1/2 -translate-y-[140%] cursor-grab items-center justify-center rounded-full border-2 border-card bg-primary text-primary-foreground shadow active:cursor-grabbing"
+            title="Arrastrá para rotar · Shift = 15°"
+            aria-label="Rotar mesa"
+          >
+            <RotateCw size={11} strokeWidth={2.5} />
+          </button>
+        </>
+      )}
+
+      {showHandles && onResizePointerDown && (
         <div
           onPointerDown={(e) => {
             e.stopPropagation();

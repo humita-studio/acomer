@@ -347,7 +347,7 @@ export const mesas = pgTable(
     alto: real('alto').notNull().default(2),
     forma: text('forma').notNull().default('cuadrada'), // 'redonda' | 'cuadrada'
     capacidad: integer('capacidad').notNull().default(4),
-    rotacion: integer('rotacion').notNull().default(0), // 0 | 90 | 180 | 270
+    rotacion: integer('rotacion').notNull().default(0), // grados 0–359 (libre en el editor)
     // Cuando la mesa es una sub-mesa temporal (división), apunta a la mesa madre
     parentMesaId: uuid('parent_mesa_id').references((): AnyPgColumn => mesas.id, { onDelete: 'cascade' }),
     /** Mozo responsable (auth.users). Null = sin asignar. */

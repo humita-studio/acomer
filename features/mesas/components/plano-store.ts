@@ -27,6 +27,8 @@ type PlanoStore = {
   ambienteActivoId: string;
   herramienta: Herramienta;
   seleccion: Seleccion | null;
+  /** Alinea posición/tamaño a media celda al soltar o colocar. */
+  snapEnabled: boolean;
   /** Monótono: sube con cada cambio de geometría del draft. */
   layoutRevision: number;
   /** Última revisión confirmada por el server. dirty = layoutRevision > savedRevision. */
@@ -44,6 +46,7 @@ type PlanoStore = {
   setAmbienteActivoId: (id: string) => void;
   setHerramienta: (h: Herramienta) => void;
   setSeleccion: (sel: Seleccion | null | ((prev: Seleccion | null) => Seleccion | null)) => void;
+  setSnapEnabled: (v: boolean | ((prev: boolean) => boolean)) => void;
   setGuardando: (guardando: boolean) => void;
   setSaveError: (err: string | null) => void;
   markSaved: (revision: number) => void;
@@ -75,6 +78,7 @@ const initialState = {
   ambienteActivoId: '',
   herramienta: 'seleccionar' as Herramienta,
   seleccion: null as Seleccion | null,
+  snapEnabled: true,
   layoutRevision: 0,
   savedRevision: 0,
   guardando: false,
@@ -96,6 +100,8 @@ export const usePlanoStore = create<PlanoStore>()((set, get) => ({
     set((s) => ({
       seleccion: typeof sel === 'function' ? sel(s.seleccion) : sel,
     })),
+  setSnapEnabled: (v) =>
+    set((s) => ({ snapEnabled: typeof v === 'function' ? v(s.snapEnabled) : v })),
   setGuardando: (guardando) => set({ guardando }),
   setSaveError: (saveError) => set({ saveError }),
   markSaved: (revision) =>

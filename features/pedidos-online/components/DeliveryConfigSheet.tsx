@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { Label } from '@/shared/ui/label';
 import { Switch } from '@/shared/ui/switch';
 import { Textarea } from '@/shared/ui/textarea';
@@ -422,14 +423,10 @@ function ConfigBody({
                 <Label htmlFor="costo-envio" className="text-sm font-medium">
                   Costo de envío ($)
                 </Label>
-                <Input
+                <MoneyInput
                   id="costo-envio"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="1"
                   value={costoEnvio}
-                  onChange={(e) => setCostoEnvio(e.target.value)}
+                  onValueChange={setCostoEnvio}
                   placeholder="0 = gratis"
                 />
               </div>
@@ -437,14 +434,10 @@ function ConfigBody({
                 <Label htmlFor="pedido-minimo" className="text-sm font-medium">
                   Pedido mínimo ($)
                 </Label>
-                <Input
+                <MoneyInput
                   id="pedido-minimo"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="1"
                   value={pedidoMinimo}
-                  onChange={(e) => setPedidoMinimo(e.target.value)}
+                  onValueChange={setPedidoMinimo}
                   placeholder="0 = sin mínimo"
                 />
               </div>

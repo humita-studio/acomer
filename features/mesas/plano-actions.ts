@@ -25,6 +25,7 @@ function clampNum(value: unknown, min: number, fallback: number) {
   return Math.round(Math.max(n, min) * 100) / 100;
 }
 
+/** Acepta cualquier ángulo entero 0–359 (rotación libre en el editor). */
 function normalizarRotacion(value: unknown) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return 0;
@@ -256,6 +257,33 @@ export async function eliminarMesaPlano(mesaId: string) {
   } catch (error) {
     console.error('[eliminarMesaPlano]', error);
     return { success: false, message: 'Error al eliminar la mesa' };
+  }
+}
+
+/** Renombra el identificador visible de una mesa (no va en el autosave de geometría). */
+export async function renombrarMesaPlano(mesaId: string, identificador: string) {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageTables')) {
+      return { success: false, message: 'No tenés permiso para gestionar el plano' };
+    }
+
+    const limpio = (identificador || '').trim();
+    if (!limpio) return { success: false, message: 'El nombre no puede estar vacío' };
+    if (limpio.length > 40) return { success: false, message: 'Máximo 40 caracteres' };
+
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(mesas)
+        .set({ identificador: limpio })
+        .where(and(eq(mesas.id, mesaId), eq(mesas.restauranteId, session.restauranteId))),
+    );
+
+    revalidatePath('/admin/mesas');
+    return { success: true };
+  } catch (error) {
+    console.error('[renombrarMesaPlano]', error);
+    return { success: false, message: 'Error al renombrar la mesa' };
   }
 }
 

@@ -4,7 +4,7 @@ import { Loader2, Tag } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatPeso } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/button';
-import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { DialogDescription, DialogTitle } from '@/shared/ui/dialog';
 import { type Metodo, METODO_LABEL } from '../types';
 
@@ -54,7 +54,7 @@ export function PasoCobrar({
     ? ['efectivo', 'tarjeta_fisica', 'mercado_pago']
     : ['efectivo', 'tarjeta_fisica'];
 
-  const recibidoNum = parseFloat(montoRecibido.replace(',', '.')) || 0;
+  const recibidoNum = Number(montoRecibido) || 0;
   const vuelto = Math.max(0, recibidoNum - total);
   const faltante = metodo === 'efectivo' && recibidoNum > 0 && recibidoNum < total;
   // Efectivo: pedimos monto recibido ≥ total (o 0 exacto solo si total es 0).
@@ -152,10 +152,9 @@ export function PasoCobrar({
               <label className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Monto recibido
               </label>
-              <Input
+              <MoneyInput
                 value={montoRecibido}
-                onChange={(e) => setMontoRecibido(e.target.value)}
-                inputMode="decimal"
+                onValueChange={setMontoRecibido}
                 placeholder={formatPeso(total).replace(/\s/g, '')}
                 aria-invalid={faltante || (efectivoIncompleto && montoRecibido.trim() !== '')}
               />

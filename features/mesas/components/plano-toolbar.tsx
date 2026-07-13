@@ -5,11 +5,12 @@ import {
   CloudOff,
   List as ListIcon,
   Loader2,
+  Magnet,
   Minus,
   MousePointer2,
-  PenLine,
   Plus,
   Square,
+  Table2,
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
@@ -26,6 +27,7 @@ export function PlanoToolbar({
   canManage,
   mostrarLista,
   herramienta,
+  snapEnabled,
   saveStatus,
   stats,
   onCambiarAmbiente,
@@ -34,7 +36,8 @@ export function PlanoToolbar({
   onToggleMostrarLista,
   onSetModo,
   onSetHerramienta,
-  onAddMesa,
+  onToggleSnap,
+  onAddMesaRapida,
   onDeleteAmbiente,
   onRetrySave,
 }: {
@@ -45,6 +48,7 @@ export function PlanoToolbar({
   canManage: boolean;
   mostrarLista: boolean;
   herramienta: Herramienta;
+  snapEnabled: boolean;
   saveStatus: SaveStatus;
   stats: { ocupadas: number; libres: number; total: number };
   onCambiarAmbiente: (id: string) => void;
@@ -53,7 +57,9 @@ export function PlanoToolbar({
   onToggleMostrarLista: () => void;
   onSetModo: (modo: Modo) => void;
   onSetHerramienta: (h: Herramienta) => void;
-  onAddMesa: () => void;
+  onToggleSnap: () => void;
+  /** Coloca una mesa en el primer hueco libre (sin click en el plano). */
+  onAddMesaRapida: () => void;
   onDeleteAmbiente: (amb: AmbienteUI) => void;
   onRetrySave?: () => void;
 }) {
@@ -106,7 +112,7 @@ export function PlanoToolbar({
 
         {editando && (
           <p className="text-xs text-muted-foreground">
-            Los cambios se guardan solos · arrastrá y redimensioná libremente
+            Autosave · V mover · M mesa · P pared · R rotar · Del borrar
           </p>
         )}
 
@@ -159,23 +165,56 @@ export function PlanoToolbar({
       {/* Herramientas de edición */}
       {editando && (
         <div className="mx-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 p-2 sm:mx-4">
-          <ToolButton active={herramienta === 'seleccionar'} onClick={() => onSetHerramienta('seleccionar')}>
+          <ToolButton
+            active={herramienta === 'seleccionar'}
+            onClick={() => onSetHerramienta('seleccionar')}
+            title="Mover y seleccionar (V)"
+          >
             <MousePointer2 size={14} /> Mover
           </ToolButton>
-          <ToolButton active={herramienta === 'pared'} onClick={() => onSetHerramienta('pared')}>
+          <ToolButton
+            active={herramienta === 'mesa'}
+            onClick={() => onSetHerramienta('mesa')}
+            title="Click en el plano para colocar mesas (M)"
+          >
+            <Table2 size={14} /> Mesa
+          </ToolButton>
+          <ToolButton
+            active={herramienta === 'pared' || herramienta === 'linea'}
+            onClick={() => onSetHerramienta('pared')}
+            title="Trazar pared de punta a punta (P) · Shift = ángulo libre"
+          >
             <Minus size={14} /> Pared
           </ToolButton>
-          <ToolButton active={herramienta === 'linea'} onClick={() => onSetHerramienta('linea')}>
-            <PenLine size={14} /> Línea
-          </ToolButton>
-          <ToolButton active={herramienta === 'barra'} onClick={() => onSetHerramienta('barra')}>
+          <ToolButton
+            active={herramienta === 'barra'}
+            onClick={() => onSetHerramienta('barra')}
+            title="Dibujar barra / mostrador (B)"
+          >
             <Square size={14} /> Barra
           </ToolButton>
+
           <div className="mx-1 h-6 w-px bg-border" />
-          <Button type="button" variant="outline" size="sm" onClick={onAddMesa}>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAddMesaRapida}
+            title="Agrega una mesa en el primer hueco libre"
+          >
             <Plus />
-            Mesa
+            Auto
           </Button>
+
+          <ToolButton
+            active={snapEnabled}
+            onClick={onToggleSnap}
+            title={snapEnabled ? 'Snap a grilla activado' : 'Snap a grilla desactivado'}
+          >
+            <Magnet size={14} /> Snap
+          </ToolButton>
+
           {ambienteActivo && ambientes.length > 1 && (
             <Button
               type="button"
@@ -183,6 +222,7 @@ export function PlanoToolbar({
               size="sm"
               onClick={() => onDeleteAmbiente(ambienteActivo)}
               title="Eliminar el ambiente actual"
+              className="ml-auto"
             >
               <Trash2 />
               Ambiente
@@ -207,7 +247,7 @@ function SaveIndicator({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Loader2 className="size-3.5 animate-spin" />
-        {status === 'saving' ? 'Guardando…' : 'Guardando…'}
+        Guardando…
       </span>
     );
   }
@@ -249,15 +289,18 @@ function ToolButton({
   active,
   onClick,
   children,
+  title,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       className={cn(
         'inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition',
         active

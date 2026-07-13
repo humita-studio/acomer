@@ -149,7 +149,7 @@ export function VentaMostradorFlow({
       }
 
       if (metodo === 'efectivo') {
-        const recibido = parseFloat(montoRecibido.replace(',', '.')) || 0;
+        const recibido = Number(montoRecibido) || 0;
         if (totalCobro > 0 && recibido < totalCobro) {
           setError(
             `El monto recibido es menor al total (${totalCobro.toLocaleString('es-AR', {
@@ -165,7 +165,7 @@ export function VentaMostradorFlow({
       const res = await cobrarVentaMostradorAction(items, {
         metodoPago: metodo,
         nombreReferencia: nombreRef,
-        montoRecibido: parseFloat(montoRecibido.replace(',', '.')) || 0,
+        montoRecibido: Number(montoRecibido) || 0,
         omitirIds,
       });
       if (!res.success || !res.ticket) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Pencil, Printer, QrCode, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -30,7 +30,7 @@ import { MesaPanel } from './mesa-panel';
 import { ElementoPanel } from './elemento-panel';
 import { OperacionPanel } from './operacion-panel';
 import { usePlanoStore, type SaveStatus } from './plano-store';
-import { usePlanoAcciones } from './use-plano-acciones';
+import { NUDGE_COARSE, NUDGE_FINE, usePlanoAcciones } from './use-plano-acciones';
 import { type FiltroMozo, type MesaPlano, type Modo } from './plano-types';
 
 function mesaPasaFiltroMozo(
@@ -76,6 +76,7 @@ export function PlanoManager({
     ambienteActivoId,
     herramienta,
     seleccion,
+    snapEnabled,
     layoutRevision,
     savedRevision,
     guardando,
@@ -88,6 +89,7 @@ export function PlanoManager({
     setAmbienteActivoId,
     setHerramienta,
     setSeleccion,
+    setSnapEnabled,
     setMostrarLista,
     pushAviso,
     removeAviso,
@@ -204,11 +206,83 @@ export function PlanoManager({
   const ambienteActivo = ambientes.find((a) => a.id === activeId) ?? null;
 
   const acciones = usePlanoAcciones({ activeId, ambientes, mesas, elementos, draft, tenantId });
+  const accionesRef = useRef(acciones);
+  accionesRef.current = acciones;
+
+  // Atajos de teclado en modo edición (ignora si el foco está en un input).
+  useEffect(() => {
+    if (!editando) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) {
+        return;
+      }
+      const a = accionesRef.current;
+      const sel = usePlanoStore.getState().seleccion;
+      const key = e.key.toLowerCase();
+      if (key === 'v' || key === 'escape') {
+        e.preventDefault();
+        if (key === 'escape') setSeleccion(null);
+        setHerramienta('seleccionar');
+        return;
+      }
+      if (key === 'm') {
+        e.preventDefault();
+        setHerramienta('mesa');
+        return;
+      }
+      if (key === 'p') {
+        e.preventDefault();
+        setHerramienta('pared');
+        return;
+      }
+      if (key === 'b') {
+        e.preventDefault();
+        setHerramienta('barra');
+        return;
+      }
+      if (key === 'delete' || key === 'backspace') {
+        e.preventDefault();
+        a.handleDeleteSeleccion();
+        return;
+      }
+      if (key === 'd' && (e.ctrlKey || e.metaKey) && sel?.tipo === 'mesa') {
+        e.preventDefault();
+        void a.handleDuplicateMesa(sel.id);
+        return;
+      }
+      // R = +15° (Shift+R = −15°). Rotación libre con el handle ↻ del canvas.
+      if (key === 'r' && sel) {
+        e.preventDefault();
+        a.handleRotateSeleccion(e.shiftKey ? -15 : 15);
+        return;
+      }
+      const step = e.shiftKey ? NUDGE_COARSE : NUDGE_FINE;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        a.handleNudge(-step, 0);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        a.handleNudge(step, 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        a.handleNudge(0, -step);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        a.handleNudge(0, step);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editando, setHerramienta, setSeleccion]);
 
   const setModoSeguro = async (next: Modo) => {
     if (next === modo) return;
     if (next === 'editar') {
       iniciarEdicion(planoData);
+      // Primer armado: ir directo a colocar mesas con un click.
+      if (planoData.mesas.length === 0) setHerramienta('mesa');
       return;
     }
     // Al salir de edición: flush del autosave (no pedimos descartar).
@@ -256,7 +330,7 @@ export function PlanoManager({
           </h1>
           <p className="text-sm text-text-secondary">
             {editando
-              ? 'Los cambios se guardan solos. Arrastrá, redimensioná y agregá mesas o paredes.'
+              ? 'Autosave activo. Usá la herramienta Mesa y clickeá donde quieras colocarla.'
               : `Plano de salón en vivo · ${stats.ocupadas} ocupadas · ${stats.libres} libres`}
           </p>
         </div>
@@ -308,6 +382,7 @@ export function PlanoManager({
             canManage={canManage}
             mostrarLista={mostrarLista}
             herramienta={herramienta}
+            snapEnabled={snapEnabled}
             saveStatus={saveStatus}
             stats={stats}
             onCambiarAmbiente={cambiarAmbiente}
@@ -316,7 +391,8 @@ export function PlanoManager({
             onToggleMostrarLista={() => setMostrarLista((v) => !v)}
             onSetModo={(m) => void setModoSeguro(m)}
             onSetHerramienta={setHerramienta}
-            onAddMesa={() => void acciones.handleAddMesa()}
+            onToggleSnap={() => setSnapEnabled((v) => !v)}
+            onAddMesaRapida={() => void acciones.handleAddMesa()}
             onDeleteAmbiente={(a) => void acciones.handleDeleteAmbiente(a)}
             onRetrySave={() => void acciones.guardar({ revalidate: false })}
           />
@@ -328,11 +404,13 @@ export function PlanoManager({
                 modo={modo}
                 herramienta={herramienta}
                 seleccion={seleccion}
+                snapEnabled={snapEnabled}
                 mozoLabel={mozoLabel}
                 onChangeMesa={acciones.updateMesa}
                 onChangeElemento={acciones.updateElemento}
                 onSelect={setSeleccion}
                 onCreateElemento={acciones.handleCreateElemento}
+                onPlaceMesa={(pos) => void acciones.handleAddMesa({ ...pos, silent: true })}
               />
             ) : (
               <div className="rounded-xl border border-dashed border-border-strong py-16 text-center text-sm text-muted-foreground">
@@ -389,6 +467,8 @@ export function PlanoManager({
                     mesa={selMesa}
                     ambientes={ambientes}
                     onUpdate={(p) => acciones.updateMesa(selMesa.id, p)}
+                    onRename={(nombre) => void acciones.handleRenameMesa(selMesa.id, nombre)}
+                    onDuplicate={() => void acciones.handleDuplicateMesa(selMesa.id)}
                     onDelete={() => acciones.handleDeleteMesa(selMesa.id)}
                   />
                 )}

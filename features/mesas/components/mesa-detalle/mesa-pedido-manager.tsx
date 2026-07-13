@@ -10,7 +10,7 @@ import { useTicketMesa, useAgregarItemsStaff } from '@/features/comanda/use-tick
 import { queryKeys } from '@/shared/query/keys';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { useConfirm } from '@/shared/hooks/use-confirm';
-import { formatPeso } from '@/shared/lib/format';
+import { formatPeso, parseMontoInput } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/carta/types';
 import {
@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { Textarea } from '@/shared/ui/textarea';
 
 type Props = {
@@ -156,12 +157,12 @@ export function MesaPedidoManager({
 
   const handleAgregarLibre = () => {
     const nombre = freeNombre.trim();
-    const precio = parseFloat(freePrecio.replace(',', '.'));
+    const precio = parseMontoInput(freePrecio);
     if (!nombre) {
       setFreeError('Poné un nombre');
       return;
     }
-    if (!Number.isFinite(precio) || precio <= 0) {
+    if (precio == null || precio <= 0) {
       setFreeError('El precio tiene que ser mayor a 0');
       return;
     }
@@ -180,7 +181,7 @@ export function MesaPedidoManager({
     setFreeOpen(false);
   };
 
-  const freeSubtotal = (parseFloat(freePrecio.replace(',', '.')) || 0) * freeCantidad;
+  const freeSubtotal = (parseMontoInput(freePrecio) ?? 0) * freeCantidad;
 
   const handleLiberar = async () => {
     const ok = await confirm({
@@ -510,10 +511,9 @@ export function MesaPedidoManager({
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="mb-1.5 block text-sm font-medium">Precio</label>
-                <Input
+                <MoneyInput
                   value={freePrecio}
-                  onChange={(e) => setFreePrecio(e.target.value)}
-                  inputMode="decimal"
+                  onValueChange={setFreePrecio}
                   placeholder="0"
                 />
               </div>

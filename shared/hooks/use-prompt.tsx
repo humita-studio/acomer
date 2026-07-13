@@ -11,7 +11,7 @@ export type PromptOptions = {
   placeholder?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  inputType?: 'text' | 'number';
+  inputType?: 'text' | 'number' | 'money';
   min?: number;
   max?: number;
   step?: string | number;

@@ -10,6 +10,7 @@ import {
   eliminarAmbiente,
   crearMesaEnPlano,
   eliminarMesaPlano,
+  renombrarMesaPlano,
   crearElementoPlano,
   eliminarElementoPlano,
   guardarLayoutAction,
@@ -23,8 +24,14 @@ import { useConfirm } from '@/shared/hooks/use-confirm';
 import { usePrompt } from '@/shared/hooks/use-prompt';
 import { usePlanoStore, type PlanoDraft } from './plano-store';
 import {
+  COARSE_STEP,
   COLS,
+  FINE_STEP,
+  MESA_DEFAULT_ALTO,
+  MESA_DEFAULT_ANCHO,
+  MESA_DEFAULT_CAPACIDAD,
   ROWS,
+  round2,
   type AmbienteUI,
   type ElementoPlanoUI,
   type Herramienta,
@@ -300,11 +307,38 @@ export function usePlanoAcciones({
   }, [guardar]);
 
   // ---- CRUD optimista ----
-  const handleAddMesa = async () => {
+  /**
+   * Crea una mesa en el ambiente activo.
+   * - Sin args: primer hueco libre.
+   * - Con pos: colocación por click en el canvas.
+   * - Con from: duplicar (copia forma/capacidad/tamaño).
+   */
+  const handleAddMesa = async (opts?: {
+    posX?: number;
+    posY?: number;
+    from?: MesaPlano;
+    /** Si true (default al colocar por click), no toast de éxito por cada una. */
+    silent?: boolean;
+  }) => {
     if (!activeId) return;
-    const nombre = nextMesaNombre(mesas);
+    const from = opts?.from;
+    const ancho = from?.ancho ?? MESA_DEFAULT_ANCHO;
+    const alto = from?.alto ?? MESA_DEFAULT_ALTO;
     const mesasAmb = mesas.filter((m) => m.ambienteId === activeId);
-    const spot = findFreeSpot(mesasAmb);
+    const spot =
+      opts?.posX != null && opts?.posY != null
+        ? {
+            posX: round2(Math.min(Math.max(0, opts.posX), COLS - ancho)),
+            posY: round2(Math.min(Math.max(0, opts.posY), ROWS - alto)),
+          }
+        : from
+          ? {
+              posX: round2(Math.min(from.posX + from.ancho + 0.5, COLS - ancho)),
+              posY: from.posY,
+            }
+          : findFreeSpot(mesasAmb, ancho, alto);
+
+    const nombre = nextMesaNombre(mesas);
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimista: MesaPlano = {
       id: tempId,
@@ -314,11 +348,11 @@ export function usePlanoAcciones({
       ambienteId: activeId,
       posX: spot.posX,
       posY: spot.posY,
-      ancho: 2,
-      alto: 2,
-      forma: 'cuadrada',
-      capacidad: 4,
-      rotacion: 0,
+      ancho,
+      alto,
+      forma: from?.forma === 'redonda' ? 'redonda' : 'cuadrada',
+      capacidad: from?.capacidad ?? MESA_DEFAULT_CAPACIDAD,
+      rotacion: from?.rotacion ?? 0,
       ocupada: false,
       mozoUserId: null,
     };
@@ -329,16 +363,25 @@ export function usePlanoAcciones({
     const res = await crearMesaEnPlano(activeId, nombre, {
       posX: spot.posX,
       posY: spot.posY,
-      ancho: 2,
-      alto: 2,
-      forma: 'cuadrada',
-      capacidad: 4,
-      rotacion: 0,
+      ancho,
+      alto,
+      forma: optimista.forma,
+      capacidad: optimista.capacidad,
+      rotacion: optimista.rotacion,
     });
     if (res.success && res.mesa) {
       const real = mapMesaFromServer(res.mesa as unknown as Record<string, unknown>, optimista);
       // Preferir posición local por si el roundtrip reordenó floats.
-      const merged = { ...real, posX: optimista.posX, posY: optimista.posY };
+      const merged = {
+        ...real,
+        posX: optimista.posX,
+        posY: optimista.posY,
+        ancho: optimista.ancho,
+        alto: optimista.alto,
+        forma: optimista.forma,
+        capacidad: optimista.capacidad,
+        rotacion: optimista.rotacion,
+      };
       patchDraft(
         (d) => ({ ...d, mesas: d.mesas.map((m) => (m.id === tempId ? merged : m)) }),
         false,
@@ -347,12 +390,94 @@ export function usePlanoAcciones({
         s?.tipo === 'mesa' && s.id === tempId ? { tipo: 'mesa', id: merged.id } : s,
       );
       syncPlanoCacheFromDraft(usePlanoStore.getState().draft!);
-      toast.success(`${merged.identificador} creada`);
+      if (!opts?.silent) toast.success(`${merged.identificador} creada`);
     } else {
       patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== tempId) }), false);
       setSeleccion((s) => (s?.tipo === 'mesa' && s.id === tempId ? null : s));
       toast.error(res.message || 'No se pudo crear la mesa');
     }
+  };
+
+  const handleRenameMesa = async (id: string, identificador: string) => {
+    const mesa = mesas.find((m) => m.id === id);
+    if (!mesa) return;
+    const limpio = identificador.trim();
+    if (!limpio || limpio === mesa.identificador) return;
+    const prev = mesa.identificador;
+    // Optimista en draft; no es geometría → no dirty de layout.
+    patchDraft(
+      (d) => ({
+        ...d,
+        mesas: d.mesas.map((m) => (m.id === id ? { ...m, identificador: limpio } : m)),
+      }),
+      false,
+    );
+    if (id.startsWith('temp-')) return;
+    const res = await renombrarMesaPlano(id, limpio);
+    if (!res.success) {
+      patchDraft(
+        (d) => ({
+          ...d,
+          mesas: d.mesas.map((m) => (m.id === id ? { ...m, identificador: prev } : m)),
+        }),
+        false,
+      );
+      toast.error(res.message || 'No se pudo renombrar');
+    } else {
+      const latest = usePlanoStore.getState().draft;
+      if (latest) syncPlanoCacheFromDraft(latest);
+    }
+  };
+
+  const handleDuplicateMesa = async (id: string) => {
+    const mesa = mesas.find((m) => m.id === id);
+    if (!mesa) return;
+    await handleAddMesa({ from: mesa });
+  };
+
+  /** Mueve la selección con las flechas (nudge). */
+  const handleNudge = (dx: number, dy: number) => {
+    const sel = usePlanoStore.getState().seleccion;
+    if (!sel) return;
+    if (sel.tipo === 'mesa') {
+      const m = mesas.find((x) => x.id === sel.id);
+      if (!m) return;
+      updateMesa(m.id, {
+        posX: round2(Math.min(Math.max(0, m.posX + dx), COLS - m.ancho)),
+        posY: round2(Math.min(Math.max(0, m.posY + dy), ROWS - m.alto)),
+      });
+    } else {
+      const el = elementos.find((x) => x.id === sel.id);
+      if (!el) return;
+      updateElemento(el.id, {
+        posX: round2(Math.min(Math.max(0, el.posX + dx), COLS - el.ancho)),
+        posY: round2(Math.min(Math.max(0, el.posY + dy), ROWS - el.alto)),
+      });
+    }
+  };
+
+  /** Rota la selección (grados). Usado por atajo R / Shift+R. */
+  const handleRotateSeleccion = (deltaDeg: number) => {
+    const sel = usePlanoStore.getState().seleccion;
+    if (!sel) return;
+    const norm = (n: number) => ((Math.round(n) % 360) + 360) % 360;
+    if (sel.tipo === 'mesa') {
+      const m = mesas.find((x) => x.id === sel.id);
+      if (!m) return;
+      updateMesa(m.id, { rotacion: norm(m.rotacion + deltaDeg) });
+    } else {
+      const el = elementos.find((x) => x.id === sel.id);
+      if (!el) return;
+      updateElemento(el.id, { rotacion: norm(el.rotacion + deltaDeg) });
+    }
+  };
+
+  /** Borrar selección actual (mesa o elemento). */
+  const handleDeleteSeleccion = () => {
+    const sel = usePlanoStore.getState().seleccion;
+    if (!sel) return;
+    if (sel.tipo === 'mesa') void handleDeleteMesa(sel.id);
+    else void handleDeleteElemento(sel.id);
   };
 
   const handleAddAmbiente = async () => {
@@ -704,6 +829,11 @@ export function usePlanoAcciones({
     updateMesa,
     updateElemento,
     handleAddMesa,
+    handleRenameMesa,
+    handleDuplicateMesa,
+    handleNudge,
+    handleRotateSeleccion,
+    handleDeleteSeleccion,
     handleAddAmbiente,
     handleRenameAmbiente,
     handleDeleteAmbiente,
@@ -720,3 +850,7 @@ export function usePlanoAcciones({
     dialogs: createElement(Fragment, null, confirmDialog, promptDialog) as ReactNode,
   };
 }
+
+// Re-export de pasos para atajos (evita import circular en manager).
+export const NUDGE_FINE = FINE_STEP;
+export const NUDGE_COARSE = COARSE_STEP;

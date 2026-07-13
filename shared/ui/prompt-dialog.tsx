@@ -11,6 +11,7 @@ import {
 } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { Label } from '@/shared/ui/label';
 
 export type PromptDialogProps = {
@@ -23,8 +24,8 @@ export type PromptDialogProps = {
   placeholder?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** type del input HTML. */
-  inputType?: 'text' | 'number';
+  /** type del input. `money` formatea pesos mientras se escribe. */
+  inputType?: 'text' | 'number' | 'money';
   min?: number;
   max?: number;
   step?: string | number;
@@ -88,27 +89,47 @@ export function PromptDialog({
               {label}
             </Label>
           ) : null}
-          <Input
-            id="prompt-dialog-input"
-            type={inputType}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              if (error) setError(null);
-            }}
-            placeholder={placeholder}
-            min={min}
-            max={max}
-            step={step}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            aria-invalid={!!error}
-          />
+          {inputType === 'money' ? (
+            <MoneyInput
+              id="prompt-dialog-input"
+              value={value}
+              onValueChange={(v) => {
+                setValue(v);
+                if (error) setError(null);
+              }}
+              placeholder={placeholder}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              aria-invalid={!!error}
+            />
+          ) : (
+            <Input
+              id="prompt-dialog-input"
+              type={inputType}
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value);
+                if (error) setError(null);
+              }}
+              placeholder={placeholder}
+              min={min}
+              max={max}
+              step={step}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              aria-invalid={!!error}
+            />
+          )}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>
