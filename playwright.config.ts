@@ -1,9 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Smoke e2e públicos (sin login). Arrancá el dev server en :3000 o setéá
- * PLAYWRIGHT_BASE_URL. Los tests de tenant usan Host header hacia
- * nonna-raffaela.localhost (resuelto a 127.0.0.1 por el browser).
+ * Smoke e2e públicos (sin login / sin cobros reales de MP).
+ * Arrancá el dev server en :3000 o setéá PLAYWRIGHT_BASE_URL.
+ * Tenant: PLAYWRIGHT_TENANT_URL (default http://demo.localhost:3000).
+ * Kit de demo y checklist comercial: docs/VENTA-PILOTO.md
  */
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000';
 

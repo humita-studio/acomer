@@ -53,6 +53,8 @@ Los e2e públicos usan el tenant `demo` por defecto (`http://demo.localhost:3000
 PLAYWRIGHT_TENANT_URL=http://mi-local.localhost:3000 bun run test:e2e
 ```
 
+Cubre landing, legal, auth (redirects) y superficies del tenant (`/carta`, `/pedir`, `/reservar`, mesa inválida). **No** ejecuta cobros reales de Mercado Pago: eso se valida a mano con el [kit de venta](./docs/VENTA-PILOTO.md).
+
 ## Estructura
 
 ```text
