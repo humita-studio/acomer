@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Pencil, Printer, QrCode, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -23,12 +24,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/shared/ui/sheet';
 import { PlanoCanvas } from './plano-canvas';
 import { PlanoToolbar } from './plano-toolbar';
 import { MesaLista } from './mesa-lista';
 import { MesaPanel } from './mesa-panel';
 import { ElementoPanel } from './elemento-panel';
 import { OperacionPanel } from './operacion-panel';
+import { MesaPedidoDialog } from './mesa-detalle/mesa-pedido-dialog';
 import { usePlanoStore, type SaveStatus } from './plano-store';
 import { NUDGE_COARSE, NUDGE_FINE, usePlanoAcciones } from './use-plano-acciones';
 import { type FiltroMozo, type MesaPlano, type Modo } from './plano-types';
@@ -65,8 +74,18 @@ export function PlanoManager({
   const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
   const esMozo = userRole === 'mozo';
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { confirm, confirmDialog } = useConfirm();
   const [qrOpen, setQrOpen] = useState(false);
+  /**
+   * Modal de pedido (reemplaza /admin/mesas/[mesaId]).
+   * Puede venir de la UI o de deep link `?pedido=`.
+   */
+  const pedidoFromUrl = searchParams.get('pedido');
+  const [pedidoLocalId, setPedidoLocalId] = useState<string | null>(null);
+  const pedidoMesaId = pedidoLocalId ?? pedidoFromUrl;
   // Mozos ven por defecto solo sus mesas; admin/owner ven todas.
   const [filtroMozo, setFiltroMozo] = useState<FiltroMozo>(esMozo ? 'mias' : 'todas');
 
@@ -147,6 +166,19 @@ export function PlanoManager({
 
   useEffect(() => reset, [reset]);
 
+  const clearPedidoUrl = () => {
+    if (!searchParams.get('pedido')) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('pedido');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const cerrarPedido = () => {
+    setPedidoLocalId(null);
+    clearPedidoUrl();
+  };
+
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel(`admin_restaurant_${tenantId}`);
@@ -207,7 +239,9 @@ export function PlanoManager({
 
   const acciones = usePlanoAcciones({ activeId, ambientes, mesas, elementos, draft, tenantId });
   const accionesRef = useRef(acciones);
-  accionesRef.current = acciones;
+  useEffect(() => {
+    accionesRef.current = acciones;
+  }, [acciones]);
 
   // Atajos de teclado en modo edición (ignora si el foco está en un input).
   useEffect(() => {
@@ -316,12 +350,30 @@ export function PlanoManager({
   };
 
   const mostrarPanelEdicion = editando && !!(selMesa || selElemento);
-  const mostrarPanelOperacion = !editando && !!selMesa;
+  // No mostrar el sheet debajo del modal de pedido (doble overlay).
+  const sheetOperacionOpen = !editando && !!selMesa && !pedidoMesaId;
+
+  const abrirPedido = (mesa: MesaPlano) => {
+    setPedidoLocalId(mesa.id);
+  };
+
+  const handleAbrirYPedido = async (mesa: MesaPlano) => {
+    const ok = await acciones.handleAbrir(mesa);
+    if (ok) setPedidoLocalId(mesa.id);
+  };
 
   return (
     <div className="space-y-6">
       {acciones.dialogs}
       {confirmDialog}
+      <MesaPedidoDialog
+        mesaId={pedidoMesaId}
+        tenantId={tenantId}
+        open={!!pedidoMesaId}
+        onOpenChange={(open) => {
+          if (!open) cerrarPedido();
+        }}
+      />
       {/* Page header — Figma Admin / Mesas */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
@@ -425,7 +477,7 @@ export function PlanoManager({
           </CardContent>
         </Card>
 
-        {/* Side column: avisos + panel de selección */}
+        {/* Side column: avisos (siempre) + panel de edición (solo modo editar) */}
         <div className="flex w-full shrink-0 flex-col gap-4 lg:w-[300px]">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
@@ -459,7 +511,7 @@ export function PlanoManager({
             </CardContent>
           </Card>
 
-          {(mostrarPanelEdicion || mostrarPanelOperacion) && (
+          {mostrarPanelEdicion && (
             <Card className="shadow-sm">
               <CardContent className="pt-5">
                 {editando && selMesa && (
@@ -479,34 +531,58 @@ export function PlanoManager({
                     onDelete={() => acciones.handleDeleteElemento(selElemento.id)}
                   />
                 )}
-                {!editando && selMesa && (
-                  <OperacionPanel
-                    mesa={selMesa}
-                    origin={origin}
-                    canManage={canManage}
-                    canTakeOrders={canTakeOrders}
-                    liberando={liberandoId === selMesa.id}
-                    abriendo={abriendoId === selMesa.id}
-                    asignando={
-                      asignarMozoMutation.isPending &&
-                      asignarMozoMutation.variables?.mesaId === selMesa.id
-                    }
-                    mozos={mozos}
-                    onLiberar={() => acciones.handleLiberar(selMesa)}
-                    onAbrir={() => acciones.handleAbrir(selMesa)}
-                    onDividir={() => acciones.handleDividir(selMesa)}
-                    onUnir={() => acciones.handleUnir(selMesa)}
-                    onAsignarMozo={(mozoUserId) =>
-                      asignarMozoMutation.mutate({ mesaId: selMesa.id, mozoUserId })
-                    }
-                    onClose={() => setSeleccion(null)}
-                  />
-                )}
               </CardContent>
             </Card>
           )}
         </div>
       </div>
+
+      {/* Detalle de mesa en operación: drawer (no apila bajo avisos ni achica el plano) */}
+      <Sheet
+        open={sheetOperacionOpen}
+        onOpenChange={(open) => {
+          if (!open) setSeleccion(null);
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md"
+          showCloseButton={false}
+        >
+          {selMesa && (
+            <>
+              <SheetHeader className="sr-only">
+                <SheetTitle>{selMesa.identificador}</SheetTitle>
+                <SheetDescription>Acciones y QR de la mesa seleccionada</SheetDescription>
+              </SheetHeader>
+              <div className="p-5">
+                <OperacionPanel
+                  mesa={selMesa}
+                  origin={origin}
+                  canManage={canManage}
+                  canTakeOrders={canTakeOrders}
+                  liberando={liberandoId === selMesa.id}
+                  abriendo={abriendoId === selMesa.id}
+                  asignando={
+                    asignarMozoMutation.isPending &&
+                    asignarMozoMutation.variables?.mesaId === selMesa.id
+                  }
+                  mozos={mozos}
+                  onLiberar={() => acciones.handleLiberar(selMesa)}
+                  onAbrir={() => void handleAbrirYPedido(selMesa)}
+                  onVerPedido={() => abrirPedido(selMesa)}
+                  onDividir={() => acciones.handleDividir(selMesa)}
+                  onUnir={() => acciones.handleUnir(selMesa)}
+                  onAsignarMozo={(mozoUserId) =>
+                    asignarMozoMutation.mutate({ mesaId: selMesa.id, mozoUserId })
+                  }
+                  onClose={() => setSeleccion(null)}
+                />
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {!editando && mostrarLista && (
         <MesaLista
@@ -518,7 +594,8 @@ export function PlanoManager({
           liberandoId={liberandoId}
           mozoLabel={mozoLabel}
           onSeleccionar={seleccionarMesa}
-          onAbrir={acciones.handleAbrir}
+          onAbrir={(m) => void handleAbrirYPedido(m)}
+          onVerPedido={abrirPedido}
           onLiberar={acciones.handleLiberar}
         />
       )}

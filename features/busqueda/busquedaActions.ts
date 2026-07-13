@@ -122,7 +122,10 @@ export async function buscarAdminAction(queryRaw: string): Promise<{
             id: m.id,
             title: m.identificador,
             subtitle: ocupada ? 'Ocupada' : 'Libre',
-            href: canOpenMesa ? `/admin/mesas/${m.id}` : '/admin/mesas',
+            href:
+              canOpenMesa && ocupada
+                ? `/admin/mesas?pedido=${encodeURIComponent(m.id)}`
+                : '/admin/mesas',
           });
         }
       }

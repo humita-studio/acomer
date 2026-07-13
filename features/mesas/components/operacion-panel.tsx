@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ClipboardList,
@@ -18,7 +17,7 @@ import { Separator } from '@/shared/ui/separator';
 import type { MozoOption } from '@/features/mesas/mesas-actions';
 import { type MesaPlano } from './plano-types';
 
-/** Panel lateral en modo operación: estado, pedido, QR, liberar/abrir/dividir/unir. */
+/** Detalle de mesa en modo operación: estado, pedido, QR, liberar/abrir/dividir/unir. */
 export function OperacionPanel({
   mesa,
   origin,
@@ -30,6 +29,7 @@ export function OperacionPanel({
   mozos,
   onLiberar,
   onAbrir,
+  onVerPedido,
   onDividir,
   onUnir,
   onAsignarMozo,
@@ -45,6 +45,7 @@ export function OperacionPanel({
   mozos: MozoOption[];
   onLiberar: () => void;
   onAbrir: () => void;
+  onVerPedido: () => void;
   onDividir: () => void;
   onUnir: () => void;
   onAsignarMozo: (mozoUserId: string | null) => void;
@@ -93,11 +94,9 @@ export function OperacionPanel({
 
       <div className="space-y-2">
         {mesa.ocupada && canTakeOrders && (
-          <Button asChild className="w-full" size="lg">
-            <Link href={`/admin/mesas/${mesa.id}`}>
-              <ClipboardList />
-              Ver / Agregar pedido
-            </Link>
+          <Button type="button" className="w-full" size="lg" onClick={onVerPedido}>
+            <ClipboardList />
+            Ver / Agregar pedido
           </Button>
         )}
 

@@ -39,6 +39,8 @@ type Props = {
   productos: ProductoMenu[];
   ticketInicial: { items: TicketItem[]; total: number };
   canLiberar?: boolean;
+  /** Si se pasa (p. ej. desde el modal del plano), se llama al liberar en lugar de navegar. */
+  onLiberado?: () => void;
 };
 
 export function MesaPedidoManager({
@@ -48,6 +50,7 @@ export function MesaPedidoManager({
   productos,
   ticketInicial,
   canLiberar = true,
+  onLiberado,
 }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -197,8 +200,12 @@ export function MesaPedidoManager({
     setIsLiberating(false);
     if (res.success) {
       toast.success('Mesa liberada');
-      router.push('/admin/mesas');
-      router.refresh();
+      if (onLiberado) {
+        onLiberado();
+      } else {
+        router.push('/admin/mesas');
+        router.refresh();
+      }
     } else {
       const msg = res.message || 'No se pudo liberar la mesa';
       setError(msg);
@@ -230,7 +237,7 @@ export function MesaPedidoManager({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,380px)_1fr]">
         {/* Cuenta de la mesa */}
-        <Card className="h-fit shadow-sm lg:sticky lg:top-20">
+        <Card className="h-fit shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
             <CardTitle className="text-base font-semibold">Cuenta de la mesa</CardTitle>
             {ticket.items.length > 0 && (

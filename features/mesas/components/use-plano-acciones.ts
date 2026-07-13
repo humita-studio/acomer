@@ -1,7 +1,6 @@
 'use client';
 
 import { createElement, Fragment, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -131,7 +130,6 @@ export function usePlanoAcciones({
   tenantId: string;
 }) {
   const queryClient = useQueryClient();
-  const router = useRouter();
   const { confirm, confirmDialog } = useConfirm();
   const { prompt, promptDialog } = usePrompt();
   const patchDraft = usePlanoStore((s) => s.patchDraft);
@@ -714,18 +712,19 @@ export function usePlanoAcciones({
     }
   };
 
-  const handleAbrir = async (mesa: MesaPlano) => {
+  /** Abre la sesión de la mesa. Devuelve true si quedó lista para el modal de pedido. */
+  const handleAbrir = async (mesa: MesaPlano): Promise<boolean> => {
     setAbriendoId(mesa.id);
     patchOcupacion(mesa.id, true);
     const res = await abrirMesaAction(mesa.id);
     setAbriendoId(null);
     if (res.success) {
-      // Navegar ya; el detalle carga la sesión. Cache del plano se alinea al volver.
-      router.push(`/admin/mesas/${mesa.id}`);
-    } else {
-      patchOcupacion(mesa.id, false);
-      toast.error(res.message || 'No se pudo abrir la mesa');
+      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
+      return true;
     }
+    patchOcupacion(mesa.id, false);
+    toast.error(res.message || 'No se pudo abrir la mesa');
+    return false;
   };
 
   const handleDividir = async (mesa: MesaPlano) => {

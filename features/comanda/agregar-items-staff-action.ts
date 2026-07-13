@@ -6,10 +6,11 @@ import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
-import { crearPedidoConItemsStaff, esItemLibre, type StaffItemInput } from '@/features/pedidos/crearPedidoCore';
-
-// Reexport para los consumidores históricos (p.ej. use-ticket-mesa).
-export type { StaffItemInput };
+import {
+  crearPedidoConItemsStaff,
+  esItemLibre,
+  type StaffItemInput,
+} from '@/features/pedidos/crearPedidoCore';
 
 /**
  * El mozo (o admin/owner) carga productos al ticket de una mesa desde el panel.
@@ -17,6 +18,8 @@ export type { StaffItemInput };
  * Crea un pedido confirmado directo a partir de los items recibidos —sin pasar
  * por el borrador compartido del comensal—, snapshoteando nombre y precio
  * vigentes (vía `crearPedidoConItemsStaff`), y lo suma a la cuenta de la sesión.
+ *
+ * Nota: no reexportar tipos desde este archivo (`'use server'` solo exporta actions).
  */
 export async function agregarItemsStaffAction(
   sesionMesaId: string,

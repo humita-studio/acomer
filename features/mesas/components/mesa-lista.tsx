@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { Users } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
@@ -17,6 +16,7 @@ export function MesaLista({
   mozoLabel,
   onSeleccionar,
   onAbrir,
+  onVerPedido,
   onLiberar,
 }: {
   mesas: MesaPlano[];
@@ -28,6 +28,7 @@ export function MesaLista({
   mozoLabel?: (userId: string | null | undefined) => string | null;
   onSeleccionar: (mesa: MesaPlano) => void;
   onAbrir: (mesa: MesaPlano) => void;
+  onVerPedido: (mesa: MesaPlano) => void;
   onLiberar: (mesa: MesaPlano) => void;
 }) {
   const ambNombre = (id: string | null) => ambientes.find((a) => a.id === id)?.nombre ?? '—';
@@ -66,8 +67,14 @@ export function MesaLista({
                 <Users size={12} /> {m.capacidad}
               </span>
               {m.ocupada && canTakeOrders && (
-                <Button asChild variant="link" size="xs" className="h-auto shrink-0 px-0">
-                  <Link href={`/admin/mesas/${m.id}`}>Pedido</Link>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="xs"
+                  className="h-auto shrink-0 px-0"
+                  onClick={() => onVerPedido(m)}
+                >
+                  Pedido
                 </Button>
               )}
               {!m.ocupada && canTakeOrders && (
