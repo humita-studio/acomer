@@ -6,6 +6,7 @@ import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
+import { createSupabaseServerClient } from '@/shared/supabase/server';
 import type { TipoMovimiento, CajaActual, CajaCerrada, DetalleCierre } from './types';
 
 // El `db` de cada acción es el handle transaccional de withTenant (RLS activo).
@@ -23,6 +24,20 @@ type Totales = {
 };
 
 type Resultado = { success: boolean; message: string };
+
+/** Avisa a otras pestañas/cajeros que el turno cambió (apertura, movimiento, cierre, venta). */
+async function broadcastCajaActualizada(tenantId: string) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    await supabase.channel(`admin_restaurant_${tenantId}`).send({
+      type: 'broadcast',
+      event: 'caja_actualizada',
+      payload: { t: Date.now() },
+    });
+  } catch {
+    // best-effort
+  }
+}
 
 /**
  * Calcula los totales en vivo de una sesión de caja: ventas cobradas por método
@@ -170,6 +185,7 @@ export async function abrirCajaAction(montoInicial: number): Promise<Resultado> 
       return { success: true, message: 'Caja abierta.' };
     });
 
+    if (res.success) void broadcastCajaActualizada(session.restauranteId);
     return res;
   } catch (error) {
     console.error('[abrirCajaAction]', error);
@@ -221,6 +237,7 @@ export async function registrarMovimientoAction(
       return { success: true, message: 'Movimiento registrado.' };
     });
 
+    if (res.success) void broadcastCajaActualizada(session.restauranteId);
     return res;
   } catch (error) {
     console.error('[registrarMovimientoAction]', error);
@@ -281,6 +298,7 @@ export async function cerrarCajaAction(
       return { success: true, message: 'Caja cerrada.', diferencia };
     });
 
+    if (res.success) void broadcastCajaActualizada(session.restauranteId);
     return res;
   } catch (error) {
     console.error('[cerrarCajaAction]', error);

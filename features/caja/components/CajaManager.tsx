@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Lock, Printer } from 'lucide-react';
+import { Check, Lock, Printer, Wallet } from 'lucide-react';
 import {
   formatPeso,
   formatHora,
@@ -35,6 +35,7 @@ import {
 } from '@/features/caja/hooks/useCaja';
 import type { CajaActual, CajaCerrada, TipoMovimiento } from '@/features/caja/types';
 import { CajaHistorial } from '@/features/caja/components/CajaHistorial';
+import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
 
 const TIPO_LABEL: Record<TipoMovimiento, string> = {
   ingreso: 'Ingreso',
@@ -80,17 +81,20 @@ export function CajaManager({
             />
             <span className="text-muted-foreground">
               {caja
-                ? `Caja abierta desde las ${formatHora(caja.abiertaAt)} hs`
-                : 'No hay ninguna caja abierta'}
+                ? `Caja abierta desde las ${formatHora(caja.abiertaAt)} hs · turno del día`
+                : 'No hay ninguna caja abierta · abrila para cobrar efectivo'}
             </span>
           </div>
         </div>
-        {caja && (
-          <Button onClick={() => setCerrarOpen(true)}>
-            <Lock className="size-4" />
-            Cerrar caja
-          </Button>
-        )}
+        {caja ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <NuevaVentaButton tenantId={tenantId} />
+            <Button onClick={() => setCerrarOpen(true)}>
+              <Lock className="size-4" />
+              Cerrar caja
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {caja ? (
@@ -258,25 +262,34 @@ function AbrirCajaCard({ tenantId }: { tenantId: string }) {
   const [montoInicial, setMontoInicial] = useState('');
 
   return (
-    <Card className="max-w-md">
+    <Card className="max-w-lg">
       <CardHeader>
-        <CardTitle>Abrir caja</CardTitle>
+        <div className="mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Wallet className="size-6" aria-hidden />
+        </div>
+        <CardTitle>Abrir caja del día</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Ingresá el monto inicial en efectivo con el que arranca el turno.
+          Ingresá el efectivo inicial del turno. Sin caja abierta no se pueden registrar
+          ventas de mostrador ni cobros en efectivo de mesa.
         </p>
       </CardHeader>
       <CardContent>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            abrirMutation.mutate(Number(montoInicial), {
+            const n = Number(montoInicial);
+            if (!Number.isFinite(n) || n < 0) {
+              toast.error('Ingresá un monto inicial válido (0 o más).');
+              return;
+            }
+            abrirMutation.mutate(n, {
               onSuccess: () => setMontoInicial(''),
             });
           }}
           className="space-y-4"
         >
           <div className="space-y-1.5">
-            <Label htmlFor="monto-inicial">Monto inicial</Label>
+            <Label htmlFor="monto-inicial">Monto inicial en efectivo</Label>
             <MontoInput
               id="monto-inicial"
               value={montoInicial}
@@ -285,8 +298,11 @@ function AbrirCajaCard({ tenantId }: { tenantId: string }) {
               required
               autoFocus
             />
+            <p className="text-xs text-muted-foreground">
+              Puede ser 0 si arrancás sin fondo de caja.
+            </p>
           </div>
-          <Button type="submit" className="w-full" disabled={abrirMutation.isPending}>
+          <Button type="submit" className="w-full" size="lg" disabled={abrirMutation.isPending}>
             {abrirMutation.isPending ? 'Abriendo…' : 'Abrir caja'}
           </Button>
         </form>

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Search, ShoppingCart, Trash2, UtensilsCrossed } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatPeso } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/button';
@@ -197,9 +198,28 @@ export function PasoArmar({
 
           <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
             {visibles.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">
-                {productos.length === 0 ? 'No hay productos en el menú.' : 'Sin resultados.'}
-              </p>
+              productos.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-12 text-center">
+                  <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <UtensilsCrossed className="size-6" aria-hidden />
+                  </span>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">El menú está vacío</p>
+                    <p className="text-sm text-muted-foreground">
+                      Cargá productos en Menú o usá un ítem libre para esta venta.
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/admin/menu">
+                      Ir a Menú
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  Sin resultados para “{q}”.
+                </p>
+              )
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {visibles.map((p) => (

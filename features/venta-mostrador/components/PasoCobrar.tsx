@@ -57,6 +57,9 @@ export function PasoCobrar({
   const recibidoNum = parseFloat(montoRecibido.replace(',', '.')) || 0;
   const vuelto = Math.max(0, recibidoNum - total);
   const faltante = metodo === 'efectivo' && recibidoNum > 0 && recibidoNum < total;
+  // Efectivo: pedimos monto recibido ≥ total (o 0 exacto solo si total es 0).
+  const efectivoIncompleto =
+    metodo === 'efectivo' && total > 0 && (montoRecibido.trim() === '' || recibidoNum < total);
   const hayDescuento = descuento > 0 && aplicadas.length > 0;
 
   return (
@@ -143,41 +146,67 @@ export function PasoCobrar({
       </div>
 
       {metodo === 'efectivo' && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Monto recibido
-            </label>
-            <Input
-              value={montoRecibido}
-              onChange={(e) => setMontoRecibido(e.target.value)}
-              inputMode="decimal"
-              placeholder="0"
-              aria-invalid={faltante}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Vuelto</label>
-            <div className="flex h-9 items-center rounded-3xl bg-success-subtle px-3 font-semibold tabular-nums text-success-foreground">
-              {formatPeso(vuelto)}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Monto recibido
+              </label>
+              <Input
+                value={montoRecibido}
+                onChange={(e) => setMontoRecibido(e.target.value)}
+                inputMode="decimal"
+                placeholder={formatPeso(total).replace(/\s/g, '')}
+                aria-invalid={faltante || (efectivoIncompleto && montoRecibido.trim() !== '')}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Vuelto
+              </label>
+              <div className="flex h-9 items-center rounded-3xl bg-success-subtle px-3 font-semibold tabular-nums text-success-foreground">
+                {formatPeso(vuelto)}
+              </div>
             </div>
           </div>
+          {faltante ? (
+            <p className="text-xs font-medium text-destructive">
+              Falta {formatPeso(total - recibidoNum)} para cubrir el total.
+            </p>
+          ) : null}
         </div>
+      )}
+
+      {metodo === 'tarjeta_fisica' && (
+        <p className="text-sm text-muted-foreground">
+          Confirmá el cobro cuando la tarjeta ya se haya debitado en el posnet.
+        </p>
       )}
 
       {metodo === 'mercado_pago' && (
         <p className="text-sm text-muted-foreground">
-          Vas a generar un QR de Mercado Pago para que el cliente lo escanee y pague.
+          Vas a generar un QR de Mercado Pago para que el cliente lo escanee y pague. El pedido
+          entra a cocina al generar el QR.
         </p>
       )}
 
-      {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+      {!mpDisponible && metodo !== 'mercado_pago' ? (
+        <p className="text-xs text-muted-foreground">
+          Mercado Pago no está vinculado. Solo efectivo y tarjeta en mostrador.
+        </p>
+      ) : null}
+
+      {error && (
+        <p className="rounded-lg bg-destructive/10 p-3 text-sm font-medium text-destructive">
+          {error}
+        </p>
+      )}
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onVolver} disabled={procesando}>
           Volver
         </Button>
-        <Button onClick={onConfirmar} disabled={procesando}>
+        <Button onClick={onConfirmar} disabled={procesando || efectivoIncompleto}>
           {procesando && <Loader2 className="animate-spin" />}
           {metodo === 'mercado_pago' ? 'Generar QR' : 'Confirmar cobro'}
         </Button>

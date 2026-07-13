@@ -131,7 +131,7 @@ export function VentaMostradorFlow({
           omitirIds,
         });
         if (!res.success || !res.paymentUrl || !res.sesionId) {
-          setError(res.message ?? 'No se pudo iniciar el cobro');
+          setError(res.message ?? 'No se pudo iniciar el cobro con Mercado Pago.');
           return;
         }
         setMp({
@@ -148,6 +148,20 @@ export function VentaMostradorFlow({
         return;
       }
 
+      if (metodo === 'efectivo') {
+        const recibido = parseFloat(montoRecibido.replace(',', '.')) || 0;
+        if (totalCobro > 0 && recibido < totalCobro) {
+          setError(
+            `El monto recibido es menor al total (${totalCobro.toLocaleString('es-AR', {
+              style: 'currency',
+              currency: 'ARS',
+              maximumFractionDigits: 0,
+            })}).`,
+          );
+          return;
+        }
+      }
+
       const res = await cobrarVentaMostradorAction(items, {
         metodoPago: metodo,
         nombreReferencia: nombreRef,
@@ -155,7 +169,7 @@ export function VentaMostradorFlow({
         omitirIds,
       });
       if (!res.success || !res.ticket) {
-        setError(res.message ?? 'No se pudo cobrar la venta');
+        setError(res.message ?? 'No se pudo cobrar la venta. Revisá la caja y reintentá.');
         return;
       }
       setTicket({
@@ -173,6 +187,8 @@ export function VentaMostradorFlow({
       setStep('cobrada');
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(tenantId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
+    } catch {
+      setError('Sin conexión o error de red. Revisá internet e intentá de nuevo.');
     } finally {
       setProcesando(false);
     }

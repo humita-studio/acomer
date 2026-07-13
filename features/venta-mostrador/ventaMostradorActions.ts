@@ -142,7 +142,8 @@ async function notificarNuevoPedidoMostrador(
     const etiqueta = payload.nombreReferencia?.trim()
       ? `Mostrador · ${payload.nombreReferencia.trim()}`
       : 'Mostrador';
-    await supabase.channel(`admin_restaurant_${tenantId}`).send({
+    const channel = supabase.channel(`admin_restaurant_${tenantId}`);
+    await channel.send({
       type: 'broadcast',
       event: 'nuevo_pedido',
       payload: {
@@ -150,6 +151,12 @@ async function notificarNuevoPedidoMostrador(
         pedidoId: payload.pedidoId,
         etiqueta,
       },
+    });
+    // Refresca el efectivo esperado en otras pestañas del panel de caja.
+    await channel.send({
+      type: 'broadcast',
+      event: 'caja_actualizada',
+      payload: { t: Date.now() },
     });
   } catch (e) {
     console.warn('[ventaMostrador] realtime nuevo_pedido:', e);

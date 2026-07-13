@@ -55,7 +55,12 @@ export function CajaHistorial({
       </CardHeader>
       <CardContent>
         {historial.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay cierres registrados.</p>
+          <div className="space-y-1 py-2">
+            <p className="text-sm font-medium text-foreground">Sin cierres todavía</p>
+            <p className="text-sm text-muted-foreground">
+              Cuando cierres el turno, el arqueo (esperado vs contado) queda acá para revisarlo.
+            </p>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
