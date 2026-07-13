@@ -2,41 +2,124 @@
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import {
+  Check,
+  Clock,
+  Loader2,
+  X,
+} from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
+import { formatPeso } from '@/shared/lib/format';
+import { cn } from '@/shared/lib/utils';
+import { Button } from '@/shared/ui/button';
 import type { TicketData } from '../obtener-ticket-action';
 
 type ResumenPagoProps = {
   ticket: TicketData;
+  /** Estado forzado desde la URL (ej. retorno failure de MP). */
+  pagoState?: string;
 };
 
-export function ResumenPago({ ticket }: ResumenPagoProps) {
+function metodoLabel(proveedor: string) {
+  switch (proveedor) {
+    case 'mercado_pago':
+      return 'Mercado Pago';
+    case 'efectivo':
+      return 'Efectivo';
+    case 'tarjeta_fisica':
+      return 'Tarjeta en mesa';
+    default:
+      return proveedor;
+  }
+}
+
+type Tone = 'success' | 'pending' | 'error' | 'neutral';
+
+function resolveTone(
+  estado: string,
+  pagoState?: string,
+): { tone: Tone; titulo: string; subtitulo?: string } {
+  // Retorno de MP con fallo explícito en la URL (aunque la tx siga pendiente un instante).
+  if (pagoState === 'error' || estado === 'Rechazado') {
+    return {
+      tone: 'error',
+      titulo: 'No se pudo completar el pago',
+      subtitulo: 'Podés intentar de nuevo desde la carta.',
+    };
+  }
+  if (estado === 'Aprobado') {
+    return {
+      tone: 'success',
+      titulo: '¡Pago exitoso!',
+      subtitulo: 'Gracias. El local ya registró tu cobro.',
+    };
+  }
+  if (estado === 'Cancelado') {
+    return {
+      tone: 'error',
+      titulo: 'Pago cancelado',
+      subtitulo: 'Se actualizó la cuenta de la mesa. Generá un cobro nuevo.',
+    };
+  }
+  if (estado === 'Pendiente' || pagoState === 'pendiente') {
+    return {
+      tone: 'pending',
+      titulo: 'Pago pendiente',
+      subtitulo: undefined,
+    };
+  }
+  return { tone: 'neutral', titulo: 'Ticket de pago' };
+}
+
+const TONE_HEADER: Record<Tone, string> = {
+  success: 'bg-success text-success-foreground',
+  pending: 'bg-warning text-warning-foreground',
+  error: 'bg-destructive text-destructive-foreground',
+  neutral: 'bg-foreground text-background',
+};
+
+/**
+ * Pantalla post-pago del comensal (mesa u online).
+ * Escucha cambios de la tx en realtime (efectivo/tarjeta o webhook MP).
+ */
+export function ResumenPago({ ticket, pagoState }: ResumenPagoProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { tone, titulo, subtitulo } = resolveTone(ticket.transaccion.estado, pagoState);
+
+  const isApproved = ticket.transaccion.estado === 'Aprobado';
+  const isPending = ticket.transaccion.estado === 'Pendiente' && pagoState !== 'error';
+  const isCanceled = ticket.transaccion.estado === 'Cancelado';
+  const isFailed =
+    pagoState === 'error' || ticket.transaccion.estado === 'Rechazado';
+  const esPresencial =
+    ticket.transaccion.proveedor === 'efectivo' ||
+    ticket.transaccion.proveedor === 'tarjeta_fisica';
 
   useEffect(() => {
-    if (ticket.transaccion.estado !== 'Pendiente' && ticket.transaccion.estado !== 'Cancelado') return;
+    if (ticket.transaccion.estado !== 'Pendiente' && ticket.transaccion.estado !== 'Cancelado') {
+      return;
+    }
 
     const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`tx_${ticket.transaccion.id}`)
+    const channel = supabase
+      .channel(`tx_${ticket.transaccion.id}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'transacciones_pago',
-          filter: `id=eq.${ticket.transaccion.id}`
+          filter: `id=eq.${ticket.transaccion.id}`,
         },
         (payload) => {
-          if (payload.new) {
-            const hasStateChanged = payload.new.estado !== 'Pendiente';
-            const hasAmountChanged = payload.new.monto !== ticket.transaccion.monto;
-            
-            if (hasStateChanged || hasAmountChanged) {
-              console.log('Transaction updated:', payload.new);
-              router.refresh(); // Refresh to get the new state or amount from server
-            }
+          if (!payload.new) return;
+          const hasStateChanged = payload.new.estado !== 'Pendiente';
+          const hasAmountChanged = payload.new.monto !== ticket.transaccion.monto;
+          if (hasStateChanged || hasAmountChanged) {
+            router.refresh();
           }
-        }
+        },
       )
       .subscribe();
 
@@ -46,163 +129,161 @@ export function ResumenPago({ ticket }: ResumenPagoProps) {
   }, [ticket.transaccion.id, ticket.transaccion.estado, ticket.transaccion.monto, router]);
 
   const handleVolver = () => {
-    // Al limpiar los searchParams, se recarga la página de la mesa,
-    // y si la sesión anterior fue cerrada (por el pago),
-    // el middleware/serverAction creará una nueva sesión limpia.
+    // Pedidos online: volver al seguimiento del pedido (no a un /pedir vacío).
+    if (ticket.tipo === 'takeaway' || ticket.tipo === 'delivery') {
+      router.replace(`/pedir?sesion=${ticket.sesionMesaId}`);
+      return;
+    }
+    // Mesa: limpiar query params y reabrir la comanda.
     router.replace(pathname);
   };
 
-  const getMetodoLabel = (proveedor: string) => {
-    switch (proveedor) {
-      case 'mercado_pago': return 'Mercado Pago';
-      case 'efectivo': return 'Efectivo';
-      case 'tarjeta_fisica': return 'Tarjeta (Presencial)';
-      default: return proveedor;
-    }
-  };
-
-  const isApproved = ticket.transaccion.estado === 'Aprobado';
-  const isPending = ticket.transaccion.estado === 'Pendiente';
-  const isCanceled = ticket.transaccion.estado === 'Cancelado';
-
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-8 flex flex-col items-center justify-start pb-24">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden animate-in slide-in-from-bottom-10 fade-in">
-        
-        {/* Header (Ticket Top) */}
-        <div className={`p-8 text-center text-white ${isApproved ? 'bg-green-600' : isPending ? 'bg-orange-500' : isCanceled ? 'bg-red-500' : 'bg-gray-800'}`}>
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
+    <div className="flex min-h-dvh flex-col items-center bg-muted/30 p-4 pb-24 sm:p-8">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl border bg-card shadow-sm animate-in fade-in slide-in-from-bottom-4">
+        <div className={cn('p-8 text-center', TONE_HEADER[tone])}>
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
             {isApproved ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
+              <Check className="size-8" strokeWidth={2.5} aria-hidden />
             ) : isPending ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-            ) : isCanceled ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>
-              </svg>
+              <Clock className="size-8" strokeWidth={2.5} aria-hidden />
+            ) : isFailed || isCanceled ? (
+              <X className="size-8" strokeWidth={2.5} aria-hidden />
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
-              </svg>
+              <Loader2 className="size-8 animate-spin" aria-hidden />
             )}
           </div>
-          <h1 className="text-2xl font-bold mb-1">
-            {isApproved ? '¡Pago Exitoso!' : isPending ? 'Pago Pendiente' : isCanceled ? 'Link Expirado' : 'Ticket de Pago'}
-          </h1>
-          <p className="text-white/80 font-medium">Mesa {ticket.mesaIdentificador}</p>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">{titulo}</h1>
+          <p className="mt-1 font-medium opacity-90">Mesa {ticket.mesaIdentificador}</p>
+          {subtitulo ? <p className="mt-2 text-sm opacity-85">{subtitulo}</p> : null}
         </div>
 
-        {/* Decorative ZigZag */}
-        <div className="w-full h-3 bg-repeat-x flex items-center justify-between opacity-10" style={{ backgroundImage: 'radial-gradient(circle, #000 3px, transparent 4px)', backgroundSize: '12px 12px' }}></div>
-
-        {/* Ticket Details */}
-        <div className="p-6 sm:p-8 space-y-6">
-          <div className="flex justify-between items-center text-sm border-b pb-4">
-            <span className="text-gray-500">Método de pago</span>
-            <span className="font-semibold text-gray-900">{getMetodoLabel(ticket.transaccion.proveedor)}</span>
+        <div className="space-y-6 p-6 sm:p-8">
+          <div className="flex items-center justify-between border-b pb-4 text-sm">
+            <span className="text-muted-foreground">Método de pago</span>
+            <span className="font-semibold">
+              {metodoLabel(ticket.transaccion.proveedor)}
+            </span>
           </div>
 
           <div className="space-y-4">
-            <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wider">Tu Pedido</h3>
-            
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Tu pedido
+            </h2>
             <div className="space-y-3">
               {ticket.items.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-start text-sm">
-                  <div className="flex-1">
-                    <div>
-                      <span className="font-medium text-gray-900">
-                        {item.cantidad}x {item.nombre}
-                      </span>
-                      {item.cantidad > 1 && (
-                        <span className="text-gray-500 text-xs ml-2 font-normal">
-                          (${(item.subtotal / item.cantidad).toFixed(2)} c/u)
-                        </span>
-                      )}
-                    </div>
-                    {item.modificadores.length > 0 && (
-                      <div className="text-gray-500 text-xs mt-0.5 ml-4">
-                        {item.modificadores.map(m => `+ ${m.nombre}`).join(', ')}
-                      </div>
-                    )}
+                <div key={idx} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">
+                      {item.cantidad}x {item.nombre}
+                    </p>
+                    {item.modificadores.length > 0 ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {item.modificadores.map((m) => `+ ${m.nombre}`).join(', ')}
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="font-semibold text-gray-900 ml-4">
-                    ${item.subtotal.toFixed(2)}
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    {formatPeso(item.subtotal)}
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Total */}
-          <div className="border-t border-dashed border-gray-300 pt-4 mt-6">
+          <div className="space-y-2 border-t border-dashed pt-4">
             {ticket.totalPagado && ticket.totalPagado > 0 ? (
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-500">Total de la mesa</span>
-                  <span className="font-semibold text-gray-900">${(ticket.saldoPendiente || 0) + ticket.totalPagado}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm text-green-600">
-                  <span>Pagos previos aprobados</span>
-                  <span>- ${ticket.totalPagado.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center pt-2">
-                  <span className="font-bold text-gray-500 text-lg">RESTANTE</span>
-                  <span className="font-black text-3xl text-gray-900">
-                    ${ticket.saldoPendiente?.toFixed(2) || '0.00'}
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total de la mesa</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatPeso((ticket.saldoPendiente || 0) + ticket.totalPagado)}
                   </span>
                 </div>
-              </div>
+                <div className="flex justify-between text-sm text-success-foreground">
+                  <span>Pagos previos</span>
+                  <span className="tabular-nums">−{formatPeso(ticket.totalPagado)}</span>
+                </div>
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-sm font-semibold text-muted-foreground">Restante</span>
+                  <span className="font-display text-3xl font-semibold tabular-nums">
+                    {formatPeso(ticket.saldoPendiente || 0)}
+                  </span>
+                </div>
+              </>
             ) : (
-              <div className="space-y-2">
-                {ticket.transaccion.descuento > 0 && (
+              <>
+                {ticket.transaccion.descuento > 0 ? (
                   <>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Subtotal</span>
-                      <span className="text-gray-900 tabular-nums">
-                        ${(ticket.transaccion.monto + ticket.transaccion.descuento).toFixed(2)}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="tabular-nums">
+                        {formatPeso(
+                          ticket.transaccion.monto + ticket.transaccion.descuento,
+                        )}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-sm text-green-600">
+                    <div className="flex justify-between text-sm text-success-foreground">
                       <span>Descuento</span>
-                      <span className="tabular-nums">−${ticket.transaccion.descuento.toFixed(2)}</span>
+                      <span className="tabular-nums">
+                        −{formatPeso(ticket.transaccion.descuento)}
+                      </span>
                     </div>
                   </>
-                )}
-                <div className="flex justify-between items-center pt-1">
-                  <span className="font-bold text-gray-500 text-lg">TOTAL</span>
-                  <span className="font-black text-3xl text-gray-900 tabular-nums">
-                    ${ticket.transaccion.monto.toFixed(2)}
+                ) : null}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-sm font-semibold text-muted-foreground">Total</span>
+                  <span className="font-display text-3xl font-semibold tabular-nums">
+                    {formatPeso(ticket.transaccion.monto)}
                   </span>
                 </div>
-              </div>
+              </>
             )}
-            {isPending && ticket.transaccion.proveedor !== 'mercado_pago' && (
-              <p className="text-center text-orange-600 bg-orange-50 p-3 rounded-lg text-sm font-medium mt-6">
-                Un mozo se está acercando a tu mesa para realizar el cobro.
+
+            {isPending && esPresencial ? (
+              <p className="mt-4 rounded-xl bg-warning-subtle p-3 text-center text-sm font-medium text-warning-foreground">
+                Un mozo se acerca a tu mesa para cobrar.
               </p>
-            )}
-            {isCanceled && (
-              <p className="text-center text-red-600 bg-red-50 p-3 rounded-lg text-sm font-medium mt-6">
-                Este link de pago ha expirado porque se agregaron nuevos platos a la mesa. Por favor, generá uno nuevo.
+            ) : null}
+
+            {isPending && ticket.transaccion.proveedor === 'mercado_pago' ? (
+              <p className="mt-4 rounded-xl bg-warning-subtle p-3 text-center text-sm font-medium text-warning-foreground">
+                Estamos confirmando el pago con Mercado Pago. Esta pantalla se actualiza sola.
               </p>
-            )}
+            ) : null}
+
+            {isCanceled ? (
+              <p className="mt-4 rounded-xl bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">
+                La cuenta cambió (se sumaron platos u otro cobro). Volvé a la carta y pedí pagar de
+                nuevo.
+              </p>
+            ) : null}
+
+            {isFailed ? (
+              <p className="mt-4 rounded-xl bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">
+                El pago no se acreditó. No te preocupes: podés elegir otro medio o reintentar.
+              </p>
+            ) : null}
           </div>
         </div>
 
-        {/* Footer actions */}
-        <div className="p-6 bg-gray-50 border-t">
-          <button
+        <div className="border-t bg-muted/40 p-5">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-12 w-full text-base"
             onClick={handleVolver}
-            className="w-full bg-white border-2 border-gray-200 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
           >
-            Volver a la Carta
-          </button>
+            {ticket.tipo === 'takeaway' || ticket.tipo === 'delivery'
+              ? isFailed
+                ? 'Volver al pedido y reintentar'
+                : 'Ver seguimiento del pedido'
+              : isFailed
+                ? 'Reintentar desde la carta'
+                : 'Volver a la carta'}
+          </Button>
         </div>
-
       </div>
     </div>
   );

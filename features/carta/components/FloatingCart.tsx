@@ -81,10 +81,10 @@ export function FloatingCart({
       if (!res || res.success) {
         setIsOpen(false);
       } else {
-        setError(res.message ?? 'Error al enviar');
+        setError(res.message ?? 'No se pudo enviar el pedido. Probá de nuevo.');
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al enviar');
+    } catch {
+      setError('Sin conexión o error de red. Revisá internet e intentá de nuevo.');
     }
   };
 
@@ -273,14 +273,21 @@ export function FloatingCart({
                 size="lg"
                 className="h-12 w-full text-base"
               >
-                {confirming ? 'Enviando...' : confirmLabel}
+                {confirming ? 'Enviando…' : confirmLabel}
               </Button>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Esto manda a cocina. Para la cuenta, usá <span className="font-medium text-foreground">Pagar</span> arriba.
+              </p>
             </div>
           )}
 
           {items.length === 0 && pedidosConfirmados.length > 0 && (
-            <div className="border-t bg-muted/40 p-4 text-center text-sm text-muted-foreground">
-              Todo tu pedido ya fue enviado a cocina.
+            <div className="space-y-1 border-t bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+              <p>Todo tu pedido ya fue enviado a cocina.</p>
+              <p>
+                Cuando quieras la cuenta, tocá{' '}
+                <span className="font-medium text-foreground">Pagar</span> arriba.
+              </p>
             </div>
           )}
         </SheetContent>

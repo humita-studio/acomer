@@ -30,14 +30,40 @@ export default async function ComandaPage({
   const { tenant, id: qrToken } = await params;
   const sp = await searchParams;
 
-  // 1. Manejar vista de Ticket / Resumen si venimos de pagar
-  const pagoState = sp?.pago as string | undefined;
-  const tx = sp?.tx as string | undefined;
+  // 1. Ticket / resumen al volver de MP o pedir cuenta presencial
+  const pagoState = typeof sp?.pago === 'string' ? sp.pago : undefined;
+  const tx = typeof sp?.tx === 'string' ? sp.tx : undefined;
 
-  if ((pagoState === 'exito' || pagoState === 'pendiente') && tx) {
+  if (
+    tx &&
+    (pagoState === 'exito' ||
+      pagoState === 'pendiente' ||
+      pagoState === 'error')
+  ) {
     const ticketResult = await obtenerTicketAction(tx);
     if (ticketResult.success && ticketResult.data) {
-      return <ResumenPago ticket={ticketResult.data} />;
+      return <ResumenPago ticket={ticketResult.data} pagoState={pagoState} />;
+    }
+    // tx inválida o no accesible: mensaje claro en vez de caer a la carta mudamente
+    if (pagoState === 'error') {
+      return (
+        <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-4">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border bg-card p-8 text-center shadow-sm">
+            <h1 className="font-display text-2xl font-semibold text-destructive">
+              No se pudo completar el pago
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Volvé a la carta e intentá de nuevo, o pedile al mozo que te cobre en la mesa.
+            </p>
+            <a
+              href={`/mesa/${qrToken}`}
+              className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+            >
+              Volver a la mesa
+            </a>
+          </div>
+        </main>
+      );
     }
   }
 
@@ -47,12 +73,17 @@ export default async function ComandaPage({
 
   if (!sessionResult.success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 text-center">
-        <div className="bg-card p-8 rounded-2xl border shadow-sm">
-          <h1 className="text-2xl font-bold text-destructive mb-2">Error</h1>
-          <p className="text-muted-foreground">{sessionResult.message}</p>
+      <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-4 text-center">
+        <div className="w-full max-w-md space-y-3 rounded-2xl border bg-card p-8 shadow-sm">
+          <h1 className="font-display text-2xl font-semibold text-destructive">
+            No pudimos abrir la mesa
+          </h1>
+          <p className="text-sm text-muted-foreground">{sessionResult.message}</p>
+          <p className="text-xs text-muted-foreground">
+            Pedile al mozo un QR nuevo o que abra la mesa desde el panel.
+          </p>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -63,12 +94,16 @@ export default async function ComandaPage({
 
   if (!sessionResult.sesionId || !sessionResult.tenantId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 text-center">
-        <div className="bg-card p-8 rounded-2xl border shadow-sm">
-          <h1 className="text-2xl font-bold text-destructive mb-2">Error</h1>
-          <p className="text-muted-foreground">No se pudo abrir la mesa.</p>
+      <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-4 text-center">
+        <div className="w-full max-w-md space-y-3 rounded-2xl border bg-card p-8 shadow-sm">
+          <h1 className="font-display text-2xl font-semibold text-destructive">
+            No se pudo abrir la mesa
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Hubo un problema al iniciar la sesión. Probá escanear el QR de nuevo.
+          </p>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -112,9 +147,13 @@ export default async function ComandaPage({
       />
 
       {/* No sticky: MenuView ya fija las categorías. Dos sticky top-0 se pisan. */}
-      <header className="bg-background p-4 border-b text-center shadow-sm">
-        <h1 className="font-bold text-xl">Mesa {mesaIdentificador}</h1>
-        <p className="text-sm text-muted-foreground">Sesión Compartida • Todos ven el mismo pedido</p>
+      <header className="border-b bg-background p-4 text-center shadow-sm">
+        <h1 className="font-display text-xl font-semibold tracking-tight">
+          Mesa {mesaIdentificador}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Pedido compartido · enviá a cocina y pagá cuando quieras
+        </p>
       </header>
 
       <MenuDigital

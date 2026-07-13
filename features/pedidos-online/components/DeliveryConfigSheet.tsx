@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
+import { CheckCheck, Copy, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
@@ -80,10 +81,12 @@ export function DeliveryConfigSheet({
   open,
   onOpenChange,
   initialConfig,
+  publicPedirUrl,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initialConfig: DeliveryConfig;
+  publicPedirUrl?: string;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -91,7 +94,11 @@ export function DeliveryConfigSheet({
         {/* El cuerpo se monta recién al abrir, así su estado parte siempre de la
             config guardada y descarta ediciones de una apertura anterior. */}
         {open && (
-          <ConfigBody initialConfig={initialConfig} onClose={() => onOpenChange(false)} />
+          <ConfigBody
+            initialConfig={initialConfig}
+            publicPedirUrl={publicPedirUrl}
+            onClose={() => onOpenChange(false)}
+          />
         )}
       </SheetContent>
     </Sheet>
@@ -100,15 +107,18 @@ export function DeliveryConfigSheet({
 
 function ConfigBody({
   initialConfig,
+  publicPedirUrl,
   onClose,
 }: {
   initialConfig: DeliveryConfig;
+  publicPedirUrl?: string;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [activo, setActivo] = useState(initialConfig.activo);
   const [modo, setModo] = useState<DeliveryConfig['modo']>(initialConfig.modo);
   const [agregadosHasta, setAgregadosHasta] = useState<AgregadosHasta>(initialConfig.agregadosHasta);
+  const [copiado, setCopiado] = useState(false);
 
   const guardar = useMutation({
     mutationFn: async () => {
@@ -129,18 +139,50 @@ function ConfigBody({
       <SheetHeader className="border-b">
         <SheetTitle>Configuración de pedidos online</SheetTitle>
         <SheetDescription>
-          Elegí qué modalidades ofrecés y hasta cuándo el cliente puede sumar productos a un pedido
-          ya confirmado.
+          Activá el canal, elegí retiro y/o envío, y compartí el link con tus clientes.
         </SheetDescription>
       </SheetHeader>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+        {publicPedirUrl ? (
+          <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
+            <p className="text-sm font-medium">Link público del menú</p>
+            <p className="break-all font-mono text-xs text-muted-foreground">{publicPedirUrl}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(publicPedirUrl);
+                    setCopiado(true);
+                    toast.success('Link copiado');
+                    setTimeout(() => setCopiado(false), 2000);
+                  } catch {
+                    toast.error('No se pudo copiar');
+                  }
+                }}
+              >
+                {copiado ? <CheckCheck className="size-4" /> : <Copy className="size-4" />}
+                {copiado ? 'Copiado' : 'Copiar'}
+              </Button>
+              <Button type="button" size="sm" variant="secondary" asChild>
+                <a href={publicPedirUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="size-4" />
+                  Abrir
+                </a>
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {/* Pedidos online activos */}
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4">
           <span>
             <span className="block text-sm font-medium">Pedidos online</span>
             <span className="block text-sm text-muted-foreground">
-              Si está apagado, la carta pública no toma pedidos.
+              Si está apagado, /pedir no toma pedidos (sí se puede ver la carta).
             </span>
           </span>
           <Switch checked={activo} onCheckedChange={setActivo} />

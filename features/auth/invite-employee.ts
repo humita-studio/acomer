@@ -12,6 +12,7 @@ import {
   updateEmployeeRoleSchema,
   perfilIdSchema,
 } from './validation';
+import { META_MUST_CHANGE_PASSWORD } from './auth-errors';
 
 export interface InviteEmployeeInput {
   email: string;
@@ -81,11 +82,13 @@ export async function inviteEmployee(
     const email = parsed.data.email.trim().toLowerCase();
     const tempPassword = generateTempPassword();
 
-    // 1. Buscar o crear el usuario en Supabase Auth
+    // 1. Buscar o crear el usuario en Supabase Auth.
+    // must_change_password: al primer login se fuerza /cambiar-password.
     const { data: signUpData, error: signUpError } = await supabase.auth.admin.createUser({
       email,
       password: tempPassword,
       email_confirm: true,
+      user_metadata: { [META_MUST_CHANGE_PASSWORD]: true },
     });
 
     // Solo hay contraseña temporal que mostrar si creamos una cuenta nueva.
@@ -150,7 +153,7 @@ export async function inviteEmployee(
     if (createdNewUser) {
       return {
         success: true,
-        message: `${email} fue agregado como ${parsed.data.rol}. Entregale la contraseña temporal.`,
+        message: `${email} fue agregado como ${parsed.data.rol}. Entregale la contraseña temporal: al ingresar se le pedirá elegir una propia.`,
         userId: finalUserId,
         tempPassword,
       };

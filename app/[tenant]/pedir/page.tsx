@@ -18,7 +18,9 @@ import { obtenerSeguimientoPedido } from '@/features/pedidos-online/obtenerSegui
 import { SeguimientoPedido } from '@/features/pedidos-online/components/SeguimientoPedido';
 import { obtenerDeliveryConfig } from '@/features/pedidos-online/deliveryConfigActions';
 import { modosPermitidos, puedeAgregar } from '@/features/pedidos-online/deliveryConfig';
+import { PedidosEstadoBox } from '@/features/pedidos-online/components/PedidosEstadoBox';
 import { obtenerPromocionesPublicas } from '@/features/promociones/promosPublicasActions';
+import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
 
 export const metadata: Metadata = {
   title: 'Pedir online',
@@ -31,17 +33,6 @@ type ModificadorSnapshot = {
   precioExtra: number;
 };
 
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 text-center">
-      <div className="bg-card p-8 rounded-2xl border shadow-sm">
-        <h1 className="text-2xl font-bold text-destructive mb-2">Error</h1>
-        <p className="text-muted-foreground">{message}</p>
-      </div>
-    </div>
-  );
-}
-
 export default async function PedirPage({
   params,
   searchParams,
@@ -53,19 +44,32 @@ export default async function PedirPage({
   const sp = await searchParams;
 
   const tenantId = await getTenantBySlug(tenant);
-  if (!tenantId) return <ErrorBox message="Restaurante no encontrado" />;
+  if (!tenantId) {
+    return <PedidosEstadoBox variante="not_found" />;
+  }
 
   // Config del local: qué modalidades ofrece y hasta cuándo se puede agregar.
-  const config = await obtenerDeliveryConfig(tenantId);
+  const [config, landing] = await Promise.all([
+    obtenerDeliveryConfig(tenantId),
+    obtenerLandingConfig(tenantId),
+  ]);
+  const whatsapp = landing.redes.whatsapp || undefined;
 
   // Retorno de pago: MercadoPago vuelve a /pedir?pago=...&tx=... (sin el sesion),
   // así que mostramos el ticket/resumen en vez del formulario.
   const pagoState = typeof sp?.pago === 'string' ? sp.pago : undefined;
   const tx = typeof sp?.tx === 'string' ? sp.tx : undefined;
-  if ((pagoState === 'exito' || pagoState === 'pendiente') && tx) {
+  if (
+    tx &&
+    (pagoState === 'exito' || pagoState === 'pendiente' || pagoState === 'error')
+  ) {
     const ticketResult = await obtenerTicketAction(tx);
     if (ticketResult.success && ticketResult.data) {
       const d = ticketResult.data;
+      // Fallo de MP: ticket con estado de error (no mandar a seguimiento como pagado).
+      if (pagoState === 'error') {
+        return <ResumenPago ticket={d} pagoState="error" />;
+      }
       // Retiro/envío → seguimiento del pedido (estado de entrega, estilo
       // Rappi/PedidosYa). Salón → ticket de pago como siempre.
       if (d.tipo === 'takeaway' || d.tipo === 'delivery') {
@@ -83,7 +87,7 @@ export default async function PedirPage({
           );
         }
       }
-      return <ResumenPago ticket={d} />;
+      return <ResumenPago ticket={d} pagoState={pagoState} />;
     }
   }
 
@@ -92,7 +96,7 @@ export default async function PedirPage({
   const sesionId = typeof sp?.sesion === 'string' ? sp.sesion : undefined;
   if (!sesionId) {
     if (!config.activo) {
-      return <ErrorBox message="El local no está tomando pedidos online en este momento." />;
+      return <PedidosEstadoBox variante="offline" whatsapp={whatsapp} />;
     }
     // Catálogo + promos + métodos de pago: el flujo "menú primero" los necesita
     // acá (los métodos, para abrir el cobro apenas se confirma el pedido sin
@@ -104,7 +108,7 @@ export default async function PedirPage({
     ]);
     return (
       <main className="min-h-dvh bg-muted/30">
-        <header  className="border-b bg-background px-4 py-3 text-center sr-only">
+        <header className="sr-only border-b bg-background px-4 py-3 text-center">
           <h1 className="text-lg font-bold leading-tight">Menú de {tenant}</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Elegí del menú y, al terminar, cómo lo querés recibir
@@ -137,7 +141,13 @@ export default async function PedirPage({
     .limit(1);
 
   if (!sesion || (sesion.tipo !== 'takeaway' && sesion.tipo !== 'delivery')) {
-    return <ErrorBox message="Pedido no encontrado" />;
+    return (
+      <PedidosEstadoBox
+        variante="error"
+        message="No encontramos ese pedido. Revisá el link o pedile al local el seguimiento."
+        whatsapp={whatsapp}
+      />
+    );
   }
 
   // Una vez confirmado el primer pedido mostramos el seguimiento (estado de
@@ -163,7 +173,13 @@ export default async function PedirPage({
         />
       );
     }
-    return <ErrorBox message="Este pedido ya fue cerrado." />;
+    return (
+      <PedidosEstadoBox
+        variante="error"
+        message="Este pedido ya fue cerrado. Si necesitás ayuda, escribinos."
+        whatsapp={whatsapp}
+      />
+    );
   }
 
   // Flujo "agregar productos" (sesión activa, aún sin confirmar o ?agregar=1):

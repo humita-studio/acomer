@@ -125,7 +125,7 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
         <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-success-subtle text-success-foreground">
           <Check className="size-7" />
         </span>
-        <h1 className="font-display text-2xl font-semibold">¡Tu local está listo!</h1>
+        <h1 className="font-display text-2xl font-semibold">¡Tu local está creado!</h1>
         <p className="mt-2 text-muted-foreground">
           Tu página pública quedó en{' '}
           <a
@@ -138,8 +138,24 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         </p>
+        <ol className="mt-5 space-y-2 rounded-xl border bg-muted/40 p-4 text-left text-sm">
+          <li className="flex gap-2">
+            <span className="font-semibold text-primary">1.</span>
+            <span>Cargá el menú (productos y precios)</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-semibold text-primary">2.</span>
+            <span>Armá el salón y generá los QR de mesa</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-semibold text-primary">3.</span>
+            <span>Vinculá Mercado Pago para cobrar</span>
+          </li>
+        </ol>
         <div className="mt-6 flex flex-col gap-2">
-          <Button onClick={() => router.push('/admin')}>Ir a mi panel</Button>
+          <Button onClick={() => router.push('/admin')}>
+            Configurar mi local
+          </Button>
           <Button variant="outline" asChild>
             <a href={`${proto}://${url}`} target="_blank" rel="noopener noreferrer">
               Ver mi página

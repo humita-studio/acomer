@@ -281,8 +281,9 @@ export function StaffNotifications({
         const p = dataOf(payload) as { tipo?: string };
         push(
           'Pedido online',
-          p.tipo === 'delivery' ? 'Nuevo delivery' : 'Nuevo takeaway',
+          p.tipo === 'delivery' ? 'Nuevo delivery' : 'Nuevo takeaway / retiro',
           '/admin/pedidos-online',
+          { important: true },
         );
       })
       .on('broadcast', { event: 'cuenta_solicitada' }, () => {

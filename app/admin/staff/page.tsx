@@ -175,7 +175,9 @@ export default function StaffPage() {
                   Contraseña temporal (se muestra una sola vez)
                 </p>
                 <p className="text-xs text-amber-800 mb-3">
-                  Copiala y entregásela al empleado. No se vuelve a mostrar. Que la cambie al ingresar.
+                  Copiala y entregásela al empleado. No se vuelve a mostrar. Al
+                  primer ingreso el sistema le pide elegir una contraseña propia
+                  antes de entrar al panel.
                 </p>
                 <dl className="text-sm space-y-1 mb-3">
                   <div className="flex gap-2">

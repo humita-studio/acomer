@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Pencil, QrCode, X } from 'lucide-react';
+import { Bell, Pencil, Printer, QrCode, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
@@ -436,37 +436,58 @@ export function PlanoManager({
         />
       )}
 
-      {/* Generar QR — pack de códigos por mesa */}
+      {/* Generar QR — pack de códigos por mesa + impresión */}
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl print:max-h-none print:max-w-none print:overflow-visible print:border-0 print:shadow-none">
+          <DialogHeader className="print:hidden">
             <DialogTitle className="font-display text-xl">QR de mesas</DialogTitle>
           </DialogHeader>
           {mesas.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay mesas para generar QR.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              {mesas.map((m) => {
-                const url = `${origin}/mesa/${m.qrToken}`;
-                return (
-                  <div
-                    key={m.id}
-                    className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-3"
-                  >
-                    <span className="text-sm font-semibold text-foreground">{m.identificador}</span>
-                    <QRCodeSVG value={url} size={120} level="H" />
-                    <button
-                      type="button"
-                      className="w-full truncate text-[10px] text-muted-foreground hover:text-primary"
-                      title="Copiar URL"
-                      onClick={() => navigator.clipboard?.writeText(url)}
+            <>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
+                <p className="text-sm text-muted-foreground">
+                  {mesas.length} mesa{mesas.length === 1 ? '' : 's'} · imprimí y poné un QR en cada una
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="size-4" aria-hidden />
+                  Imprimir todos
+                </Button>
+              </div>
+              <div
+                id="qr-print-pack"
+                className="grid grid-cols-2 gap-4 sm:grid-cols-3 print:grid-cols-3 print:gap-6"
+              >
+                {mesas.map((m) => {
+                  const url = `${origin}/mesa/${m.qrToken}`;
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-3 print:break-inside-avoid print:border-border"
                     >
-                      Copiar link
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      <span className="text-sm font-semibold text-foreground">
+                        Mesa {m.identificador}
+                      </span>
+                      <QRCodeSVG value={url} size={120} level="H" />
+                      <button
+                        type="button"
+                        className="w-full truncate text-[10px] text-muted-foreground hover:text-primary print:hidden"
+                        title="Copiar URL"
+                        onClick={() => navigator.clipboard?.writeText(url)}
+                      >
+                        Copiar link
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

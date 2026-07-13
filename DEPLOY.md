@@ -86,7 +86,21 @@ tener doble CDN y problemas de SSL (errores `525` / `526`), y el plan free de Cl
 
 ---
 
-## 4. Verificación
+## 4. Supabase Auth — redirect URLs
+
+En **Supabase → Authentication → URL Configuration**, agregá a *Redirect URLs*:
+
+| URL | Para qué |
+|---|---|
+| `https://acomer.com.ar/auth/callback` | Recovery de contraseña y magic links |
+| `http://localhost:3000/auth/callback` | Dev local |
+
+El form de “olvidé mi contraseña” redirige a  
+`/auth/callback?next=/cambiar-password`.
+
+---
+
+## 5. Verificación
 
 Una vez propagado el DNS (puede tardar unos minutos):
 

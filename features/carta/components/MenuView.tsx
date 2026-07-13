@@ -354,9 +354,12 @@ export function MenuView({
             </ul>
           )
         ) : secciones.length === 0 ? (
-          <p className="px-2 py-12 text-center text-sm text-muted-foreground">
-            No hay productos en el menú.
-          </p>
+          <div className="space-y-2 px-2 py-14 text-center">
+            <p className="text-base font-medium text-foreground">El menú aún no está cargado</p>
+            <p className="text-sm text-muted-foreground">
+              Avisale al mozo o al local. En cuanto carguen los platos, aparecen acá.
+            </p>
+          </div>
         ) : (
           <Accordion
             type="multiple"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatPeso } from '@/shared/lib/format';
@@ -9,12 +9,14 @@ import { Input } from '@/shared/ui/input';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/shared/ui/sheet';
 import { getCartTotal, type CartItem, type CartPromoResumen } from '@/features/carta/cart';
 import { crearPedidoExternoAction } from '../pedidoExternoActions';
 import type { ModoPedido } from '../deliveryConfig';
+import { validarCheckoutCliente } from '../checkoutValidation';
 
 type Tipo = 'takeaway' | 'delivery';
 
@@ -31,7 +33,7 @@ function Campo({
     <div className="space-y-1.5">
       <label className="text-xs font-medium tracking-[0.2px] text-muted-foreground">
         {label}
-        {opcional && <span className="text-muted-foreground/70"> (opcional)</span>}
+        {opcional ? <span className="text-muted-foreground/70"> (opcional)</span> : null}
       </label>
       {children}
     </div>
@@ -51,14 +53,8 @@ export function CheckoutExterno({
   onClose: () => void;
   tenantSlug: string;
   cartItems: CartItem[];
-  // Modalidades habilitadas por el local; si hay una sola no se muestra selector.
   modos: ModoPedido[];
-  // Descuento por promos sobre el carrito (preview). El método aún no se eligió.
   promoResumen?: CartPromoResumen | null;
-  // Pedido creado en DB: el padre decide qué sigue (abrir el pago in-place o
-  // navegar al seguimiento). Acá no se navega para no pagar un render de página.
-  // Devolvemos también el tipo elegido: es el canal con el que el pago resuelve
-  // las promos, así el descuento del modal coincide con el que se cobra.
   onPedidoCreado: (sesionId: string, tipo: Tipo) => void;
 }) {
   const opciones: Tipo[] = modos.length > 0 ? modos : ['takeaway', 'delivery'];
@@ -70,6 +66,10 @@ export function CheckoutExterno({
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!opciones.includes(tipo)) setTipo(opciones[0]);
+  }, [opciones, tipo]);
+
   const subtotal = getCartTotal(cartItems);
   const descuento = promoResumen && promoResumen.descuento > 0 ? promoResumen.descuento : 0;
   const total = Math.max(0, subtotal - descuento);
@@ -77,20 +77,29 @@ export function CheckoutExterno({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (cartItems.length === 0) {
-      setError('Tu carrito está vacío');
+
+    const clienteErr = validarCheckoutCliente({
+      nombre,
+      telefono,
+      tipo,
+      direccion,
+      itemsCount: cartItems.length,
+    });
+    if (clienteErr) {
+      setError(clienteErr);
       return;
     }
+
     setEnviando(true);
     try {
       const res = await crearPedidoExternoAction(
         tenantSlug,
         tipo,
         {
-          nombreContacto: nombre,
-          telefono,
-          direccion: tipo === 'delivery' ? direccion : undefined,
-          referencia: tipo === 'delivery' ? referencia : undefined,
+          nombreContacto: nombre.trim(),
+          telefono: telefono.trim(),
+          direccion: tipo === 'delivery' ? direccion.trim() : undefined,
+          referencia: tipo === 'delivery' ? referencia.trim() || undefined : undefined,
         },
         cartItems.map((i) => ({
           productoId: i.productoId,
@@ -100,32 +109,37 @@ export function CheckoutExterno({
         })),
       );
       if (res.success && res.sesionId) {
-        // El pedido ya está persistido. El padre cierra este sheet y abre el pago
-        // sobre la misma pantalla (sin navegar), así no hay segundos muertos.
         onPedidoCreado(res.sesionId, tipo);
       } else {
-        setError(res.message ?? 'No se pudo confirmar el pedido');
+        setError(res.message ?? 'No se pudo confirmar el pedido. Probá de nuevo.');
         setEnviando(false);
       }
     } catch {
-      setError('No se pudo confirmar el pedido');
+      setError('Sin conexión o error de red. Revisá internet e intentá de nuevo.');
       setEnviando(false);
     }
   };
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Sheet
+      open={open}
+      onOpenChange={(o) => {
+        if (!o && !enviando) onClose();
+      }}
+    >
       <SheetContent
         side="bottom"
         className="mx-auto flex max-h-[92vh] flex-col gap-0 bg-background p-0 sm:max-w-md sm:rounded-t-2xl"
       >
-        <SheetHeader className="border-b p-5">
+        <SheetHeader className="border-b p-5 text-left">
           <SheetTitle className="text-lg">Finalizá tu pedido</SheetTitle>
+          <SheetDescription>
+            Confirmamos el pedido al local. Después podés pagar online o al recibir/retirar.
+          </SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-4 overflow-y-auto p-5">
-            {/* Modalidad: sólo si hay más de una habilitada. */}
             {opciones.length > 1 ? (
               <div className="grid grid-cols-2 gap-3">
                 {opciones.includes('takeaway') && (
@@ -168,7 +182,8 @@ export function CheckoutExterno({
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 required
-                className="h-12 rounded-lg"
+                autoComplete="name"
+                className="h-12 rounded-lg text-base"
                 placeholder="Tu nombre"
               />
             </Campo>
@@ -176,22 +191,25 @@ export function CheckoutExterno({
             <Campo label="Teléfono">
               <Input
                 type="tel"
+                inputMode="tel"
                 value={telefono}
                 onChange={(e) => setTelefono(e.target.value)}
                 required
-                className="h-12 rounded-lg"
+                autoComplete="tel"
+                className="h-12 rounded-lg text-base"
                 placeholder="Ej: 11 2345 6789"
               />
             </Campo>
 
-            {tipo === 'delivery' && (
+            {tipo === 'delivery' ? (
               <>
                 <Campo label="Dirección">
                   <Input
                     value={direccion}
                     onChange={(e) => setDireccion(e.target.value)}
                     required
-                    className="h-12 rounded-lg"
+                    autoComplete="street-address"
+                    className="h-12 rounded-lg text-base"
                     placeholder="Calle, número, piso/depto"
                   />
                 </Campo>
@@ -199,23 +217,25 @@ export function CheckoutExterno({
                   <Input
                     value={referencia}
                     onChange={(e) => setReferencia(e.target.value)}
-                    className="h-12 rounded-lg"
+                    className="h-12 rounded-lg text-base"
                     placeholder="Ej: timbre roto, golpear"
                   />
                 </Campo>
+                <p className="text-xs text-muted-foreground">
+                  El costo de envío lo confirma el local si aplica.
+                </p>
               </>
-            )}
+            ) : null}
 
-            {error && (
+            {error ? (
               <div className="rounded-lg bg-destructive/10 p-3 text-sm font-medium text-destructive">
                 {error}
               </div>
-            )}
+            ) : null}
           </div>
 
-          {/* Footer: desglose del descuento (si hay) + confirmar con total neto. */}
           <div className="space-y-3 border-t bg-muted/40 p-5">
-            {descuento > 0 && (
+            {descuento > 0 ? (
               <div className="space-y-1 text-sm">
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span>Subtotal</span>
@@ -226,19 +246,22 @@ export function CheckoutExterno({
                   <span className="tabular-nums">−{formatPeso(descuento)}</span>
                 </div>
               </div>
-            )}
+            ) : null}
             <Button
               type="submit"
-              disabled={enviando}
+              disabled={enviando || cartItems.length === 0}
               size="lg"
               className="h-12 w-full justify-between text-base"
             >
               <span className="flex items-center gap-2">
-                {enviando && <Loader2 className="size-4 animate-spin" />}
+                {enviando ? <Loader2 className="size-4 animate-spin" /> : null}
                 {enviando ? 'Confirmando…' : 'Confirmar pedido'}
               </span>
               <span className="tabular-nums">{formatPeso(total)}</span>
             </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              Al confirmar, el local recibe el pedido en cocina.
+            </p>
           </div>
         </form>
       </SheetContent>

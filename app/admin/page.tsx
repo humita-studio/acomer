@@ -1,6 +1,8 @@
 import { Suspense } from 'react';
+import { headers } from 'next/headers';
 import { getCurrentSession } from '@/features/auth/session';
 import { getDashboardMetricsAction } from '@/features/dashboard/dashboardActions';
+import { getOnboardingStatusAction } from '@/features/dashboard/onboardingActions';
 import { DashboardMetrics } from '@/features/dashboard/components/DashboardMetrics';
 import { Skeleton } from '@/shared/ui/skeleton';
 
@@ -19,6 +21,13 @@ function DashboardSkeleton() {
       <div className="space-y-1">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-4 w-40" />
+      </div>
+      {/* Onboarding skeleton */}
+      <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+        <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
       </div>
       {/* Metric cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -42,9 +51,13 @@ function DashboardSkeleton() {
 async function DashboardContent() {
   const session = await getCurrentSession();
 
-  const metrics = session
-    ? await getDashboardMetricsAction()
-    : null;
+  const [metrics, onboarding, headersList] = session
+    ? await Promise.all([
+        getDashboardMetricsAction(),
+        getOnboardingStatusAction(),
+        headers(),
+      ])
+    : [null, null, null];
 
   const ahora = new Date();
   const horaBA = Number(
@@ -61,6 +74,10 @@ async function DashboardContent() {
     return null;
   }
 
+  // Dominio base para el link público del local (sin subdominio de tenant).
+  const host = headersList?.get('host') || '';
+  const dominioPublico = host.replace(/^app\./, '') || undefined;
+
   return (
     <DashboardMetrics
       initialData={metrics}
@@ -69,6 +86,8 @@ async function DashboardContent() {
       saludo={saludo(horaBA)}
       fecha={fechaLarga}
       nombreRestaurante={session.nombreRestaurante}
+      onboarding={onboarding}
+      dominioPublico={dominioPublico}
     />
   );
 }

@@ -88,8 +88,15 @@ export async function crearPedidoExternoAction(
     if (itemsLimpios.length === 0) {
       return { success: false, message: 'El carrito está vacío' };
     }
-    if (!contacto.nombreContacto?.trim() || !contacto.telefono?.trim()) {
-      return { success: false, message: 'Nombre y teléfono son obligatorios' };
+    if (!contacto.nombreContacto?.trim() || contacto.nombreContacto.trim().length < 2) {
+      return { success: false, message: 'Ingresá tu nombre' };
+    }
+    if (!contacto.telefono?.trim()) {
+      return { success: false, message: 'Ingresá un teléfono de contacto' };
+    }
+    const telDigits = contacto.telefono.replace(/\D/g, '');
+    if (telDigits.length < 8 || telDigits.length > 15) {
+      return { success: false, message: 'Ingresá un teléfono válido (ej. 11 2345 6789)' };
     }
     if (
       contacto.nombreContacto.trim().length > 120 ||
@@ -98,7 +105,7 @@ export async function crearPedidoExternoAction(
     ) {
       return { success: false, message: 'Datos de contacto inválidos' };
     }
-    if (tipo === 'delivery' && !contacto.direccion?.trim()) {
+    if (tipo === 'delivery' && (!contacto.direccion?.trim() || contacto.direccion.trim().length < 5)) {
       return { success: false, message: 'La dirección es obligatoria para envíos' };
     }
 

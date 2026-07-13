@@ -47,24 +47,44 @@ export async function proxy(req: NextRequest) {
   );
 
   // --- 2. Protección de rutas autenticadas ---
+  // /auth/* es el callback de Supabase (code exchange); no redirigir.
+  if (path.startsWith('/auth/')) {
+    return response;
+  }
+
   const protectedPaths = ['/admin'];
   const isProtectedRoute = protectedPaths.some((p) => path.startsWith(p));
-  const isAuthRoute = path === '/login' || path === '/register';
+  const isAuthRoute =
+    path === '/login' || path === '/register' || path === '/forgot-password';
+  const isChangePasswordRoute = path === '/cambiar-password';
 
   // Optimización: Solo hacemos getUser() (que requiere request a BD) en rutas que lo necesitan
   let user = null;
-  if (isProtectedRoute || isAuthRoute) {
+  if (isProtectedRoute || isAuthRoute || isChangePasswordRoute) {
     const { data } = await supabase.auth.getUser();
     user = data.user;
   }
+
+  const mustChangePassword =
+    user?.user_metadata?.must_change_password === true;
 
   if (isProtectedRoute && !user) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // --- 3. Redirigir usuarios autenticados lejos del login ---
+  // Staff con contraseña temporal: no entra al panel hasta cambiarla.
+  if (isProtectedRoute && user && mustChangePassword) {
+    return NextResponse.redirect(new URL('/cambiar-password', req.url));
+  }
+
+  if (isChangePasswordRoute && !user) {
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
+  // --- 3. Redirigir usuarios autenticados lejos del login/registro ---
   if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL('/admin', req.url));
+    const dest = mustChangePassword ? '/cambiar-password' : '/admin';
+    return NextResponse.redirect(new URL(dest, req.url));
   }
 
   // --- 4. Lógica de subdominios (tenants) ---

@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
@@ -42,17 +43,25 @@ async function PedidosContent() {
   if (!session) redirect('/login');
   if (!canAccessSection(session.role, 'delivery')) redirect('/unauthorized');
 
-  const [ordenesRes, configRes] = await Promise.all([
+  const [ordenesRes, configRes, headersList] = await Promise.all([
     getOrdenesExternasAction(),
     getDeliveryConfigAction(),
+    headers(),
   ]);
   const ordenes = ordenesRes.success ? ordenesRes.ordenes : [];
+
+  const host = headersList.get('host') || '';
+  const dominioBase = host.replace(/^(app|www)\./, '') || 'acomer.com.ar';
+  const proto = dominioBase.includes('localhost') ? 'http' : 'https';
+  const slug = session.slugRestaurante;
+  const publicPedirUrl = slug ? `${proto}://${slug}.${dominioBase}/pedir` : undefined;
 
   return (
     <PedidosOnlineManager
       tenantId={session.restauranteId}
       initialOrdenes={ordenes as never}
       initialConfig={configRes.config}
+      publicPedirUrl={publicPedirUrl}
     />
   );
 }
