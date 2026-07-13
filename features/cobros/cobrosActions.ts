@@ -5,6 +5,10 @@ import { eq, and, desc, inArray } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
+import {
+  getSesionCajaAbiertaId,
+  requireSesionCajaAbierta,
+} from '@/features/caja/sesionCaja';
 import type { TransaccionCobro } from './types';
 
 // El restaurante se deriva siempre de la sesión (nunca del cliente) y todo el
@@ -112,6 +116,17 @@ export async function aprobarPagoPresencialAction(
                 return { success: false, message: 'La transacción no es válida o ya fue procesada.' };
             }
 
+            // Efectivo: la caja debe estar abierta (el dinero físico entra al turno).
+            // Tarjeta u otros: se asocian a la caja si hay una abierta, sin bloquear.
+            let sesionCajaId: string | null = null;
+            if (tx.proveedor === 'efectivo') {
+                const caja = await requireSesionCajaAbierta(tenantId, db);
+                if (!caja.ok) return { success: false, message: caja.message };
+                sesionCajaId = caja.sesionCajaId;
+            } else {
+                sesionCajaId = await getSesionCajaAbiertaId(tenantId, db);
+            }
+
             // 1. Marcar como aprobado, registrando el vuelto si se ingresó el
             // efectivo recibido. El método (proveedor) no cambia: lo eligió el
             // cliente al pedir la cuenta y el total ya viene con ese descuento.
@@ -126,6 +141,8 @@ export async function aprobarPagoPresencialAction(
                 .set({
                     estado: 'Aprobado',
                     metadata,
+                    // Al aprobar fijamos el turno actual (cuando se cobra de verdad).
+                    sesionCajaId: sesionCajaId ?? tx.sesionCajaId,
                     updatedAt: new Date(),
                 })
                 .where(eq(transaccionesPago.id, transactionId));

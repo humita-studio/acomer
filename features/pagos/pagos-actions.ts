@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { getPaymentProvider } from './core/payment-factory';
 import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
 import type { PromoCanal } from '@/features/promociones/promociones';
+import { getSesionCajaAbiertaId } from '@/features/caja/sesionCaja';
 import { pedirCuentaSchema } from './validation';
 import { withPublicTenant } from '@/shared/db/secure-wrapper';
 
@@ -80,13 +81,15 @@ export async function pedirCuentaAction(
     }
     const totalCalculado = Math.max(0, saldoPendiente - descuento);
 
-    // 3. Crear registro de transacción pendiente
+    // 3. Crear registro de transacción pendiente (asociada a la caja abierta si hay).
     const transactionId = await withPublicTenant(tenantId, async (tx) => {
+      const sesionCajaId = await getSesionCajaAbiertaId(tenantId, tx);
       const nuevaTx = await tx
         .insert(transaccionesPago)
         .values({
           restauranteId: tenantId,
           sesionMesaId,
+          sesionCajaId,
           proveedor: 'indefinido_por_ahora',
           monto: totalCalculado.toString(),
           descuento: descuento.toString(),

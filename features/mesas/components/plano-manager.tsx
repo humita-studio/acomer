@@ -1,14 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Pencil, QrCode, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { toast } from 'sonner';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import type { PlanoData } from '@/features/mesas/plano-data';
 import { getPlanoDataAction } from '@/features/mesas/plano-actions';
+import {
+  asignarMozoMesaAction,
+  listMozosAction,
+} from '@/features/mesas/mesas-actions';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import {
@@ -25,7 +30,18 @@ import { ElementoPanel } from './elemento-panel';
 import { OperacionPanel } from './operacion-panel';
 import { usePlanoStore, type SaveStatus } from './plano-store';
 import { usePlanoAcciones } from './use-plano-acciones';
-import { type MesaPlano, type Modo } from './plano-types';
+import { type FiltroMozo, type MesaPlano, type Modo } from './plano-types';
+
+function mesaPasaFiltroMozo(
+  mesa: MesaPlano,
+  filtro: FiltroMozo,
+  currentUserId: string,
+): boolean {
+  if (filtro === 'todas') return true;
+  if (filtro === 'mias') return mesa.mozoUserId === currentUserId;
+  if (filtro === 'sin_asignar') return !mesa.mozoUserId;
+  return mesa.mozoUserId === filtro;
+}
 
 export function PlanoManager({
   ambientes: initialAmbientes,
@@ -34,6 +50,7 @@ export function PlanoManager({
   origin,
   userRole,
   tenantId,
+  currentUserId,
 }: {
   ambientes: PlanoData['ambientes'];
   mesas: PlanoData['mesas'];
@@ -41,11 +58,15 @@ export function PlanoManager({
   origin: string;
   userRole: string;
   tenantId: string;
+  currentUserId: string;
 }) {
   const canManage = hasPermission(userRole as RoleType, 'canManageTables');
   const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
+  const esMozo = userRole === 'mozo';
   const queryClient = useQueryClient();
   const [qrOpen, setQrOpen] = useState(false);
+  // Mozos ven por defecto solo sus mesas; admin/owner ven todas.
+  const [filtroMozo, setFiltroMozo] = useState<FiltroMozo>(esMozo ? 'mias' : 'todas');
 
   const {
     modo,
@@ -92,6 +113,34 @@ export function PlanoManager({
     initialData: { ambientes: initialAmbientes, mesas: initialMesas, elementos: initialElementos },
   });
 
+  const { data: mozos = [] } = useQuery({
+    queryKey: queryKeys.mozos(tenantId),
+    queryFn: () => listMozosAction(),
+    staleTime: 60 * 1000,
+    enabled: canManage || canTakeOrders,
+  });
+
+  const mozoLabel = useMemo(() => {
+    const map = new Map(mozos.map((m) => [m.userId, m.label]));
+    return (userId: string | null | undefined) =>
+      userId ? (map.get(userId) ?? 'Mozo') : null;
+  }, [mozos]);
+
+  const asignarMozoMutation = useMutation({
+    mutationFn: async (vars: { mesaId: string; mozoUserId: string | null }) => {
+      const res = await asignarMozoMesaAction(vars.mesaId, vars.mozoUserId);
+      if (!res.success) throw new Error(res.message ?? 'No se pudo asignar');
+      return res;
+    },
+    onSuccess: (res) => {
+      toast.success(res.message ?? 'Mozo actualizado');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : 'No se pudo asignar el mozo');
+    },
+  });
+
   useEffect(() => reset, [reset]);
 
   useEffect(() => {
@@ -104,8 +153,10 @@ export function PlanoManager({
           queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
         }
       })
-      .on('broadcast', { event: 'alerta_mesa' }, ({ payload }) => {
-        pushAviso(`Mesa ${payload?.mesaIdentificador || ''} llama al mozo`.trim());
+      .on('broadcast', { event: 'llamar_mozo' }, ({ payload }) => {
+        const p = (payload ?? {}) as { mesaIdentificador?: string };
+        const mesa = p.mesaIdentificador?.trim();
+        pushAviso(mesa ? `Mesa ${mesa} llama al mozo` : 'Una mesa llama al mozo');
       })
       .on('broadcast', { event: 'cuenta_solicitada' }, () => {
         pushAviso('Una mesa pidió la cuenta — revisá Cobros');
@@ -124,16 +175,26 @@ export function PlanoManager({
     ? ambienteActivoId
     : ambientes[0]?.id ?? '';
 
-  const mesasAmbiente = useMemo(() => mesas.filter((m) => m.ambienteId === activeId), [mesas, activeId]);
+  // En edición no filtramos (hay que ver y mover todo). En operación sí.
+  const mesasFiltradas = useMemo(() => {
+    if (editando || filtroMozo === 'todas') return mesas;
+    return mesas.filter((m) => mesaPasaFiltroMozo(m, filtroMozo, currentUserId));
+  }, [mesas, editando, filtroMozo, currentUserId]);
+
+  const mesasAmbiente = useMemo(
+    () => mesasFiltradas.filter((m) => m.ambienteId === activeId),
+    [mesasFiltradas, activeId],
+  );
   const elementosAmbiente = useMemo(
     () => elementos.filter((e) => e.ambienteId === activeId),
     [elementos, activeId],
   );
 
   const stats = useMemo(() => {
-    const ocupadas = mesas.filter((m) => m.ocupada).length;
-    return { ocupadas, libres: mesas.length - ocupadas, total: mesas.length };
-  }, [mesas]);
+    const base = editando ? mesas : mesasFiltradas;
+    const ocupadas = base.filter((m) => m.ocupada).length;
+    return { ocupadas, libres: base.length - ocupadas, total: base.length };
+  }, [mesas, mesasFiltradas, editando]);
 
   const selMesa = seleccion?.tipo === 'mesa' ? mesas.find((m) => m.id === seleccion.id) ?? null : null;
   const selElemento =
@@ -193,6 +254,24 @@ export function PlanoManager({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {!editando && (canManage || canTakeOrders) && (
+            <select
+              value={filtroMozo}
+              onChange={(e) => setFiltroMozo(e.target.value as FiltroMozo)}
+              className="h-10 rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+              aria-label="Filtrar mesas por mozo"
+            >
+              <option value="todas">Todas las mesas</option>
+              {(esMozo || canTakeOrders) && <option value="mias">Mis mesas</option>}
+              <option value="sin_asignar">Sin asignar</option>
+              {canManage &&
+                mozos.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.label}
+                  </option>
+                ))}
+            </select>
+          )}
           <Button type="button" variant="outline" size="lg" onClick={() => setQrOpen(true)}>
             <QrCode />
             Generar QR
@@ -242,6 +321,7 @@ export function PlanoManager({
                 modo={modo}
                 herramienta={herramienta}
                 seleccion={seleccion}
+                mozoLabel={mozoLabel}
                 onChangeMesa={acciones.updateMesa}
                 onChangeElemento={acciones.updateElemento}
                 onSelect={setSeleccion}
@@ -320,10 +400,18 @@ export function PlanoManager({
                     canTakeOrders={canTakeOrders}
                     liberando={liberandoId === selMesa.id}
                     abriendo={abriendoId === selMesa.id}
+                    asignando={
+                      asignarMozoMutation.isPending &&
+                      asignarMozoMutation.variables?.mesaId === selMesa.id
+                    }
+                    mozos={mozos}
                     onLiberar={() => acciones.handleLiberar(selMesa)}
                     onAbrir={() => acciones.handleAbrir(selMesa)}
                     onDividir={() => acciones.handleDividir(selMesa)}
                     onUnir={() => acciones.handleUnir(selMesa)}
+                    onAsignarMozo={(mozoUserId) =>
+                      asignarMozoMutation.mutate({ mesaId: selMesa.id, mozoUserId })
+                    }
                     onClose={() => setSeleccion(null)}
                   />
                 )}
@@ -335,12 +423,13 @@ export function PlanoManager({
 
       {!editando && mostrarLista && (
         <MesaLista
-          mesas={mesas}
+          mesas={mesasFiltradas}
           ambientes={ambientes}
           canManage={canManage}
           canTakeOrders={canTakeOrders}
           abriendoId={abriendoId}
           liberandoId={liberandoId}
+          mozoLabel={mozoLabel}
           onSeleccionar={seleccionarMesa}
           onAbrir={acciones.handleAbrir}
           onLiberar={acciones.handleLiberar}

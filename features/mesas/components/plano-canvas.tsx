@@ -47,6 +47,7 @@ export function PlanoCanvas({
   modo,
   herramienta,
   seleccion,
+  mozoLabel,
   onChangeMesa,
   onChangeElemento,
   onSelect,
@@ -57,6 +58,7 @@ export function PlanoCanvas({
   modo: Modo;
   herramienta: Herramienta;
   seleccion: Seleccion | null;
+  mozoLabel?: (userId: string | null | undefined) => string | null;
   onChangeMesa: (id: string, partial: Partial<MesaPlano>) => void;
   onChangeElemento: (id: string, partial: Partial<ElementoPlanoUI>) => void;
   onSelect: (sel: Seleccion | null) => void;
@@ -257,6 +259,7 @@ export function PlanoCanvas({
               puedeArrastrar={puedeArrastrar}
               seleccionada={seleccion?.tipo === 'mesa' && seleccion.id === mesa.id}
               ocupada={!!mesa.ocupada}
+              mozoNombre={mozoLabel?.(mesa.mozoUserId) ?? null}
               onResizePointerDown={(e) => beginResize(e, 'mesa', mesa)}
               onClick={(e) => {
                 e.stopPropagation();

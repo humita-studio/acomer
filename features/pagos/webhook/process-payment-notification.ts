@@ -3,6 +3,7 @@ import { db } from '@/shared/db';
 import { pedidos, sesionesMesa, transaccionesPago } from '@/shared/db/schema';
 import { getPaymentProvider } from '@/features/pagos/core/payment-factory';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { getSesionCajaAbiertaId } from '@/features/caja/sesionCaja';
 import {
   decideSettlement,
   isAlreadyProcessed,
@@ -126,12 +127,19 @@ export async function processPaymentNotification(opts: {
       alreadyFinal: false,
     });
 
+    // Si se aprueba y aún no tiene turno de caja, asociamos la abierta (si hay).
+    let sesionCajaId = row.sesionCajaId;
+    if (verification.status === 'Aprobado' && !sesionCajaId) {
+      sesionCajaId = await getSesionCajaAbiertaId(tenantId, tx);
+    }
+
     // Actualizar la transacción siempre (estado + metadata con payment id).
     await tx
       .update(transaccionesPago)
       .set({
         estado: verification.status,
         metadata,
+        sesionCajaId,
         updatedAt: new Date(),
       })
       .where(

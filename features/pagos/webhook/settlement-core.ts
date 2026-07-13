@@ -31,7 +31,7 @@ export type SettlementDecision =
       totalPedidos: number;
       totalPagado: number;
       pedidoIdsAMarcarPagado: string[];
-      /** Cerrar sesión solo en salón (no takeaway/delivery). */
+      /** Cerrar sesión en salón/mostrador (no takeaway/delivery). */
       cerrarSesion: boolean;
     };
 
@@ -85,12 +85,17 @@ export function decideSettlement(opts: {
   }
 
   const esExterno = opts.tipoSesion === 'takeaway' || opts.tipoSesion === 'delivery';
+  // Canales donde el cobro y la prep son ejes distintos: el pago NO debe sacar
+  // el pedido del KDS. El cobro vive en transacciones_pago; cocina avanza
+  // Pendiente → … → Entregado. En salón el pago suele ser al final → Pagado ok.
+  const dejarEnCocina = esExterno || opts.tipoSesion === 'mostrador';
 
   return {
     kind: 'full',
     totalPedidos,
     totalPagado,
-    pedidoIdsAMarcarPagado: pedidosActivos.map((p) => p.id),
+    pedidoIdsAMarcarPagado: dejarEnCocina ? [] : pedidosActivos.map((p) => p.id),
+    // Cerrar sesión en salón y mostrador (one-shot); takeaway/delivery siguen abiertos.
     cerrarSesion: !esExterno,
   };
 }

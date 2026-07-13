@@ -14,6 +14,7 @@ export function MesaLista({
   canTakeOrders,
   abriendoId,
   liberandoId,
+  mozoLabel,
   onSeleccionar,
   onAbrir,
   onLiberar,
@@ -24,6 +25,7 @@ export function MesaLista({
   canTakeOrders: boolean;
   abriendoId: string | null;
   liberandoId: string | null;
+  mozoLabel?: (userId: string | null | undefined) => string | null;
   onSeleccionar: (mesa: MesaPlano) => void;
   onAbrir: (mesa: MesaPlano) => void;
   onLiberar: (mesa: MesaPlano) => void;
@@ -54,6 +56,11 @@ export function MesaLista({
               <button type="button" onClick={() => onSeleccionar(m)} className="min-w-0 flex-1 text-left">
                 <span className="font-medium text-foreground">{m.identificador}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{ambNombre(m.ambienteId)}</span>
+                {mozoLabel?.(m.mozoUserId) && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    · {mozoLabel(m.mozoUserId)}
+                  </span>
+                )}
               </button>
               <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                 <Users size={12} /> {m.capacidad}

@@ -8,12 +8,14 @@ import {
   DoorOpen,
   QrCode,
   Scissors,
+  UserRound,
   Users,
   X,
 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Separator } from '@/shared/ui/separator';
+import type { MozoOption } from '@/features/mesas/mesas-actions';
 import { type MesaPlano } from './plano-types';
 
 /** Panel lateral en modo operación: estado, pedido, QR, liberar/abrir/dividir/unir. */
@@ -24,10 +26,13 @@ export function OperacionPanel({
   canTakeOrders,
   liberando,
   abriendo,
+  asignando,
+  mozos,
   onLiberar,
   onAbrir,
   onDividir,
   onUnir,
+  onAsignarMozo,
   onClose,
 }: {
   mesa: MesaPlano;
@@ -36,14 +41,18 @@ export function OperacionPanel({
   canTakeOrders: boolean;
   liberando: boolean;
   abriendo: boolean;
+  asignando: boolean;
+  mozos: MozoOption[];
   onLiberar: () => void;
   onAbrir: () => void;
   onDividir: () => void;
   onUnir: () => void;
+  onAsignarMozo: (mozoUserId: string | null) => void;
   onClose: () => void;
 }) {
   const url = `${origin}/mesa/${mesa.qrToken}`;
   const esSubMesa = !!mesa.parentMesaId;
+  const mozoAsignado = mozos.find((m) => m.userId === mesa.mozoUserId);
 
   return (
     <div className="space-y-4">
@@ -69,6 +78,12 @@ export function OperacionPanel({
           </div>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <Users size={12} /> {mesa.capacidad} lugares
+            {mozoAsignado && (
+              <>
+                <span className="mx-1 text-border">·</span>
+                <UserRound size={12} /> {mozoAsignado.label}
+              </>
+            )}
           </p>
         </div>
         <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Cerrar panel">
@@ -132,6 +147,39 @@ export function OperacionPanel({
           </Button>
         )}
       </div>
+
+      {canManage && (
+        <>
+          <Separator />
+          <div className="space-y-1.5">
+            <label
+              htmlFor={`mozo-${mesa.id}`}
+              className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              <UserRound size={12} /> Mozo asignado
+            </label>
+            <select
+              id={`mozo-${mesa.id}`}
+              value={mesa.mozoUserId ?? ''}
+              disabled={asignando || mozos.length === 0}
+              onChange={(e) => onAsignarMozo(e.target.value || null)}
+              className="w-full rounded-md border border-border bg-card px-2.5 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-60"
+            >
+              <option value="">Sin asignar</option>
+              {mozos.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            {mozos.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No hay mozos activos. Invitá uno desde Empleados.
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       <Separator />
 

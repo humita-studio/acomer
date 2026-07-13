@@ -58,6 +58,7 @@ async function PlanoContent() {
       origin={origin}
       userRole={session.role}
       tenantId={session.restauranteId}
+      currentUserId={session.user.id}
     />
   );
 }

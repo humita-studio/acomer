@@ -1,6 +1,6 @@
 'use server';
 
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import {
   comandaItemModificadores,
   comandaItems,
@@ -8,6 +8,7 @@ import {
   mesas,
   pedidos,
   sesionesMesa,
+  transaccionesPago,
 } from '@/shared/db/schema';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
@@ -17,32 +18,154 @@ import { cocinaAEntrega } from '@/features/pedidos/estadoSync';
 import type { EstadoPedidoCocina, PedidoCocina } from './types';
 
 const ESTADOS_ACTIVOS: EstadoPedidoCocina[] = ['Pendiente', 'En Preparación', 'Listo'];
+/** Cerrados: salen del KDS y entran al historial del día. */
+const ESTADOS_HISTORIAL: EstadoPedidoCocina[] = ['Entregado', 'Cancelado', 'Pagado'];
+
+// Día operativo en horario de Buenos Aires (igual que dashboard/reportes).
+const INICIO_HOY = sql`(date_trunc('day', now() AT TIME ZONE 'America/Argentina/Buenos_Aires')) AT TIME ZONE 'America/Argentina/Buenos_Aires'`;
+const FIN_HOY = sql`${INICIO_HOY} + interval '1 day'`;
+
+type CocinaRow = {
+  id: string;
+  estado: string;
+  total: string | number;
+  notas: string | null;
+  createdAt: Date;
+  sesionMesaId: string;
+  tipoSesion: string | null;
+  mesaIdentificador: string | null;
+};
+
+function requireCocinaSession() {
+  return getCurrentSession().then((session) => {
+    if (
+      !session ||
+      (!hasPermission(session.role, 'canViewKanban') &&
+        !hasPermission(session.role, 'canAcceptOrders'))
+    ) {
+      return null;
+    }
+    return session;
+  });
+}
+
+function etiquetaOrigen(tipoSesion: string | null, mesaIdentificador: string | null): string {
+  const tipo = tipoSesion || 'salon';
+  if (tipo === 'takeaway') return 'Takeaway';
+  if (tipo === 'delivery') return 'Delivery';
+  if (tipo === 'mostrador') return 'Mostrador';
+  if (mesaIdentificador && tipo === 'salon') return mesaIdentificador;
+  return mesaIdentificador || 'Mesa';
+}
+
+/** Cliente Drizzle dentro de withTenant (tx o db scoped). */
+type DbScoped = {
+  select: typeof import('@/shared/db').db.select;
+};
+
+/** Hidrata filas de pedido → modelo de UI (ítems, mods, flag pagado). */
+async function hidratarPedidosCocina(
+  db: DbScoped,
+  tenantId: string,
+  rows: CocinaRow[],
+): Promise<PedidoCocina[]> {
+  if (rows.length === 0) return [];
+
+  const pedidoIds = rows.map((r) => r.id);
+  const sesionIds = Array.from(new Set(rows.map((r) => r.sesionMesaId)));
+
+  const cobrosAprobados =
+    sesionIds.length === 0
+      ? ([] as { sesionMesaId: string }[])
+      : await db
+          .select({ sesionMesaId: transaccionesPago.sesionMesaId })
+          .from(transaccionesPago)
+          .where(
+            and(
+              eq(transaccionesPago.restauranteId, tenantId),
+              inArray(transaccionesPago.sesionMesaId, sesionIds),
+              eq(transaccionesPago.estado, 'Aprobado'),
+            ),
+          );
+  const sesionesPagadas = new Set(cobrosAprobados.map((c) => c.sesionMesaId));
+
+  const items = await db
+    .select({
+      id: comandaItems.id,
+      pedidoId: comandaItems.pedidoId,
+      nombre: comandaItems.nombreProductoSnapshot,
+      cantidad: comandaItems.cantidad,
+    })
+    .from(comandaItems)
+    .where(
+      and(eq(comandaItems.restauranteId, tenantId), inArray(comandaItems.pedidoId, pedidoIds)),
+    );
+
+  const itemIds = items.map((i) => i.id);
+  const mods =
+    itemIds.length === 0
+      ? ([] as { comandaItemId: string; nombre: string }[])
+      : await db
+          .select({
+            comandaItemId: comandaItemModificadores.comandaItemId,
+            nombre: comandaItemModificadores.nombreModificadorSnapshot,
+          })
+          .from(comandaItemModificadores)
+          .where(inArray(comandaItemModificadores.comandaItemId, itemIds));
+
+  const modsByItem = new Map<string, string[]>();
+  for (const m of mods) {
+    const list = modsByItem.get(m.comandaItemId) ?? [];
+    list.push(m.nombre);
+    modsByItem.set(m.comandaItemId, list);
+  }
+
+  const itemsByPedido = new Map<string, PedidoCocina['items']>();
+  for (const it of items) {
+    const list = itemsByPedido.get(it.pedidoId) ?? [];
+    list.push({
+      id: it.id,
+      nombre: it.nombre,
+      cantidad: Number(it.cantidad),
+      modificadores: modsByItem.get(it.id) ?? [],
+    });
+    itemsByPedido.set(it.pedidoId, list);
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    estado: r.estado as EstadoPedidoCocina,
+    total: Number(r.total),
+    notas: r.notas,
+    createdAt: r.createdAt.toISOString(),
+    etiquetaOrigen: etiquetaOrigen(r.tipoSesion, r.mesaIdentificador),
+    tipoSesion: r.tipoSesion || 'salon',
+    pagado: sesionesPagadas.has(r.sesionMesaId),
+    items: itemsByPedido.get(r.id) ?? [],
+  }));
+}
 
 /**
- * Pedidos activos del local para el tablero de cocina (KDS).
- * Scopeado por tenant con RLS.
+ * Pedidos activos de **hoy** (AR) para el KDS.
+ * Solo cola de trabajo: Pendiente / En prep. / Listo.
+ * Los de días anteriores no entran (evita basura en el tablero).
  */
 export async function getPedidosCocinaAction(): Promise<PedidoCocina[]> {
-  const session = await getCurrentSession();
-  if (
-    !session ||
-    (!hasPermission(session.role, 'canViewKanban') &&
-      !hasPermission(session.role, 'canAcceptOrders'))
-  ) {
-    return [];
-  }
+  const session = await requireCocinaSession();
+  if (!session) return [];
 
   const tenantId = session.restauranteId;
 
   try {
     return await withTenant(claimsFromSession(session), async (db) => {
-      const rows = await db
+      const rows: CocinaRow[] = await db
         .select({
           id: pedidos.id,
           estado: pedidos.estado,
           total: pedidos.total,
           notas: pedidos.notas,
           createdAt: pedidos.createdAt,
+          sesionMesaId: pedidos.sesionMesaId,
           tipoSesion: sesionesMesa.tipo,
           mesaIdentificador: mesas.identificador,
         })
@@ -53,84 +176,61 @@ export async function getPedidosCocinaAction(): Promise<PedidoCocina[]> {
           and(
             eq(pedidos.restauranteId, tenantId),
             inArray(pedidos.estado, ESTADOS_ACTIVOS),
+            sql`${pedidos.createdAt} >= ${INICIO_HOY}`,
           ),
         )
         .orderBy(desc(pedidos.createdAt))
         .limit(100);
 
-      if (rows.length === 0) return [];
-
-      const pedidoIds = rows.map((r) => r.id);
-      const items = await db
-        .select({
-          id: comandaItems.id,
-          pedidoId: comandaItems.pedidoId,
-          nombre: comandaItems.nombreProductoSnapshot,
-          cantidad: comandaItems.cantidad,
-        })
-        .from(comandaItems)
-        .where(
-          and(
-            eq(comandaItems.restauranteId, tenantId),
-            inArray(comandaItems.pedidoId, pedidoIds),
-          ),
-        );
-
-      const itemIds = items.map((i) => i.id);
-      const mods =
-        itemIds.length === 0
-          ? []
-          : await db
-              .select({
-                comandaItemId: comandaItemModificadores.comandaItemId,
-                nombre: comandaItemModificadores.nombreModificadorSnapshot,
-              })
-              .from(comandaItemModificadores)
-              .where(inArray(comandaItemModificadores.comandaItemId, itemIds));
-
-      const modsByItem = new Map<string, string[]>();
-      for (const m of mods) {
-        const list = modsByItem.get(m.comandaItemId) ?? [];
-        list.push(m.nombre);
-        modsByItem.set(m.comandaItemId, list);
-      }
-
-      const itemsByPedido = new Map<string, PedidoCocina['items']>();
-      for (const it of items) {
-        const list = itemsByPedido.get(it.pedidoId) ?? [];
-        list.push({
-          id: it.id,
-          nombre: it.nombre,
-          cantidad: Number(it.cantidad),
-          modificadores: modsByItem.get(it.id) ?? [],
-        });
-        itemsByPedido.set(it.pedidoId, list);
-      }
-
-      return rows.map((r) => {
-        const tipo = r.tipoSesion || 'salon';
-        let etiquetaOrigen = r.mesaIdentificador || 'Mesa';
-        if (tipo === 'takeaway') etiquetaOrigen = 'Takeaway';
-        if (tipo === 'delivery') etiquetaOrigen = 'Delivery';
-        if (tipo === 'mostrador') etiquetaOrigen = 'Mostrador';
-        if (r.mesaIdentificador && tipo === 'salon') {
-          etiquetaOrigen = r.mesaIdentificador;
-        }
-
-        return {
-          id: r.id,
-          estado: r.estado as EstadoPedidoCocina,
-          total: Number(r.total),
-          notas: r.notas,
-          createdAt: r.createdAt.toISOString(),
-          etiquetaOrigen,
-          tipoSesion: tipo,
-          items: itemsByPedido.get(r.id) ?? [],
-        };
-      });
+      return hidratarPedidosCocina(db, tenantId, rows);
     });
   } catch (error) {
     console.error('[getPedidosCocinaAction]', error);
+    return [];
+  }
+}
+
+/**
+ * Historial del día (AR): pedidos ya cerrados (Entregado / Cancelado / Pagado).
+ * Para revisar qué salió, no para operar.
+ */
+export async function getHistorialCocinaHoyAction(): Promise<PedidoCocina[]> {
+  const session = await requireCocinaSession();
+  if (!session) return [];
+
+  const tenantId = session.restauranteId;
+
+  try {
+    return await withTenant(claimsFromSession(session), async (db) => {
+      const rows: CocinaRow[] = await db
+        .select({
+          id: pedidos.id,
+          estado: pedidos.estado,
+          total: pedidos.total,
+          notas: pedidos.notas,
+          createdAt: pedidos.createdAt,
+          sesionMesaId: pedidos.sesionMesaId,
+          tipoSesion: sesionesMesa.tipo,
+          mesaIdentificador: mesas.identificador,
+        })
+        .from(pedidos)
+        .innerJoin(sesionesMesa, eq(pedidos.sesionMesaId, sesionesMesa.id))
+        .leftJoin(mesas, eq(sesionesMesa.mesaId, mesas.id))
+        .where(
+          and(
+            eq(pedidos.restauranteId, tenantId),
+            inArray(pedidos.estado, ESTADOS_HISTORIAL),
+            sql`${pedidos.createdAt} >= ${INICIO_HOY}`,
+            sql`${pedidos.createdAt} < ${FIN_HOY}`,
+          ),
+        )
+        .orderBy(desc(pedidos.createdAt))
+        .limit(150);
+
+      return hidratarPedidosCocina(db, tenantId, rows);
+    });
+  } catch (error) {
+    console.error('[getHistorialCocinaHoyAction]', error);
     return [];
   }
 }

@@ -5,6 +5,7 @@ import { mesas } from '@/shared/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { crearStaffAlert } from '@/features/notificaciones/staffAlertsActions';
 import { abrirOReusarSesion } from './sesion-mesa-core';
 
 /**
@@ -91,20 +92,25 @@ export async function getOrCreateSesionMesa(
 
 export async function llamarMozoAction(tenantId: string, mesaIdentificador: string) {
   try {
-    const supabase = await createSupabaseServerClient();
-    
-    // Enviar broadcast al canal del restaurante donde escuchan mozos/admins
-    const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-    
-    await channel.send({
-      type: 'broadcast',
-      event: 'alerta_mesa',
-      payload: {
-        tipo: 'llamar_mozo',
-        mesaIdentificador,
-        timestamp: new Date().toISOString()
-      }
+    if (!tenantId?.trim() || !mesaIdentificador?.trim()) {
+      return { success: false, message: 'Faltan datos de la mesa' };
+    }
+
+    const mesa = mesaIdentificador.trim();
+    // 1) Persistir (si el mozo no está con el panel abierto, igual la ve al
+    //    abrir la campana / recargar). 2) Broadcast en vivo.
+    const res = await crearStaffAlert({
+      restauranteId: tenantId,
+      tipo: 'llamar_mozo',
+      titulo: 'Llaman al mozo',
+      cuerpo: `Mesa ${mesa}`,
+      href: '/admin/mesas',
+      metadata: { mesaIdentificador: mesa },
     });
+
+    if (!res.success) {
+      return { success: false, message: res.message ?? 'No se pudo avisar al personal' };
+    }
 
     return { success: true };
   } catch (error) {

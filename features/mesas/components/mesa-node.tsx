@@ -12,6 +12,7 @@ export function MesaNode({
   seleccionada,
   ocupada,
   puedeArrastrar,
+  mozoNombre,
   onResizePointerDown,
   onClick,
 }: {
@@ -21,6 +22,8 @@ export function MesaNode({
   seleccionada: boolean;
   ocupada: boolean;
   puedeArrastrar: boolean;
+  /** Nombre corto del mozo asignado (null si no hay). */
+  mozoNombre?: string | null;
   onResizePointerDown?: (e: React.PointerEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
 }) {
@@ -70,7 +73,13 @@ export function MesaNode({
           puedeArrastrar ? 'cursor-move' : 'cursor-pointer',
           estilo,
         )}
-        title={`${mesa.identificador} · ${ocupada ? 'Ocupada' : 'Libre'}`}
+        title={[
+          mesa.identificador,
+          ocupada ? 'Ocupada' : 'Libre',
+          mozoNombre ? `Mozo: ${mozoNombre}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       >
         <span className="max-w-full truncate px-1 text-center text-sm font-semibold leading-tight">
           {mesa.identificador}
@@ -79,6 +88,11 @@ export function MesaNode({
           <Users size={11} />
           {mesa.capacidad}
         </span>
+        {mozoNombre && cell >= 18 && (
+          <span className="mt-0.5 max-w-full truncate px-1 text-[10px] font-medium uppercase opacity-70">
+            {mozoNombre.slice(0, 8)}
+          </span>
+        )}
       </div>
 
       {editando && seleccionada && onResizePointerDown && (

@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
 import type { PromoCanal } from '@/features/promociones/promociones';
+import { getSesionCajaAbiertaId } from '@/features/caja/sesionCaja';
 import { pedirCuentaPresencialSchema } from './validation';
 import { withPublicTenant } from '@/shared/db/secure-wrapper';
 
@@ -103,6 +104,10 @@ export async function pedirCuentaPresencialAction(
     }
     const totalCalculado = Math.max(0, saldoPendiente - descuento);
 
+    // Si hay caja abierta la dejamos anotada; el cobro real (aprobación staff)
+    // reasigna al turno vigente y exige caja abierta para efectivo.
+    const sesionCajaId = await getSesionCajaAbiertaId(tenantId);
+
     let transactionId;
 
     if (existingTx) {
@@ -115,6 +120,7 @@ export async function pedirCuentaPresencialAction(
           descuento: descuento.toString(),
           promocionId,
           promocionesAplicadas,
+          sesionCajaId: sesionCajaId ?? existingTx.sesionCajaId,
           metadata: { metodo: metodoPago },
         })
         .where(eq(transaccionesPago.id, existingTx.id));
@@ -123,6 +129,7 @@ export async function pedirCuentaPresencialAction(
       const nuevaTx = await db.insert(transaccionesPago).values({
         restauranteId: tenantId,
         sesionMesaId: sesionMesaId,
+        sesionCajaId,
         proveedor: metodoPago,
         monto: totalCalculado.toString(),
         descuento: descuento.toString(),

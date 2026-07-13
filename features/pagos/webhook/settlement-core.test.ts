@@ -67,7 +67,7 @@ describe('decideSettlement', () => {
     }
   });
 
-  it('full en takeaway NO cierra sesión', () => {
+  it('full en takeaway NO cierra sesión y deja el pedido en cocina', () => {
     const d = decideSettlement({
       currentTxId: 'tx1',
       newStatus: 'Aprobado',
@@ -78,6 +78,23 @@ describe('decideSettlement', () => {
     expect(d.kind).toBe('full');
     if (d.kind === 'full') {
       expect(d.cerrarSesion).toBe(false);
+      expect(d.pedidoIdsAMarcarPagado).toEqual([]);
+    }
+  });
+
+  it('full en mostrador: cobrado (cierra sesión) pero sigue en cocina', () => {
+    const d = decideSettlement({
+      currentTxId: 'tx1',
+      newStatus: 'Aprobado',
+      pedidos: [{ id: 'p1', estado: 'Pendiente', total: 500 }],
+      transacciones: [{ id: 'tx1', estado: 'Pendiente', monto: 500 }],
+      tipoSesion: 'mostrador',
+    });
+    expect(d.kind).toBe('full');
+    if (d.kind === 'full') {
+      expect(d.cerrarSesion).toBe(true);
+      // No marcar Pagado: cocina necesita ver qué preparar.
+      expect(d.pedidoIdsAMarcarPagado).toEqual([]);
     }
   });
 });

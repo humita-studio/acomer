@@ -18,6 +18,11 @@ import { calcularPromosStaff } from '@/features/promociones/cobroPromosActions';
 import type { PromoMetodoPago } from '@/features/promociones/promociones';
 import { obtenerCarta } from '@/features/carta/obtenerCarta';
 import type { ProductoMenu, CategoriaMenu } from '@/features/carta/types';
+import { createSupabaseServerClient } from '@/shared/supabase/server';
+import {
+  getSesionCajaAbiertaId,
+  requireSesionCajaAbierta,
+} from '@/features/caja/sesionCaja';
 
 /**
  * Venta de mostrador: el cajero arma un pedido y lo cobra en el acto, sin mesa.
@@ -25,9 +30,21 @@ import type { ProductoMenu, CategoriaMenu } from '@/features/carta/types';
  * carrito se arma local en el modal y recién se persiste al cobrar, evitando
  * sesiones fantasma. El permiso es de caja (`canProcessPayments`), no de mozo
  * (`canTakeOrders`), porque el cajero es quien hace estas ventas.
+ *
+ * Dos ejes independientes (venta rápida ≠ sin cocina):
+ *  - Pago: transacción `Aprobado` al confirmar (efectivo/tarjeta) o al webhook (MP).
+ *  - Prep: el pedido queda `Pendiente` y entra al KDS como "Mostrador" para que
+ *    cocina sepa qué hacer (Pendiente → En prep. → Listo → Entregado).
+ *  - Sesión: se cierra (one-shot, sin mesa). Caja/reportes miran la transacción.
  */
 
 type MetodoMostrador = 'efectivo' | 'tarjeta_fisica';
+
+export type VentaMostradorTicketLinea = {
+  nombre: string;
+  cantidad: number;
+  subtotal: number;
+};
 
 export type VentaMostradorTicket = {
   sesionId: string;
@@ -43,6 +60,10 @@ export type VentaMostradorTicket = {
   vuelto: number;
   cantidadItems: number;
   horaISO: string;
+  /** Referencia opcional del cajero (nombre del cliente). */
+  nombreReferencia?: string | null;
+  /** Líneas para imprimir el ticket. */
+  lineas: VentaMostradorTicketLinea[];
 };
 
 // ---------------------------------------------------------------------------
@@ -109,6 +130,30 @@ async function cancelarVentaInterno(tenantId: string, sesionId: string) {
       .set({ estado: 'Cerrada' })
       .where(and(eq(sesionesMesa.id, sesionId), eq(sesionesMesa.restauranteId, tenantId)));
   });
+}
+
+/** Avisa al KDS + campana. Best-effort (el KDS también pollea cada 30s). */
+async function notificarNuevoPedidoMostrador(
+  tenantId: string,
+  payload: { sesionId: string; pedidoId: string; nombreReferencia?: string | null },
+) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const etiqueta = payload.nombreReferencia?.trim()
+      ? `Mostrador · ${payload.nombreReferencia.trim()}`
+      : 'Mostrador';
+    await supabase.channel(`admin_restaurant_${tenantId}`).send({
+      type: 'broadcast',
+      event: 'nuevo_pedido',
+      payload: {
+        sesionMesaId: payload.sesionId,
+        pedidoId: payload.pedidoId,
+        etiqueta,
+      },
+    });
+  } catch (e) {
+    console.warn('[ventaMostrador] realtime nuevo_pedido:', e);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +260,16 @@ export async function cobrarVentaMostradorAction(
     const promo = await promosDeVenta(tenantId, itemsValidos, metodoPago, opciones.omitirIds);
 
     const result = await withTenant(claimsFromSession(session), async (tx) => {
+      // Efectivo exige caja abierta; tarjeta se asocia si hay una.
+      let sesionCajaId: string | null = null;
+      if (metodoPago === 'efectivo') {
+        const caja = await requireSesionCajaAbierta(tenantId, tx);
+        if (!caja.ok) throw new Error(caja.message);
+        sesionCajaId = caja.sesionCajaId;
+      } else {
+        sesionCajaId = await getSesionCajaAbiertaId(tenantId, tx);
+      }
+
       const [sesion] = await tx
         .insert(sesionesMesa)
         .values({ restauranteId: tenantId, mesaId: null, tipo: 'mostrador', estado: 'Activa' })
@@ -234,17 +289,27 @@ export async function cobrarVentaMostradorAction(
       await tx.insert(transaccionesPago).values({
         restauranteId: tenantId,
         sesionMesaId: sesion.id,
+        sesionCajaId,
         proveedor: metodoPago,
         monto: totalNeto.toString(),
         descuento: descuento.toString(),
         promocionId,
         promocionesAplicadas: promo?.aplicadas ?? [],
         estado: 'Aprobado',
-        metadata: { metodo: metodoPago, canal: 'mostrador' },
+        metadata: {
+          metodo: metodoPago,
+          canal: 'mostrador',
+          ...(metodoPago === 'efectivo' && opciones.montoRecibido != null
+            ? {
+                montoRecibido: Number(opciones.montoRecibido) || 0,
+                vuelto: Math.max(0, (Number(opciones.montoRecibido) || 0) - totalNeto),
+              }
+            : {}),
+        },
       });
 
-      // Cobrada al instante: pedido pagado y sesión cerrada.
-      await tx.update(pedidos).set({ estado: 'Pagado' }).where(eq(pedidos.id, pedidoId));
+      // Pago ya cobrado (tx Aprobado). El pedido queda Pendiente para cocina;
+      // marcar Pagado lo sacaría del KDS. Sesión cerrada: one-shot sin mesa.
       await tx.update(sesionesMesa).set({ estado: 'Cerrada' }).where(eq(sesionesMesa.id, sesion.id));
 
       return { sesionId: sesion.id, pedidoId, subtotal: totalPedido, descuento, totalNeto };
@@ -253,6 +318,12 @@ export async function cobrarVentaMostradorAction(
     const montoRecibido = Number(opciones.montoRecibido) || 0;
     const vuelto =
       metodoPago === 'efectivo' ? Math.max(0, montoRecibido - result.totalNeto) : 0;
+
+    void notificarNuevoPedidoMostrador(tenantId, {
+      sesionId: result.sesionId,
+      pedidoId: result.pedidoId,
+      nombreReferencia: opciones.nombreReferencia,
+    });
 
     return {
       success: true,
@@ -267,6 +338,8 @@ export async function cobrarVentaMostradorAction(
         vuelto,
         cantidadItems,
         horaISO: new Date().toISOString(),
+        nombreReferencia: opciones.nombreReferencia?.trim() || null,
+        lineas: [], // el cliente completa con el carrito local (nombres/precios de UI)
       },
     };
   } catch (error) {
@@ -312,6 +385,8 @@ export async function iniciarVentaMostradorMpAction(
 
     // 1. Persistir sesión + pedido + transacción pendiente (con el total ya descontado).
     const { sesionId, transactionId, pedidoId, subtotal, descuento, total } = await withTenant(claimsFromSession(session), async (tx) => {
+      const sesionCajaId = await getSesionCajaAbiertaId(tenantId, tx);
+
       const [sesion] = await tx
         .insert(sesionesMesa)
         .values({ restauranteId: tenantId, mesaId: null, tipo: 'mostrador', estado: 'Activa' })
@@ -333,6 +408,7 @@ export async function iniciarVentaMostradorMpAction(
         .values({
           restauranteId: tenantId,
           sesionMesaId: sesion.id,
+          sesionCajaId,
           proveedor: 'mercado_pago',
           monto: totalNeto.toString(),
           descuento: descuento.toString(),
@@ -381,6 +457,13 @@ export async function iniciarVentaMostradorMpAction(
         .set({ referenciaExterna: intent.externalReference })
         .where(eq(transaccionesPago.id, transactionId));
     }
+
+    // Entra a cocina al generar el QR (si cancelan el cobro, se cancela el pedido).
+    void notificarNuevoPedidoMostrador(tenantId, {
+      sesionId,
+      pedidoId,
+      nombreReferencia: opciones.nombreReferencia,
+    });
 
     return {
       success: true,

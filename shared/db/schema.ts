@@ -294,6 +294,8 @@ export const mesas = pgTable(
     rotacion: integer('rotacion').notNull().default(0), // 0 | 90 | 180 | 270
     // Cuando la mesa es una sub-mesa temporal (división), apunta a la mesa madre
     parentMesaId: uuid('parent_mesa_id').references((): AnyPgColumn => mesas.id, { onDelete: 'cascade' }),
+    /** Mozo responsable (auth.users). Null = sin asignar. */
+    mozoUserId: uuid('mozo_user_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
@@ -304,6 +306,7 @@ export const mesas = pgTable(
       name: 'mesas_restaurant_id_fk',
     }).onDelete('cascade'),
     qrTokenIdx: uniqueIndex('mesas_qr_token_idx').on(table.qrToken),
+    mozoUserIdIdx: index('mesas_mozo_user_id_idx').on(table.restauranteId, table.mozoUserId),
     formaCheck: check('mesas_forma_check', sql`forma IN ('redonda','cuadrada')`),
   })
 )
@@ -774,73 +777,8 @@ export const promociones = pgTable(
 )
 
 // ============================================================================
-// Pagos e Integraciones
-// ============================================================================
-
-export const configuracionPagos = pgTable(
-  'configuracion_pagos',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    restauranteId: uuid('restaurant_id').notNull(),
-    proveedor: text('proveedor').notNull(), // 'mercado_pago', 'stripe', 'mock'
-    credenciales: jsonb('credenciales').notNull().default({}), // access_token, public_key, etc
-    activo: boolean('activo').notNull().default(false),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    restauranteIdFk: foreignKey({
-      columns: [table.restauranteId],
-      foreignColumns: [restaurantes.id],
-      name: 'configuracion_pagos_restaurant_id_fk',
-    }).onDelete('cascade'),
-  })
-)
-
-export const transaccionesPago = pgTable(
-  'transacciones_pago',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    restauranteId: uuid('restaurant_id').notNull(),
-    sesionMesaId: uuid('sesion_mesa_id').notNull(),
-    proveedor: text('proveedor').notNull(),
-    monto: numeric('monto', { precision: 10, scale: 2 }).notNull(), // total YA con descuento
-    descuento: numeric('descuento', { precision: 10, scale: 2 }).notNull().default('0'),
-    promocionId: uuid('promocion_id'), // promo aplicada (null si manual, borrada o si aplicaron 2+)
-    // Snapshot de TODAS las promos aplicadas en el cobro: sobrevive aunque después
-    // se edite/borre la promo y soporta varias a la vez (promocion_id sólo guarda una).
-    promocionesAplicadas: jsonb('promociones_aplicadas')
-      .$type<{ id: string; nombre: string; tipo: string; descuento: number }[]>()
-      .notNull()
-      .default([]),
-    estado: text('estado').notNull().default('Pendiente'), // Pendiente | Aprobado | Rechazado | Cancelado
-    referenciaExterna: text('referencia_externa'), // ID del pago/preferencia en MP
-    metadata: jsonb('metadata').default({}),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    restauranteCreatedAtIdx: index('transacciones_pago_restaurante_created_at_idx').on(table.restauranteId, table.createdAt),
-    restauranteIdFk: foreignKey({
-      columns: [table.restauranteId],
-      foreignColumns: [restaurantes.id],
-      name: 'transacciones_pago_restaurant_id_fk',
-    }).onDelete('cascade'),
-    sesionMesaIdFk: foreignKey({
-      columns: [table.sesionMesaId],
-      foreignColumns: [sesionesMesa.id],
-      name: 'transacciones_pago_sesion_mesa_id_fk',
-    }).onDelete('cascade'),
-    promocionIdFk: foreignKey({
-      columns: [table.promocionId],
-      foreignColumns: [promociones.id],
-      name: 'transacciones_pago_promocion_id_fk',
-    }).onDelete('set null'),
-  })
-)
-
-// ============================================================================
 // Caja (apertura, movimientos y arqueo de turno)
+// Va antes de Pagos porque transacciones_pago referencia sesiones_caja.
 // ============================================================================
 
 export const sesionesCaja = pgTable(
@@ -898,6 +836,111 @@ export const movimientosCaja = pgTable(
 )
 
 // ============================================================================
+// Pagos e Integraciones
+// ============================================================================
+
+export const configuracionPagos = pgTable(
+  'configuracion_pagos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    proveedor: text('proveedor').notNull(), // 'mercado_pago', 'stripe', 'mock'
+    credenciales: jsonb('credenciales').notNull().default({}), // access_token, public_key, etc
+    activo: boolean('activo').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'configuracion_pagos_restaurant_id_fk',
+    }).onDelete('cascade'),
+  })
+)
+
+export const transaccionesPago = pgTable(
+  'transacciones_pago',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    sesionMesaId: uuid('sesion_mesa_id').notNull(),
+    /** Turno de caja en el que se cobró (null si no había caja abierta o dato histórico). */
+    sesionCajaId: uuid('sesion_caja_id'),
+    proveedor: text('proveedor').notNull(),
+    monto: numeric('monto', { precision: 10, scale: 2 }).notNull(), // total YA con descuento
+    descuento: numeric('descuento', { precision: 10, scale: 2 }).notNull().default('0'),
+    promocionId: uuid('promocion_id'), // promo aplicada (null si manual, borrada o si aplicaron 2+)
+    // Snapshot de TODAS las promos aplicadas en el cobro: sobrevive aunque después
+    // se edite/borre la promo y soporta varias a la vez (promocion_id sólo guarda una).
+    promocionesAplicadas: jsonb('promociones_aplicadas')
+      .$type<{ id: string; nombre: string; tipo: string; descuento: number }[]>()
+      .notNull()
+      .default([]),
+    estado: text('estado').notNull().default('Pendiente'), // Pendiente | Aprobado | Rechazado | Cancelado
+    referenciaExterna: text('referencia_externa'), // ID del pago/preferencia en MP
+    metadata: jsonb('metadata').default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteCreatedAtIdx: index('transacciones_pago_restaurante_created_at_idx').on(table.restauranteId, table.createdAt),
+    sesionCajaIdIdx: index('transacciones_pago_sesion_caja_id_idx').on(table.sesionCajaId),
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'transacciones_pago_restaurant_id_fk',
+    }).onDelete('cascade'),
+    sesionMesaIdFk: foreignKey({
+      columns: [table.sesionMesaId],
+      foreignColumns: [sesionesMesa.id],
+      name: 'transacciones_pago_sesion_mesa_id_fk',
+    }).onDelete('cascade'),
+    sesionCajaIdFk: foreignKey({
+      columns: [table.sesionCajaId],
+      foreignColumns: [sesionesCaja.id],
+      name: 'transacciones_pago_sesion_caja_id_fk',
+    }).onDelete('set null'),
+    promocionIdFk: foreignKey({
+      columns: [table.promocionId],
+      foreignColumns: [promociones.id],
+      name: 'transacciones_pago_promocion_id_fk',
+    }).onDelete('set null'),
+  })
+)
+
+// ============================================================================
+// Alertas del staff (campana del admin)
+// ============================================================================
+// Persistimos avisos operativos (llamar mozo, etc.) para que no dependan solo
+// de Realtime efímero: si el mozo no estaba conectado, los ve al recargar.
+
+export const staffAlerts = pgTable(
+  'staff_alerts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    tipo: text('tipo').notNull(), // llamar_mozo | ...
+    titulo: text('titulo').notNull(),
+    cuerpo: text('cuerpo').notNull(),
+    href: text('href'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteCreatedAtIdx: index('staff_alerts_restaurante_created_at_idx').on(
+      table.restauranteId,
+      table.createdAt,
+    ),
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'staff_alerts_restaurant_id_fk',
+    }).onDelete('cascade'),
+  }),
+)
+
+// ============================================================================
 // Auditoría y Logs
 // ============================================================================
 
@@ -930,6 +973,7 @@ export const auditLog = pgTable(
 
 export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   perfilesEmpleados: many(perfilesEmpleados),
+  staffAlerts: many(staffAlerts),
   categorias: many(categorias),
   productos: many(productos),
   productosPrecios: many(productosPrecios),
@@ -1194,6 +1238,10 @@ export const transaccionesPagoRelations = relations(transaccionesPago, ({ one })
     fields: [transaccionesPago.sesionMesaId],
     references: [sesionesMesa.id],
   }),
+  sesionCaja: one(sesionesCaja, {
+    fields: [transaccionesPago.sesionCajaId],
+    references: [sesionesCaja.id],
+  }),
 }))
 
 export const sesionesCajaRelations = relations(sesionesCaja, ({ one, many }) => ({
@@ -1202,6 +1250,7 @@ export const sesionesCajaRelations = relations(sesionesCaja, ({ one, many }) => 
     references: [restaurantes.id],
   }),
   movimientos: many(movimientosCaja),
+  transacciones: many(transaccionesPago),
 }))
 
 export const movimientosCajaRelations = relations(movimientosCaja, ({ one }) => ({

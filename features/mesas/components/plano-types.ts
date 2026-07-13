@@ -26,7 +26,12 @@ export interface MesaPlano {
   capacidad: number;
   rotacion: number;
   ocupada?: boolean;
+  /** auth.users id del mozo asignado. */
+  mozoUserId: string | null;
 }
+
+/** Filtro de mesas por mozo en modo operación. */
+export type FiltroMozo = 'todas' | 'mias' | 'sin_asignar' | string; // string = userId de un mozo
 
 export interface ElementoPlanoUI {
   id: string;

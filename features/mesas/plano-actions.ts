@@ -478,6 +478,8 @@ export async function dividirMesaAction(
             identificador: `${mesa.identificador}-${letra}`,
             ambienteId: mesa.ambienteId,
             parentMesaId: mesaId,
+            // La sub-mesa hereda el mozo del sector de la madre.
+            mozoUserId: mesa.mozoUserId,
             posX: clampNum(mesa.posX + mesa.ancho + 0.3, 0, 0),
             posY: mesa.posY,
             ancho: 2,

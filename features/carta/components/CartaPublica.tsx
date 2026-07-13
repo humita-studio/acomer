@@ -3,8 +3,13 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Search, X } from 'lucide-react';
-import { formatPeso } from '@/shared/lib/format';
 import { Input } from '@/shared/ui/input';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/shared/ui/accordion';
 import { cn } from '@/shared/lib/utils';
 import {
   colorCategoriaMeta,
@@ -15,9 +20,9 @@ import { filtrarProductosPorBusqueda } from '../buscarProductos';
 import type { CategoriaMenu, ProductoMenu } from '../types';
 
 /**
- * Vista de carta de solo lectura para la landing del local: lista categorías y
- * productos con su precio, sin armar pedido. Para pedir se usa /pedir (online) o
- * el QR de la mesa.
+ * Vista de carta de solo lectura para la landing del local.
+ * Misma presentación que MenuView (/pedir): accordion de categorías + product cards.
+ * Sin carrito ni pedido: para pedir se usa /pedir o el QR de la mesa.
  */
 export function CartaPublica({
   nombre,
@@ -29,6 +34,8 @@ export function CartaPublica({
   productos: ProductoMenu[];
 }) {
   const [busqueda, setBusqueda] = useState('');
+  // Browse: todo cerrado; el comensal abre lo que le interesa (igual que MenuView).
+  const [openCategories, setOpenCategories] = useState<string[]>([]);
   const query = busqueda.trim();
   const buscando = query.length > 0;
 
@@ -42,29 +49,31 @@ export function CartaPublica({
     [productos, query],
   );
 
-  // Productos agrupados por categoría, respetando el orden de las categorías y
-  // descartando las que quedan vacías.
-  const secciones = useMemo(
-    () =>
-      categorias
-        .map((cat) => ({
-          cat,
-          items: productos.filter((p) => p.categoriaId === cat.id),
-        }))
-        .filter((s) => s.items.length > 0),
-    [categorias, productos],
-  );
+  const secciones = useMemo(() => {
+    const byCat = new Map<string, ProductoMenu[]>();
+    for (const p of productos) {
+      const list = byCat.get(p.categoriaId);
+      if (list) list.push(p);
+      else byCat.set(p.categoriaId, [p]);
+    }
+    return categorias
+      .map((cat) => ({
+        categoria: cat,
+        productos: byCat.get(cat.id) ?? [],
+      }))
+      .filter((s) => s.productos.length > 0);
+  }, [categorias, productos]);
 
   const totalResultados = productosFiltrados.length;
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-md items-center gap-3 px-4">
+    <main className="min-h-dvh bg-muted/30">
+      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-lg items-center gap-3 px-3">
           <Link
             href="/"
             aria-label="Volver"
-            className="flex size-9 items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground"
+            className="flex size-9 items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground touch-manipulation"
           >
             <ArrowLeft className="size-5" aria-hidden />
           </Link>
@@ -75,7 +84,7 @@ export function CartaPublica({
         </div>
       </header>
 
-      <div className="mx-auto max-w-md space-y-4 px-4 pb-12 pt-4">
+      <div className="relative mx-auto w-full max-w-lg space-y-3 px-3 pb-12 pt-3">
         <div className="relative">
           <Search
             className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80"
@@ -122,83 +131,112 @@ export function CartaPublica({
 
         {buscando ? (
           totalResultados === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
+            <p className="px-2 py-12 text-center text-sm text-muted-foreground">
               Probá con otro nombre.
             </p>
           ) : (
-            <ul className="divide-y">
-              {productosFiltrados.map((p) => (
-                <ProductoRow
-                  key={p.id}
-                  producto={p}
-                  categoriaNombre={catNombre.get(p.categoriaId)}
-                />
+            <ul className="space-y-2">
+              {productosFiltrados.map((prod) => (
+                <li key={prod.id}>
+                  <ProductoCard
+                    prod={prod}
+                    categoriaNombre={catNombre.get(prod.categoriaId)}
+                  />
+                </li>
               ))}
             </ul>
           )
         ) : secciones.length === 0 ? (
-          <p className="py-16 text-center text-muted-foreground">
+          <p className="px-2 py-12 text-center text-sm text-muted-foreground">
             Todavía no hay productos cargados en la carta.
           </p>
         ) : (
-          <div className="space-y-8">
-            {secciones.map(({ cat, items }) => {
-              const meta = colorCategoriaMeta(cat.color);
-              const Icon = ICONOS_CATEGORIA_MAP[resolveIconoCategoria(cat.icono)];
+          <Accordion
+            type="multiple"
+            value={openCategories}
+            onValueChange={setOpenCategories}
+            className="rounded-2xl border bg-card shadow-sm"
+          >
+            {secciones.map(({ categoria, productos: prods }) => {
+              const meta = colorCategoriaMeta(categoria.color);
+              const Icon = ICONOS_CATEGORIA_MAP[resolveIconoCategoria(categoria.icono)];
               return (
-                <section key={cat.id}>
-                  <h2 className="flex items-center gap-2.5 font-display text-2xl font-semibold">
-                    <span
-                      className="flex size-9 items-center justify-center rounded-xl text-white shadow-sm"
-                      style={{ backgroundColor: meta.hex }}
-                      aria-hidden
-                    >
-                      <Icon className="size-4" />
+                <AccordionItem key={categoria.id} value={categoria.id}>
+                  <AccordionTrigger
+                    className={cn(
+                      'min-h-14 touch-manipulation px-3.5 py-3 hover:no-underline',
+                      'active:bg-muted/40',
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className="flex size-9 shrink-0 items-center justify-center rounded-full"
+                        style={{ backgroundColor: meta.soft, color: meta.hex }}
+                      >
+                        <Icon className="size-4" aria-hidden />
+                      </span>
+                      <span className="truncate text-[15px] font-semibold leading-tight">
+                        {categoria.nombre}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+                        {prods.length}
+                      </span>
                     </span>
-                    {cat.nombre}
-                  </h2>
-                  <ul className="mt-3 divide-y">
-                    {items.map((p) => (
-                      <ProductoRow key={p.id} producto={p} />
-                    ))}
-                  </ul>
-                </section>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-2.5 pb-3">
+                    <ul className="space-y-2">
+                      {prods.map((prod) => (
+                        <li key={prod.id}>
+                          <ProductoCard prod={prod} />
+                        </li>
+                      ))}
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
               );
             })}
-          </div>
+          </Accordion>
         )}
       </div>
     </main>
   );
 }
 
-function ProductoRow({
-  producto: p,
+/** Card de producto alineada con MenuView, sin acción de agregar (solo lectura). */
+function ProductoCard({
+  prod,
   categoriaNombre,
 }: {
-  producto: ProductoMenu;
+  prod: ProductoMenu;
   /** Si viene, se muestra arriba del nombre (modo búsqueda plana). */
   categoriaNombre?: string;
 }) {
   return (
-    <li className="flex items-start justify-between gap-4 py-3">
-      <div className="min-w-0">
+    <div
+      className={cn(
+        'flex w-full items-center justify-between gap-3 rounded-2xl border bg-card p-3.5 text-left',
+        'text-card-foreground shadow-sm',
+      )}
+    >
+      <div className="min-w-0 flex-1">
         {categoriaNombre ? (
           <p className="mb-0.5 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {categoriaNombre}
           </p>
         ) : null}
-        <p className="font-medium">{p.nombre}</p>
-        {p.descripcion ? (
-          <p className="mt-0.5 text-sm text-muted-foreground">{p.descripcion}</p>
+        <h3 className="text-[15px] font-semibold leading-snug">{prod.nombre}</h3>
+        {prod.descripcion ? (
+          <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-muted-foreground">
+            {prod.descripcion}
+          </p>
         ) : null}
+        <p className="mt-1.5 text-[15px] font-bold tabular-nums text-primary">
+          {prod.variantes.length > 0 ? (
+            <span className="font-normal text-muted-foreground">desde </span>
+          ) : null}
+          ${Number(prod.precio).toFixed(2)}
+        </p>
       </div>
-      <p className="shrink-0 font-semibold tabular-nums">
-        {p.variantes.length > 0 ? (
-          <span className="text-sm font-normal text-muted-foreground">desde </span>
-        ) : null}
-        {formatPeso(p.precio)}
-      </p>
-    </li>
+    </div>
   );
 }

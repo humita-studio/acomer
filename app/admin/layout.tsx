@@ -49,7 +49,13 @@ export default async function AdminLayout({
                         <Input placeholder="Buscar pedidos, mesas…" className="pl-9" aria-label="Buscar" />
                     </div>
 
-                    <StaffNotifications tenantId={session.restauranteId} />
+                    <StaffNotifications
+                        tenantId={session.restauranteId}
+                        alertarCajaCerrada={hasPermission(
+                            session.role as RoleType,
+                            'canProcessPayments',
+                        )}
+                    />
 
                     {/* Nueva venta, a la derecha del buscador */}
                     {hasPermission(session.role as RoleType, 'canProcessPayments') && (

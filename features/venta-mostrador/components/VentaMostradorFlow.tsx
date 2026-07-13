@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
 import { queryKeys } from '@/shared/query/keys';
 import { Dialog, DialogContent } from '@/shared/ui/dialog';
+import { getCajaActualAction } from '@/features/caja/cajaActions';
 import {
   cobrarVentaMostradorAction,
   iniciarVentaMostradorMpAction,
@@ -15,6 +16,7 @@ import type { Step, Metodo, MpData } from '../types';
 import { useVentaMostradorData } from '../hooks/useVentaMostradorData';
 import { useCarritoVenta } from '../hooks/useCarritoVenta';
 import { useVentaPreview } from '../hooks/useVentaPreview';
+import { CajaCerradaGate } from './CajaCerradaGate';
 import { PasoArmar } from './PasoArmar';
 import { PasoCobrar } from './PasoCobrar';
 import { PasoMercadoPago } from './PasoMercadoPago';
@@ -30,6 +32,25 @@ export function VentaMostradorFlow({
 }) {
   const queryClient = useQueryClient();
   const { menu, mpDisponible } = useVentaMostradorData(tenantId);
+
+  // Sin caja abierta no dejamos armar la venta: el cobro en efectivo (y el
+  // arqueo) necesitan un turno. Refrescamos al abrir el modal.
+  const {
+    data: caja,
+    isPending: cajaPending,
+    isFetching: cajaFetching,
+    isError: cajaError,
+  } = useQuery({
+    queryKey: queryKeys.caja(tenantId),
+    queryFn: () => getCajaActualAction(),
+    // Siempre revalidar al abrir el modal: si acaba de abrir la caja en otra pestaña,
+    // no queremos un cache viejo “cerrada”.
+    staleTime: 0,
+  });
+  // isPending solo en la primera carga sin data; si hay cache (null) y re-fetch, usamos
+  // isFetching para no flashar el gate con un resultado viejo al reabrir.
+  const cajaLoading = cajaPending || (cajaFetching && caja === undefined);
+  const cajaCerrada = !cajaLoading && (cajaError || caja == null);
   const {
     cart,
     agregarProducto,
@@ -137,9 +158,21 @@ export function VentaMostradorFlow({
         setError(res.message ?? 'No se pudo cobrar la venta');
         return;
       }
-      setTicket(res.ticket);
+      setTicket({
+        ...res.ticket,
+        nombreReferencia: nombreRef.trim() || null,
+        lineas: cart.map((l) => ({
+          nombre:
+            l.modificadoresNombres.length > 0
+              ? `${l.nombre} (${l.modificadoresNombres.join(', ')})`
+              : l.nombre,
+          cantidad: l.cantidad,
+          subtotal: l.precioUnitario * l.cantidad,
+        })),
+      });
       setStep('cobrada');
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(tenantId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(tenantId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
     } finally {
       setProcesando(false);
     }
@@ -159,9 +192,19 @@ export function VentaMostradorFlow({
       vuelto: 0,
       cantidadItems: mp.cantidadItems,
       horaISO: new Date().toISOString(),
+      nombreReferencia: nombreRef.trim() || null,
+      lineas: cart.map((l) => ({
+        nombre:
+          l.modificadoresNombres.length > 0
+            ? `${l.nombre} (${l.modificadoresNombres.join(', ')})`
+            : l.nombre,
+        cantidad: l.cantidad,
+        subtotal: l.precioUnitario * l.cantidad,
+      })),
     });
     setStep('cobrada');
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(tenantId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(tenantId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
   };
 
   const cancelarMp = async () => {
@@ -170,13 +213,25 @@ export function VentaMostradorFlow({
     setStep('cobrando');
   };
 
+  const mostrarFlujoCompleto = !cajaLoading && !cajaCerrada;
+  const dialogWide = mostrarFlujoCompleto && step === 'armando';
+
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
-        showCloseButton={step !== 'cobrada'}
-        className={cn('block p-0', step === 'armando' ? 'sm:max-w-4xl' : 'sm:max-w-md')}
+        showCloseButton={step !== 'cobrada' || cajaCerrada}
+        className={cn('block p-0', dialogWide ? 'sm:max-w-4xl' : 'sm:max-w-md')}
       >
-        {step === 'armando' && (
+        {cajaLoading && (
+          <div className="flex flex-col items-center gap-3 p-10 text-center">
+            <div className="size-8 animate-pulse rounded-full bg-muted" />
+            <p className="text-sm text-muted-foreground">Comprobando caja…</p>
+          </div>
+        )}
+
+        {cajaCerrada && <CajaCerradaGate onCerrar={cerrar} />}
+
+        {mostrarFlujoCompleto && step === 'armando' && (
           <PasoArmar
             menu={menu}
             cart={cart}
@@ -192,7 +247,7 @@ export function VentaMostradorFlow({
           />
         )}
 
-        {step === 'cobrando' && (
+        {mostrarFlujoCompleto && step === 'cobrando' && (
           <PasoCobrar
             subtotal={subtotalCobro}
             descuento={descuentoCobro}
@@ -213,7 +268,7 @@ export function VentaMostradorFlow({
           />
         )}
 
-        {step === 'mp_esperando' && mp && (
+        {mostrarFlujoCompleto && step === 'mp_esperando' && mp && (
           <PasoMercadoPago
             mp={mp}
             onAprobado={onMpAprobado}
@@ -226,7 +281,7 @@ export function VentaMostradorFlow({
           />
         )}
 
-        {step === 'cobrada' && ticket && (
+        {mostrarFlujoCompleto && step === 'cobrada' && ticket && (
           <PasoCobrada ticket={ticket} onNuevaVenta={reiniciar} onCerrar={cerrar} />
         )}
       </DialogContent>

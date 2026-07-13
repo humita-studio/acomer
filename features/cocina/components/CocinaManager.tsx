@@ -21,12 +21,15 @@ import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import {
   avanzarPedidoCocinaAction,
+  getHistorialCocinaHoyAction,
   getPedidosCocinaAction,
 } from '@/features/cocina/cocinaActions';
 import {
   COLUMNAS_KDS,
+  labelEstadoCocina,
   type EstadoPedidoCocina,
   type PedidoCocina,
 } from '@/features/cocina/types';
@@ -136,6 +139,14 @@ function PedidoCardContent({
                 >
                   {mins} min
                 </Badge>
+                {pedido.pagado && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-success-subtle font-normal text-success-foreground"
+                  >
+                    Cobrado
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -268,6 +279,68 @@ function BoardColumn({
   );
 }
 
+/* ─── Historial del día (solo lectura) ──────────────────────────────────── */
+
+function HistorialHoy({
+  pedidos,
+  cargando,
+}: {
+  pedidos: PedidoCocina[];
+  cargando: boolean;
+}) {
+  if (cargando) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 size-4 animate-spin" />
+        Cargando historial…
+      </div>
+    );
+  }
+
+  if (pedidos.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+        Todavía no hay pedidos cerrados hoy
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-0.5">
+      {pedidos.map((p) => (
+        <div
+          key={p.id}
+          className="flex items-start justify-between gap-3 rounded-xl border bg-card px-4 py-3"
+        >
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{p.etiquetaOrigen}</span>
+              <Badge variant="secondary" className="font-normal">
+                {labelEstadoCocina(p.estado)}
+              </Badge>
+              {p.pagado && (
+                <Badge
+                  variant="secondary"
+                  className="bg-success-subtle font-normal text-success-foreground"
+                >
+                  Cobrado
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {formatHora(p.createdAt)} hs · {p.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(' · ')}
+            </p>
+            {p.notas && (
+              <p className="text-xs italic text-muted-foreground">{p.notas}</p>
+            )}
+          </div>
+          <span className="shrink-0 text-sm font-medium tabular-nums">{formatPeso(p.total)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ─── Manager ───────────────────────────────────────────────────────────── */
 
 export function CocinaManager({
@@ -277,7 +350,10 @@ export function CocinaManager({
   initialPedidos: PedidoCocina[];
   tenantId: string;
 }) {
+  const [tab, setTab] = useState<'activos' | 'historial'>('activos');
   const [pedidos, setPedidos] = useState(initialPedidos);
+  const [historial, setHistorial] = useState<PedidoCocina[]>([]);
+  const [historialCargado, setHistorialCargado] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const [activePedido, setActivePedido] = useState<PedidoCocina | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -328,7 +404,7 @@ export function CocinaManager({
     setPedidos(merged);
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refreshActivos = useCallback(async () => {
     setRefreshing(true);
     try {
       const data = await getPedidosCocinaAction();
@@ -338,6 +414,25 @@ export function CocinaManager({
     }
   }, [mergeFromServer]);
 
+  const refreshHistorial = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const data = await getHistorialCocinaHoyAction();
+      setHistorial(data);
+      setHistorialCargado(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (tab === 'historial') {
+      await refreshHistorial();
+    } else {
+      await refreshActivos();
+    }
+  }, [tab, refreshActivos, refreshHistorial]);
+
   // Sync inicial del server component (solo si no hay mutaciones en vuelo).
   useEffect(() => {
     if (inflightRef.current.size === 0) {
@@ -345,25 +440,37 @@ export function CocinaManager({
     }
   }, [initialPedidos]);
 
+  // Historial bajo demanda al abrir la pestaña.
+  useEffect(() => {
+    if (tab === 'historial' && !historialCargado) {
+      void refreshHistorial();
+    }
+  }, [tab, historialCargado, refreshHistorial]);
+
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel(`admin_restaurant_${tenantId}`)
       .on('broadcast', { event: 'nuevo_pedido' }, () => {
-        void refresh();
+        void refreshActivos();
+        if (historialCargado) void refreshHistorial();
       })
       .on('broadcast', { event: 'pedido_estado' }, () => {
         // Si hay mutaciones nuestras en vuelo, el merge las respeta.
-        void refresh();
+        void refreshActivos();
+        if (historialCargado) void refreshHistorial();
       })
       .subscribe();
 
-    const poll = setInterval(() => void refresh(), 30_000);
+    const poll = setInterval(() => {
+      void refreshActivos();
+      if (historialCargado) void refreshHistorial();
+    }, 30_000);
     return () => {
       clearInterval(poll);
       void supabase.removeChannel(channel);
     };
-  }, [tenantId, refresh]);
+  }, [tenantId, refreshActivos, refreshHistorial, historialCargado]);
 
   const porColumna = useMemo(() => {
     const map = new Map<EstadoPedidoCocina, PedidoCocina[]>();
@@ -400,6 +507,9 @@ export function CocinaManager({
         if (!res.success) {
           toast.error(res.message);
           setPedidos(inflightRef.current.get(id) ?? snapshot);
+        } else if (estado === 'Entregado' && historialCargado) {
+          // El pedido salió del KDS: refrescar historial si ya se cargó.
+          void refreshHistorial();
         }
         // Éxito: dejamos el estado optimista. El realtime/poll confirma después.
       } catch {
@@ -414,7 +524,7 @@ export function CocinaManager({
         });
       }
     })();
-  }, []);
+  }, [historialCargado, refreshHistorial]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const pedido = event.active.data.current?.pedido as PedidoCocina | undefined;
@@ -451,60 +561,86 @@ export function CocinaManager({
             Cocina
           </h1>
           <p className="text-sm text-muted-foreground">
-            {totalActivos === 0
-              ? 'Sin pedidos activos'
-              : `${totalActivos} pedido${totalActivos === 1 ? '' : 's'} · arrastrá entre columnas o usá el botón`}
+            {tab === 'historial'
+              ? 'Pedidos cerrados de hoy'
+              : totalActivos === 0
+                ? 'Sin pedidos activos de hoy'
+                : `${totalActivos} pedido${totalActivos === 1 ? '' : 's'} de hoy · arrastrá o usá el botón`}
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={() => void refresh()}
-          disabled={refreshing || pendingIds.size > 0}
+          disabled={refreshing || (tab === 'activos' && pendingIds.size > 0)}
         >
           {refreshing ? <Loader2 className="size-4 animate-spin" /> : 'Actualizar'}
         </Button>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={() => setActivePedido(null)}
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v === 'historial' ? 'historial' : 'activos')}
+        className="flex min-h-0 flex-1 flex-col gap-3"
       >
-        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto">
-          {COLUMNAS_KDS.map((col) => {
-            const lista = porColumna.get(col.estado) ?? [];
-            return (
-              <BoardColumn
-                key={col.estado}
-                estado={col.estado}
-                label={col.label}
-                description={col.description}
-                count={lista.length}
-                activePedido={activePedido}
-              >
-                {lista.map((p) => (
-                  <DraggablePedido
-                    key={p.id}
-                    pedido={p}
-                    onAdvance={onAdvance}
-                    busy={pendingIds.has(p.id)}
-                  />
-                ))}
-              </BoardColumn>
-            );
-          })}
-        </div>
+        <TabsList className="shrink-0">
+          <TabsTrigger value="activos">
+            En curso
+            {totalActivos > 0 && (
+              <Badge variant="secondary" className="ml-0.5 font-normal">
+                {totalActivos}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="historial">Historial de hoy</TabsTrigger>
+        </TabsList>
 
-        <DragOverlay dropAnimation={null}>
-          {activePedido ? (
-            <div className="w-[min(100vw-2rem,340px)] rotate-1 cursor-grabbing shadow-xl">
-              <PedidoCardContent pedido={activePedido} />
+        <TabsContent value="activos" className="mt-0 flex min-h-0 flex-1 flex-col outline-none">
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setActivePedido(null)}
+          >
+            <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto">
+              {COLUMNAS_KDS.map((col) => {
+                const lista = porColumna.get(col.estado) ?? [];
+                return (
+                  <BoardColumn
+                    key={col.estado}
+                    estado={col.estado}
+                    label={col.label}
+                    description={col.description}
+                    count={lista.length}
+                    activePedido={activePedido}
+                  >
+                    {lista.map((p) => (
+                      <DraggablePedido
+                        key={p.id}
+                        pedido={p}
+                        onAdvance={onAdvance}
+                        busy={pendingIds.has(p.id)}
+                      />
+                    ))}
+                  </BoardColumn>
+                );
+              })}
             </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+
+            <DragOverlay dropAnimation={null}>
+              {activePedido ? (
+                <div className="w-[min(100vw-2rem,340px)] rotate-1 cursor-grabbing shadow-xl">
+                  <PedidoCardContent pedido={activePedido} />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </TabsContent>
+
+        <TabsContent value="historial" className="mt-0 flex min-h-0 flex-1 flex-col outline-none">
+          <HistorialHoy pedidos={historial} cargando={refreshing && !historialCargado} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

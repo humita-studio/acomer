@@ -92,6 +92,10 @@ function mapMesaFromServer(raw: Record<string, unknown>, fallback?: MesaPlano): 
     capacidad: Number(raw.capacidad ?? fallback?.capacidad ?? 4),
     rotacion: Number(raw.rotacion ?? fallback?.rotacion ?? 0),
     ocupada: fallback?.ocupada ?? false,
+    mozoUserId:
+      (raw.mozoUserId as string | null | undefined) !== undefined
+        ? ((raw.mozoUserId as string | null) ?? null)
+        : (fallback?.mozoUserId ?? null),
   };
 }
 
@@ -311,6 +315,7 @@ export function usePlanoAcciones({
       capacidad: 4,
       rotacion: 0,
       ocupada: false,
+      mozoUserId: null,
     };
     // No marca dirty: la geometría ya va al server en el insert.
     patchDraft((d) => ({ ...d, mesas: [...d.mesas, optimista] }), false);
