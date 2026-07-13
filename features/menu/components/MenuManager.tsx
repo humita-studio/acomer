@@ -29,6 +29,7 @@ import {
   resolveIconoCategoria,
 } from '@/features/menu/categoriaVisual';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
+import { useConfirm } from '@/shared/hooks/use-confirm';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Card } from '@/shared/ui/card';
@@ -72,6 +73,7 @@ export function MenuManager({
   const eliminarProducto = useEliminarProducto();
   const cambiarDisponibilidad = useCambiarDisponibilidad();
   const duplicarProducto = useDuplicarProducto();
+  const { confirm, confirmDialog } = useConfirm();
 
   const role = userRole as RoleType;
   const canManage = hasPermission(role, 'canManageMenu');
@@ -160,20 +162,30 @@ export function MenuManager({
   const handleDuplicar = (producto: ProductoMenu) => {
     duplicarProducto.mutate(producto.id);
   };
-  const handleEliminar = (producto: ProductoMenu) => {
-    if (confirm(`¿Eliminar el producto ${producto.nombre}?`)) {
-      eliminarProducto.mutate(producto.id);
-    }
+  const handleEliminar = async (producto: ProductoMenu) => {
+    const ok = await confirm({
+      title: `¿Eliminar “${producto.nombre}”?`,
+      description: 'Se saca del menú. Los pedidos históricos no se modifican.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (ok) eliminarProducto.mutate(producto.id);
   };
-  const handleEliminarCategoria = (c: CategoriaMenu) => {
-    if (confirm(`¿Eliminar la categoría ${c.nombre}?`)) {
-      eliminarCategoria.mutate(c.id);
-      if (categoriaActiva === c.id) setCategoriaActiva('todos');
-    }
+  const handleEliminarCategoria = async (c: CategoriaMenu) => {
+    const ok = await confirm({
+      title: `¿Eliminar la categoría “${c.nombre}”?`,
+      description: 'Solo se puede eliminar si no tiene productos.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    eliminarCategoria.mutate(c.id);
+    if (categoriaActiva === c.id) setCategoriaActiva('todos');
   };
 
   return (
     <div className="min-w-0 space-y-6">
+      {confirmDialog}
       {/* Encabezado */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 space-y-1">
@@ -237,7 +249,7 @@ export function MenuManager({
                   ocultarCount={canManage}
                 />
                 {canManage && (
-                  <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 gap-0.5 opacity-0 transition group-hover/cat:opacity-100">
+                  <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 gap-0.5 opacity-100 transition sm:opacity-0 sm:group-hover/cat:opacity-100 sm:group-focus-within/cat:opacity-100">
                     <button
                       type="button"
                       onClick={() => abrirEditarCategoria(c)}
@@ -293,10 +305,36 @@ export function MenuManager({
           </div>
 
           {productosFiltrados.length === 0 ? (
-            <div className="px-6 py-16 text-center text-sm text-muted-foreground">
-              {productos.length === 0
-                ? 'Todavía no cargaste productos.'
-                : 'No hay productos que coincidan con la búsqueda.'}
+            <div className="flex flex-col items-center px-6 py-16 text-center">
+              {productos.length === 0 ? (
+                <>
+                  <div className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <Utensils className="size-7" aria-hidden />
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold text-foreground">
+                    Todavía no cargaste productos
+                  </h3>
+                  <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                    Sumá el menú a mano o importá un CSV. En minutos tus clientes ya pueden pedir.
+                  </p>
+                  {canManage ? (
+                    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                      <Button onClick={abrirCrear}>
+                        <Plus className="size-4" />
+                        Nuevo producto
+                      </Button>
+                      <Button variant="outline" onClick={() => setImportarDialogOpen(true)}>
+                        <Upload className="size-4" />
+                        Importar CSV
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No hay productos que coincidan con la búsqueda.
+                </p>
+              )}
             </div>
           ) : (
             <div className="w-full min-w-0 overflow-x-hidden">

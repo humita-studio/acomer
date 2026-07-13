@@ -6,8 +6,8 @@ import { cn } from '@/shared/lib/utils';
 import { PLANES } from '../marketingContent';
 
 /**
- * Planes de precios: tres tarjetas, con el plan "Pro" destacado (borde primario +
- * badge "Recomendado"). Cada CTA lleva a registro / ventas.
+ * Precios de la landing: hoy gratis (todo incluido) + opcional A medida.
+ * Cuando se habilite cobro, se vuelve a alinear con features/billing/plans.ts.
  */
 export function MarketingPricing() {
   return (
@@ -18,15 +18,15 @@ export function MarketingPricing() {
             Precios
           </p>
           <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Planes simples, sin sorpresas
+            Gratis mientras armamos el cobro
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            14 días de prueba al crear tu local. Después pagás el mes con Mercado
-            Pago, sin permanencia.
+            Sin tarjeta y con todo el producto incluido. Cuando habilitemos planes
+            pagos, el copy y el gate van a coincidir.
           </p>
         </div>
 
-        <div className="mt-14 grid items-start gap-6 lg:grid-cols-3">
+        <div className="mt-14 mx-auto grid max-w-3xl items-start gap-6 sm:grid-cols-2">
           {PLANES.map((plan) => (
             <div
               key={plan.nombre}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, Star, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   useCrearProducto,
   useEditarProducto,
@@ -20,6 +21,7 @@ import {
   useMarcarVarianteDefault,
 } from '@/features/menu/hooks/useVariantes';
 import type { CategoriaMenu, ProductoMenu, Adicional, Variante } from '@/features/menu/types';
+import { usePrompt } from '@/shared/hooks/use-prompt';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -97,6 +99,7 @@ export function ProductoDialog({
   const editarPrecioVariante = useEditarPrecioVariante();
   const eliminarVariante = useEliminarVariante();
   const marcarVarianteDefault = useMarcarVarianteDefault();
+  const { prompt, promptDialog } = usePrompt();
 
   const adicionalesDelProducto = esEditar
     ? adicionales.filter((a) => a.productoId === producto!.id)
@@ -130,10 +133,27 @@ export function ProductoDialog({
     form.reset();
   };
 
-  const handleEditarPrecioAdicional = (id: string, nombreAd: string, precioActual: number) => {
-    const nuevo = prompt(`Nuevo precio extra para ${nombreAd}. Actual: $${precioActual}.`);
+  const handleEditarPrecioAdicional = async (
+    id: string,
+    nombreAd: string,
+    precioActual: number,
+  ) => {
+    const nuevo = await prompt({
+      title: `Precio extra · ${nombreAd}`,
+      description: `Actual: ${formatPeso(precioActual)}`,
+      label: 'Precio extra ($)',
+      defaultValue: String(precioActual),
+      inputType: 'number',
+      min: 0,
+      step: '0.01',
+      confirmLabel: 'Guardar',
+      validate: (v) => {
+        const n = Number(v);
+        if (isNaN(n) || n < 0) return 'Ingresá un precio válido (0 o más).';
+        return null;
+      },
+    });
     if (nuevo === null) return;
-    if (isNaN(Number(nuevo)) || Number(nuevo) < 0) return;
     editarPrecioAdicional.mutate({ modificadorId: id, nuevoPrecio: Number(nuevo) });
   };
 
@@ -146,7 +166,7 @@ export function ProductoDialog({
     if (!nombreVar) return;
     const precioVar = Number(data.get('precio'));
     if (isNaN(precioVar) || precioVar <= 0) {
-      alert('Ingresá un precio válido para la variante.');
+      toast.error('Ingresá un precio válido para la variante.');
       return;
     }
 
@@ -158,24 +178,44 @@ export function ProductoDialog({
     form.reset();
   };
 
-  const handleEditarPrecioVariante = (id: string, nombreVar: string, precioActual: number) => {
-    const nuevo = prompt(`Nuevo precio para ${nombreVar}. Actual: $${precioActual}.`);
+  const handleEditarPrecioVariante = async (
+    id: string,
+    nombreVar: string,
+    precioActual: number,
+  ) => {
+    const nuevo = await prompt({
+      title: `Precio · ${nombreVar}`,
+      description: `Actual: ${formatPeso(precioActual)}`,
+      label: 'Precio ($)',
+      defaultValue: String(precioActual),
+      inputType: 'number',
+      min: 0,
+      step: '0.01',
+      confirmLabel: 'Guardar',
+      validate: (v) => {
+        const n = Number(v);
+        if (isNaN(n) || n <= 0) return 'Ingresá un precio mayor a 0.';
+        return null;
+      },
+    });
     if (nuevo === null) return;
-    if (isNaN(Number(nuevo)) || Number(nuevo) <= 0) return;
     editarPrecioVariante.mutate({ varianteId: id, nuevoPrecio: Number(nuevo) });
   };
 
   const handleGuardar = () => {
     const nombreLimpio = nombre.trim();
-    if (!nombreLimpio) return;
+    if (!nombreLimpio) {
+      toast.error('Ingresá el nombre del producto.');
+      return;
+    }
     if (!categoriaId) {
-      alert('Elegí una categoría para el producto.');
+      toast.error('Elegí una categoría para el producto.');
       return;
     }
 
     const precioNum = Number(precio);
     if (!usarVariantes && (isNaN(precioNum) || precioNum <= 0)) {
-      alert('Ingresá un precio válido.');
+      toast.error('Ingresá un precio válido.');
       return;
     }
 
@@ -183,7 +223,8 @@ export function ProductoDialog({
       .filter((v) => v.nombre.trim() && v.precio > 0)
       .map((v) => ({ nombre: v.nombre, precio: v.precio }));
     if (!esEditar && usarVariantes && variantesAEnviar.length === 0) {
-      alert('Agregá al menos una variante con precio.');
+      toast.error('Agregá al menos una variante con precio.');
+      setTab('variantes');
       return;
     }
 
@@ -229,6 +270,8 @@ export function ProductoDialog({
   };
 
   return (
+    <>
+      {promptDialog}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -561,5 +604,6 @@ export function ProductoDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

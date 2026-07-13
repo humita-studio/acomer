@@ -1,8 +1,13 @@
 'use server';
 
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '@/shared/db';
-import { mesas, productos } from '@/shared/db/schema';
+import {
+  mesas,
+  perfilesEmpleados,
+  productos,
+  sesionesCaja,
+} from '@/shared/db/schema';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import type { OnboardingStatus, OnboardingStepStatus } from './onboarding';
@@ -21,7 +26,15 @@ export async function getOnboardingStatusAction(): Promise<OnboardingStatus | nu
   const tenantId = session.restauranteId;
 
   try {
-    const [productosRow, mesasRow, pagosRow, landingRow, restRow] = await Promise.all([
+    const [
+      productosRow,
+      mesasRow,
+      pagosRow,
+      landingRow,
+      restRow,
+      cajaRow,
+      staffRow,
+    ] = await Promise.all([
       db
         .select({ c: sql<number>`count(*)::int` })
         .from(productos)
@@ -59,10 +72,28 @@ export async function getOnboardingStatusAction(): Promise<OnboardingStatus | nu
         where: (t, { eq: e }) => e(t.id, tenantId),
         columns: { slug: true },
       }),
+      // Alguna sesión de caja (abierta o histórica) = ya practicaron el flujo.
+      db
+        .select({ c: sql<number>`count(*)::int` })
+        .from(sesionesCaja)
+        .where(eq(sesionesCaja.restauranteId, tenantId)),
+      // Al menos un empleado que no sea el owner.
+      db
+        .select({ c: sql<number>`count(*)::int` })
+        .from(perfilesEmpleados)
+        .where(
+          and(
+            eq(perfilesEmpleados.restauranteId, tenantId),
+            eq(perfilesEmpleados.activo, true),
+            ne(perfilesEmpleados.rol, 'owner'),
+          ),
+        ),
     ]);
 
     const nProductos = Number(productosRow[0]?.c ?? 0);
     const nMesas = Number(mesasRow[0]?.c ?? 0);
+    const nCajas = Number(cajaRow[0]?.c ?? 0);
+    const nStaff = Number(staffRow[0]?.c ?? 0);
 
     const creds = (pagosRow?.credenciales ?? {}) as { access_token?: string };
     const tieneToken = typeof creds.access_token === 'string' && creds.access_token.length > 0;
@@ -87,6 +118,9 @@ export async function getOnboardingStatusAction(): Promise<OnboardingStatus | nu
         tieneRed)
     );
 
+    const cajaHecha = nCajas >= 1;
+    const staffHecho = nStaff >= 1;
+
     const steps: OnboardingStepStatus[] = [
       {
         id: 'menu',
@@ -108,6 +142,24 @@ export async function getOnboardingStatusAction(): Promise<OnboardingStatus | nu
         id: 'pagos',
         done: mpVinculado,
         detalle: mpVinculado ? 'Mercado Pago vinculado' : undefined,
+      },
+      {
+        id: 'caja',
+        done: cajaHecha,
+        detalle: cajaHecha
+          ? nCajas === 1
+            ? '1 turno registrado'
+            : `${nCajas} turnos registrados`
+          : undefined,
+      },
+      {
+        id: 'staff',
+        done: staffHecho,
+        detalle: staffHecho
+          ? nStaff === 1
+            ? '1 empleado'
+            : `${nStaff} empleados`
+          : undefined,
       },
       {
         id: 'landing',

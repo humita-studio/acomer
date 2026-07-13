@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { createElement, Fragment, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   crearAmbiente,
   renombrarAmbiente,
@@ -18,6 +19,8 @@ import {
 import { liberarMesaAction, abrirMesaAction } from '@/features/mesas/mesas-actions';
 import type { PlanoData } from '@/features/mesas/plano-data';
 import { queryKeys } from '@/shared/query/keys';
+import { useConfirm } from '@/shared/hooks/use-confirm';
+import { usePrompt } from '@/shared/hooks/use-prompt';
 import { usePlanoStore, type PlanoDraft } from './plano-store';
 import {
   COLS,
@@ -122,6 +125,8 @@ export function usePlanoAcciones({
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
+  const { prompt, promptDialog } = usePrompt();
   const patchDraft = usePlanoStore((s) => s.patchDraft);
   const setSeleccion = usePlanoStore((s) => s.setSeleccion);
   const setAmbienteActivoId = usePlanoStore((s) => s.setAmbienteActivoId);
@@ -342,10 +347,11 @@ export function usePlanoAcciones({
         s?.tipo === 'mesa' && s.id === tempId ? { tipo: 'mesa', id: merged.id } : s,
       );
       syncPlanoCacheFromDraft(usePlanoStore.getState().draft!);
+      toast.success(`${merged.identificador} creada`);
     } else {
       patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== tempId) }), false);
       setSeleccion((s) => (s?.tipo === 'mesa' && s.id === tempId ? null : s));
-      alert(res.message || 'No se pudo crear la mesa');
+      toast.error(res.message || 'No se pudo crear la mesa');
     }
   };
 
@@ -379,17 +385,26 @@ export function usePlanoAcciones({
       setAmbienteActivoId(amb.id);
       const latest = usePlanoStore.getState().draft;
       if (latest) syncPlanoCacheFromDraft(latest);
+      toast.success(`Ambiente “${amb.nombre}” creado`);
     } else {
       patchDraft((d) => ({ ...d, ambientes: d.ambientes.filter((a) => a.id !== tempId) }), false);
       if (usePlanoStore.getState().ambienteActivoId === tempId) {
         setAmbienteActivoId(ambientes[0]?.id ?? '');
       }
-      alert(res.message || 'No se pudo crear el ambiente');
+      toast.error(res.message || 'No se pudo crear el ambiente');
     }
   };
 
   const handleRenameAmbiente = async (amb: AmbienteUI) => {
-    const nombre = window.prompt('Nuevo nombre del ambiente:', amb.nombre)?.trim();
+    const nombre = (
+      await prompt({
+        title: 'Renombrar ambiente',
+        label: 'Nombre',
+        defaultValue: amb.nombre,
+        confirmLabel: 'Guardar',
+        validate: (v) => (!v ? 'Ingresá un nombre.' : null),
+      })
+    )?.trim();
     if (!nombre || nombre === amb.nombre) return;
     const prev = amb.nombre;
     patchDraft(
@@ -408,7 +423,7 @@ export function usePlanoAcciones({
         }),
         false,
       );
-      alert(res.message || 'No se pudo renombrar');
+      toast.error(res.message || 'No se pudo renombrar');
     } else {
       const latest = usePlanoStore.getState().draft;
       if (latest) syncPlanoCacheFromDraft(latest);
@@ -417,10 +432,16 @@ export function usePlanoAcciones({
 
   const handleDeleteAmbiente = async (amb: AmbienteUI) => {
     if (ambientes.length <= 1) {
-      alert('Tiene que quedar al menos un ambiente');
+      toast.error('Tiene que quedar al menos un ambiente');
       return;
     }
-    if (!confirm(`¿Eliminar el ambiente "${amb.nombre}"? Sus mesas se reasignan al resto.`)) return;
+    const ok = await confirm({
+      title: `¿Eliminar “${amb.nombre}”?`,
+      description: 'Sus mesas se reasignan al resto de ambientes.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
 
     const snapshot = draft;
     const restantes = ambientes.filter((a) => a.id !== amb.id);
@@ -441,20 +462,26 @@ export function usePlanoAcciones({
     const res = await eliminarAmbiente(amb.id);
     if (!res.success) {
       if (snapshot) patchDraft(() => snapshot, false);
-      alert(res.message || 'No se pudo eliminar');
+      toast.error(res.message || 'No se pudo eliminar');
     }
   };
 
   const handleDeleteMesa = async (id: string) => {
     const mesa = mesas.find((m) => m.id === id);
-    if (!confirm(`¿Eliminar ${mesa?.identificador ?? 'la mesa'}?`)) return;
+    const ok = await confirm({
+      title: `¿Eliminar ${mesa?.identificador ?? 'la mesa'}?`,
+      description: 'Se borra del plano. Los QR impresos dejan de servir.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     patchDraft((d) => ({ ...d, mesas: d.mesas.filter((m) => m.id !== id) }), false);
     setSeleccion(null);
     if (id.startsWith('temp-')) return;
     const res = await eliminarMesaPlano(id);
     if (!res.success) {
       if (mesa) patchDraft((d) => ({ ...d, mesas: [...d.mesas, mesa] }), false);
-      alert(res.message || 'No se pudo eliminar');
+      toast.error(res.message || 'No se pudo eliminar');
     } else {
       const latest = usePlanoStore.getState().draft;
       if (latest) syncPlanoCacheFromDraft(latest);
@@ -520,7 +547,7 @@ export function usePlanoAcciones({
       if (latest) syncPlanoCacheFromDraft(latest);
     } else {
       patchDraft((d) => ({ ...d, elementos: d.elementos.filter((e) => e.id !== tempId) }), false);
-      alert(res.message || 'No se pudo crear el elemento');
+      toast.error(res.message || 'No se pudo crear el elemento');
     }
   };
 
@@ -532,7 +559,7 @@ export function usePlanoAcciones({
     const res = await eliminarElementoPlano(id);
     if (!res.success) {
       if (elemento) patchDraft((d) => ({ ...d, elementos: [...d.elementos, elemento] }), false);
-      alert(res.message || 'No se pudo eliminar');
+      toast.error(res.message || 'No se pudo eliminar');
     } else {
       const latest = usePlanoStore.getState().draft;
       if (latest) syncPlanoCacheFromDraft(latest);
@@ -541,7 +568,13 @@ export function usePlanoAcciones({
 
   // ---- Operación (modo ver) — optimista en cache ----
   const handleLiberar = async (mesa: MesaPlano) => {
-    if (!confirm(`¿Liberar ${mesa.identificador}? Se cerrará la sesión actual.`)) return;
+    const ok = await confirm({
+      title: `¿Liberar ${mesa.identificador}?`,
+      description: 'Se cierra la sesión actual de la mesa.',
+      confirmLabel: 'Liberar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setLiberandoId(mesa.id);
     patchOcupacion(mesa.id, false);
     setSeleccion(null);
@@ -549,9 +582,10 @@ export function usePlanoAcciones({
     setLiberandoId(null);
     if (res.success) {
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
+      toast.success(`${mesa.identificador} liberada`);
     } else {
       patchOcupacion(mesa.id, true);
-      alert(res.message || 'No se pudo liberar la mesa');
+      toast.error(res.message || 'No se pudo liberar la mesa');
     }
   };
 
@@ -565,22 +599,32 @@ export function usePlanoAcciones({
       router.push(`/admin/mesas/${mesa.id}`);
     } else {
       patchOcupacion(mesa.id, false);
-      alert(res.message || 'No se pudo abrir la mesa');
+      toast.error(res.message || 'No se pudo abrir la mesa');
     }
   };
 
   const handleDividir = async (mesa: MesaPlano) => {
     const def = Math.max(1, Math.floor(mesa.capacidad / 2));
-    const entrada = window.prompt(
-      `Dividir ${mesa.identificador} (${mesa.capacidad} lugares).\n¿Cuántos lugares para la nueva sub-mesa?`,
-      String(def),
-    );
+    const entrada = await prompt({
+      title: `Dividir ${mesa.identificador}`,
+      description: `Capacidad actual: ${mesa.capacidad} lugares. ¿Cuántos para la nueva sub-mesa?`,
+      label: 'Lugares de la sub-mesa',
+      defaultValue: String(def),
+      inputType: 'number',
+      min: 1,
+      max: mesa.capacidad - 1,
+      step: 1,
+      confirmLabel: 'Dividir',
+      validate: (v) => {
+        const cap = parseInt(v, 10);
+        if (!Number.isFinite(cap) || cap < 1 || cap >= mesa.capacidad) {
+          return `Tiene que ser un número entre 1 y ${mesa.capacidad - 1}.`;
+        }
+        return null;
+      },
+    });
     if (entrada == null) return;
     const cap = parseInt(entrada, 10);
-    if (!Number.isFinite(cap) || cap < 1 || cap >= mesa.capacidad) {
-      alert(`Tiene que ser un número entre 1 y ${mesa.capacidad - 1}.`);
-      return;
-    }
 
     // Optimista: achicar madre + crear submesa temporal al lado
     const tempId = `temp-sub-${crypto.randomUUID()}`;
@@ -618,12 +662,17 @@ export function usePlanoAcciones({
     } else {
       if (snapshot) queryClient.setQueryData(queryKeys.plano(tenantId), snapshot);
       setSeleccion(null);
-      alert(res.message || 'No se pudo dividir la mesa');
+      toast.error(res.message || 'No se pudo dividir la mesa');
     }
   };
 
   const handleUnir = async (mesa: MesaPlano) => {
-    if (!confirm(`¿Volver a unir ${mesa.identificador} con su mesa madre?`)) return;
+    const ok = await confirm({
+      title: `¿Unir ${mesa.identificador}?`,
+      description: 'Vuelve a juntarse con su mesa madre y se elimina esta sub-mesa.',
+      confirmLabel: 'Unir',
+    });
+    if (!ok) return;
     const snapshot = queryClient.getQueryData<PlanoData>(queryKeys.plano(tenantId));
     queryClient.setQueryData<PlanoData>(queryKeys.plano(tenantId), (prev) => {
       if (!prev || !mesa.parentMesaId) return prev;
@@ -647,7 +696,7 @@ export function usePlanoAcciones({
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     } else {
       if (snapshot) queryClient.setQueryData(queryKeys.plano(tenantId), snapshot);
-      alert(res.message || 'No se pudo unir la mesa');
+      toast.error(res.message || 'No se pudo unir la mesa');
     }
   };
 
@@ -667,5 +716,7 @@ export function usePlanoAcciones({
     handleUnir,
     guardar,
     flushSave,
+    /** Montar en el árbol del PlanoManager (confirm/prompt UI). */
+    dialogs: createElement(Fragment, null, confirmDialog, promptDialog) as ReactNode,
   };
 }

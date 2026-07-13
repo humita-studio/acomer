@@ -120,6 +120,7 @@ export default async function PedirPage({
           categorias={cats as CategoriaMenu[]}
           productos={menuProductos}
           modos={modosPermitidos(config)}
+          deliveryConfig={config}
           promos={promos}
           metodosPago={metodosPago}
         />

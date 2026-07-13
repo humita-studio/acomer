@@ -2,7 +2,15 @@
 // (sin 'use server' ni `db`) para importarse tanto desde server actions como
 // desde componentes cliente sin arrastrar dependencias de servidor.
 
-export type ColorMarca = 'terracota' | 'ambar' | 'verde';
+export type ColorMarca =
+  | 'terracota'
+  | 'ambar'
+  | 'verde'
+  | 'azul'
+  | 'bordo'
+  | 'negro'
+  | 'rosa'
+  | 'indigo';
 
 export type TurnoHorario = {
   desde: string; // 'HH:MM'
@@ -31,6 +39,8 @@ export type RedesLanding = {
 
 export type LandingConfig = {
   descripcion: string;
+  /** Párrafo "sobre el local" (historia, especialidades). */
+  sobre: string;
   direccion: string;
   // 7 días indexados por getDay() (0=Dom … 6=Sáb).
   horarios: HorarioDia[];
@@ -41,6 +51,9 @@ export type LandingConfig = {
   imagenUrl: string;
   /** public_id en Cloudinary para reemplazar/borrar. */
   imagenPublicId: string;
+  /** Logo del local (cuadrado/circular). Vacío = sin logo. */
+  logoUrl: string;
+  logoPublicId: string;
 };
 
 const HORARIO_DIA_DEFAULT: HorarioDia = { cerrado: false, turnos: [{ desde: '12:00', hasta: '00:00' }] };
@@ -48,19 +61,28 @@ const HORARIO_DIA_DEFAULT: HorarioDia = { cerrado: false, turnos: [{ desde: '12:
 /** Defaults usados cuando el restaurante no tiene fila de config todavía. */
 export const LANDING_CONFIG_DEFAULT: LandingConfig = {
   descripcion: '',
+  sobre: '',
   direccion: '',
   horarios: Array.from({ length: 7 }, () => ({ ...HORARIO_DIA_DEFAULT, turnos: [...HORARIO_DIA_DEFAULT.turnos] })),
-  acciones: { verCarta: true, pedirOnline: true, reservar: true, qr: true },
+  // Pedir/reservar off por default; se prenden cuando el local activa esos canales.
+  acciones: { verCarta: true, pedirOnline: false, reservar: false, qr: true },
   colorMarca: 'terracota',
   redes: { whatsapp: '', instagram: '', telefono: '' },
   imagenUrl: '',
   imagenPublicId: '',
+  logoUrl: '',
+  logoPublicId: '',
 };
 
 export const COLORES_MARCA: { value: ColorMarca; label: string }[] = [
   { value: 'terracota', label: 'Terracota' },
   { value: 'ambar', label: 'Ámbar' },
   { value: 'verde', label: 'Verde' },
+  { value: 'azul', label: 'Azul' },
+  { value: 'bordo', label: 'Bordo' },
+  { value: 'negro', label: 'Negro' },
+  { value: 'rosa', label: 'Rosa' },
+  { value: 'indigo', label: 'Índigo' },
 ];
 
 /**
@@ -86,6 +108,11 @@ export const GRADIENTE_MARCA: Record<ColorMarca, string> = {
   terracota: 'linear-gradient(155deg, #c2562f 0%, #6b2f18 55%, #2c1610 100%)',
   ambar: 'linear-gradient(155deg, #e0992a 0%, #8a560f 55%, #382506 100%)',
   verde: 'linear-gradient(155deg, #3f9b5e 0%, #235c39 55%, #112c1c 100%)',
+  azul: 'linear-gradient(155deg, #3b82c4 0%, #1e4a7a 55%, #0f243d 100%)',
+  bordo: 'linear-gradient(155deg, #9b2c3e 0%, #5c1a26 55%, #2a0f14 100%)',
+  negro: 'linear-gradient(155deg, #3a3a3a 0%, #1a1a1a 55%, #0a0a0a 100%)',
+  rosa: 'linear-gradient(155deg, #d46a8e 0%, #8a3a58 55%, #3d1a28 100%)',
+  indigo: 'linear-gradient(155deg, #5b5fc7 0%, #32368a 55%, #181a40 100%)',
 };
 
 /** Color sólido de la marca, oscuro lo suficiente para texto blanco encima. */
@@ -93,6 +120,11 @@ export const SOLIDO_MARCA: Record<ColorMarca, string> = {
   terracota: '#c2562f',
   ambar: '#b5731a',
   verde: '#2f7e49',
+  azul: '#2d6a9f',
+  bordo: '#8a2436',
+  negro: '#2a2a2a',
+  rosa: '#b84d72',
+  indigo: '#4549a8',
 };
 
 // ---------------------------------------------------------------------------

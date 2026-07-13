@@ -17,7 +17,7 @@ function BadgeEstado({ abierto }: { abierto: boolean }) {
 
 /**
  * Hero de la landing del local: foto de portada (si hay) o gradiente de marca,
- * con el nombre en Fraunces, la descripción y la fila de horario + dirección.
+ * con logo opcional, nombre en Fraunces, descripción y horario + dirección.
  */
 export function LandingHero({
   nombre,
@@ -27,6 +27,7 @@ export function LandingHero({
   horarioTexto,
   colorMarca,
   imagenUrl,
+  logoUrl,
 }: {
   nombre: string;
   descripcion: string;
@@ -36,8 +37,11 @@ export function LandingHero({
   colorMarca: ColorMarca;
   /** URL optimizada de Cloudinary; vacío = solo gradiente de marca. */
   imagenUrl?: string;
+  /** Logo circular del local. */
+  logoUrl?: string;
 }) {
   const hasImage = Boolean(imagenUrl);
+  const hasLogo = Boolean(logoUrl);
 
   return (
     <header
@@ -81,6 +85,19 @@ export function LandingHero({
 
       {/* Bloque de identidad del local */}
       <div className="relative z-10 space-y-3">
+        {hasLogo ? (
+          <div className="relative size-16 overflow-hidden rounded-2xl border-2 border-white/30 bg-white/10 shadow-lg backdrop-blur-sm">
+            <Image
+              key={logoUrl}
+              src={logoUrl!}
+              alt=""
+              fill
+              sizes="64px"
+              className="object-cover"
+              unoptimized
+            />
+          </div>
+        ) : null}
         <h1 className="font-display text-5xl font-semibold leading-none tracking-tight">{nombre}</h1>
         {descripcion ? <p className="text-base text-white/85">{descripcion}</p> : null}
 

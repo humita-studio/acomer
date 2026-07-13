@@ -7,11 +7,10 @@ import { AppSidebar } from './app-sidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/shared/ui/sidebar';
 import { Separator } from '@/shared/ui/separator';
 import { ModeToggle } from '@/shared/ui/mode-toggle';
-import { Input } from '@/shared/ui/input';
-import { Search } from 'lucide-react';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
 import { StaffNotifications } from '@/features/notificaciones/components/StaffNotifications';
+import { AdminSearch } from '@/features/busqueda/components/AdminSearch';
 
 export default async function AdminLayout({
   children,
@@ -59,10 +58,7 @@ export default async function AdminLayout({
             {session.nombreRestaurante}
           </h1>
 
-          <div className="relative hidden w-full max-w-xs sm:block">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar pedidos, mesas…" className="pl-9" aria-label="Buscar" />
-          </div>
+          <AdminSearch />
 
           <StaffNotifications
             tenantId={session.restauranteId}

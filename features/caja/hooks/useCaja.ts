@@ -108,7 +108,14 @@ export function useRegistrarMovimiento(tenantId: string) {
       if (!res.success) throw new Error(res.message);
       return res;
     },
-    onSuccess: () => invalidar(),
+    onSuccess: (_res, vars) => {
+      invalidar();
+      const tipoLabel =
+        vars.tipo === 'ingreso' ? 'Ingreso' : vars.tipo === 'egreso' ? 'Egreso' : 'Retiro';
+      toast.success(`${tipoLabel} registrado`, {
+        description: formatPeso(vars.monto),
+      });
+    },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : 'No se pudo registrar el movimiento'),
   });

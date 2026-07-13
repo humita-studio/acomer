@@ -26,6 +26,7 @@ import {
 } from '@/shared/ui/select';
 import { guardarLandingConfigAction } from '../landingConfigActions';
 import { ImagenLocalUploader } from './ImagenLocalUploader';
+import { cn } from '@/shared/lib/utils';
 import {
   COLORES_MARCA,
   DIAS_SEMANA,
@@ -54,6 +55,7 @@ export function LandingConfigForm({
 }) {
   const router = useRouter();
   const [descripcion, setDescripcion] = useState(initial.descripcion);
+  const [sobre, setSobre] = useState(initial.sobre);
   const [direccion, setDireccion] = useState(initial.direccion);
   const [horarios, setHorarios] = useState<HorarioDia[]>(initial.horarios);
   const [acciones, setAcciones] = useState<AccionesLanding>(initial.acciones);
@@ -93,6 +95,7 @@ export function LandingConfigForm({
     mutationFn: async () => {
       const res = await guardarLandingConfigAction({
         descripcion,
+        sobre,
         direccion,
         horarios,
         acciones,
@@ -116,17 +119,18 @@ export function LandingConfigForm({
         <div className="space-y-6">
           {identidadSuperior}
 
-          <ImagenLocalUploader imagenUrl={initial.imagenUrl} />
-          
+          <ImagenLocalUploader imagenUrl={initial.imagenUrl} kind="cover" />
+          <ImagenLocalUploader imagenUrl={initial.logoUrl} kind="logo" />
+
           {/* Identidad */}
           <Card>
             <CardHeader>
-              <CardTitle>Descripción y Ubicación</CardTitle>
+              <CardTitle>Descripción y ubicación</CardTitle>
               <CardDescription>Cómo se presenta tu local en la página de inicio.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="landing-descripcion">Descripción</Label>
+                <Label htmlFor="landing-descripcion">Tagline</Label>
                 <Textarea
                   id="landing-descripcion"
                   value={descripcion}
@@ -135,6 +139,18 @@ export function LandingConfigForm({
                   rows={2}
                   placeholder="Cocina de barrio · Parrilla · Pastas"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="landing-sobre">Sobre el local</Label>
+                <Textarea
+                  id="landing-sobre"
+                  value={sobre}
+                  onChange={(e) => setSobre(e.target.value)}
+                  maxLength={1200}
+                  rows={4}
+                  placeholder="Contá la historia del lugar, especialidades o lo que quieras que lean tus clientes…"
+                />
+                <p className="text-xs text-muted-foreground">{sobre.length}/1200</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="landing-direccion">Dirección</Label>
@@ -178,12 +194,26 @@ export function LandingConfigForm({
               <CardTitle>Apariencia</CardTitle>
               <CardDescription>Color de marca del hero y los botones.</CardDescription>
             </CardHeader>
-            <CardContent className="flex items-center gap-3">
-              <span
-                className="size-10 shrink-0 rounded-lg border"
-                style={{ background: GRADIENTE_MARCA[colorMarca] }}
-                aria-hidden
-              />
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {COLORES_MARCA.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    title={c.label}
+                    aria-label={c.label}
+                    aria-pressed={colorMarca === c.value}
+                    onClick={() => setColorMarca(c.value)}
+                    className={cn(
+                      'size-9 rounded-lg border-2 transition-transform',
+                      colorMarca === c.value
+                        ? 'scale-110 border-foreground ring-2 ring-ring ring-offset-2'
+                        : 'border-transparent opacity-80 hover:opacity-100',
+                    )}
+                    style={{ background: GRADIENTE_MARCA[c.value] }}
+                  />
+                ))}
+              </div>
               <Select value={colorMarca} onValueChange={(v) => setColorMarca(v as ColorMarca)}>
                 <SelectTrigger className="w-full max-w-xs">
                   <SelectValue />

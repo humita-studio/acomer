@@ -9,6 +9,7 @@ export const queryKeys = {
   plano: (restauranteId: string) => ['plano', restauranteId] as const,
   mozos: (tenantId: string) => ['mozos', tenantId] as const,
   staffAlerts: (tenantId: string) => ['staff-alerts', tenantId] as const,
+  adminSearch: (query: string) => ['admin-search', query] as const,
   borrador: (sesionMesaId: string) => ['borrador', sesionMesaId] as const,
   dashboard: (tenantId: string) => ['dashboard', tenantId] as const,
   reportes: (tenantId: string, desde: string, hasta: string) =>

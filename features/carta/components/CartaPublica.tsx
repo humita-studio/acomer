@@ -10,6 +10,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/shared/ui/accordion';
+import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import {
   colorCategoriaMeta,
@@ -34,8 +35,10 @@ export function CartaPublica({
   productos: ProductoMenu[];
 }) {
   const [busqueda, setBusqueda] = useState('');
-  // Browse: todo cerrado; el comensal abre lo que le interesa (igual que MenuView).
-  const [openCategories, setOpenCategories] = useState<string[]>([]);
+  // Primera categoría abierta para que la carta no se vea vacía.
+  const [openCategories, setOpenCategories] = useState<string[]>(() =>
+    categorias[0] ? [categorias[0].id] : [],
+  );
   const query = busqueda.trim();
   const buscando = query.length > 0;
 
@@ -234,7 +237,7 @@ function ProductoCard({
           {prod.variantes.length > 0 ? (
             <span className="font-normal text-muted-foreground">desde </span>
           ) : null}
-          ${Number(prod.precio).toFixed(2)}
+          {formatPeso(prod.precio)}
         </p>
       </div>
     </div>

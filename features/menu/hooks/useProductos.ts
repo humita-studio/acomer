@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { queryKeys } from '@/shared/query/keys';
 import {
   obtenerProductosMenu,
@@ -58,8 +59,9 @@ export function useCrearProducto() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al crear el producto');
+      toast.error(error instanceof Error ? error.message : 'Error al crear el producto');
     },
+    onSuccess: () => toast.success('Producto creado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
       // Adicionales y variantes se crean junto con el producto: refrescamos sus cachés.
@@ -110,8 +112,9 @@ export function useEditarProducto() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al actualizar el producto');
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar el producto');
     },
+    onSuccess: () => toast.success('Producto actualizado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -139,8 +142,10 @@ export function useCambiarDisponibilidad() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al cambiar la disponibilidad');
+      toast.error(error instanceof Error ? error.message : 'Error al cambiar la disponibilidad');
     },
+    onSuccess: (_res, vars) =>
+      toast.success(vars.disponible ? 'Producto disponible' : 'Producto agotado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -157,6 +162,9 @@ export function useDuplicarProducto() {
       if (!res.success) throw new Error(res.message);
       return res;
     },
+    onSuccess: () => toast.success('Producto duplicado'),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'No se pudo duplicar'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
       queryClient.invalidateQueries({ queryKey: queryKeys.adicionalesMenu() });
@@ -185,8 +193,9 @@ export function useModificarPrecioProducto() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al actualizar el precio');
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar el precio');
     },
+    onSuccess: () => toast.success('Precio actualizado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -214,8 +223,9 @@ export function useEliminarProducto() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al eliminar el producto');
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar el producto');
     },
+    onSuccess: () => toast.success('Producto eliminado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },

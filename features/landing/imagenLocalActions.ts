@@ -13,6 +13,9 @@ import {
   urlEntrega,
 } from '@/shared/lib/cloudinary';
 
+/** Portada del hero o logo del local. */
+export type ImagenLocalKind = 'cover' | 'logo';
+
 function assertAdminSession() {
   return getCurrentSession().then((session) => {
     if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
@@ -32,23 +35,34 @@ async function revalidateLanding(restauranteId: string) {
   if (rest?.slug) revalidatePath(`/${rest.slug}`);
 }
 
+function publicIdFor(kind: ImagenLocalKind): string {
+  return kind === 'logo' ? 'logo' : 'cover';
+}
+
+function entregaOpts(kind: ImagenLocalKind, version: number | string) {
+  if (kind === 'logo') {
+    return { width: 400, height: 400, crop: 'fill' as const, version };
+  }
+  return { width: 1400, height: 900, crop: 'fill' as const, version };
+}
+
 /**
  * Genera firma de Cloudinary para que el browser suba directo (sin pasar
  * el archivo por nuestro server). El public_id es fijo por restaurante
- * (`cover`) para que un reemplazo pise el asset anterior.
+ * (`cover` o `logo`) para que un reemplazo pise el asset anterior.
  */
-export async function obtenerFirmaUploadImagenAction() {
+export async function obtenerFirmaUploadImagenAction(kind: ImagenLocalKind = 'cover') {
   try {
     const session = await assertAdminSession();
     if (!session) return { success: false as const, message: 'No autorizado' };
 
+    const k: ImagenLocalKind = kind === 'logo' ? 'logo' : 'cover';
     const timestamp = Math.floor(Date.now() / 1000);
     const folder = folderRestaurante(session.restauranteId);
-    // Mismo public_id → overwrite natural al re-subir.
-    const publicId = 'cover';
+    const publicId = publicIdFor(k);
 
     const firmado = firmarUpload({ folder, publicId, timestamp });
-    return { success: true as const, ...firmado };
+    return { success: true as const, kind: k, ...firmado };
   } catch (error) {
     console.error('[obtenerFirmaUploadImagenAction]', error);
     return {
@@ -67,6 +81,7 @@ export async function obtenerFirmaUploadImagenAction() {
  */
 export async function guardarImagenLocalAction(input: {
   publicId: string;
+  kind?: ImagenLocalKind;
   /**
    * Versión que devuelve Cloudinary en el upload. Va en la URL (`/v{version}/`)
    * para que al re-subir con el mismo public_id el browser/CDN no sirvan la vieja.
@@ -79,6 +94,7 @@ export async function guardarImagenLocalAction(input: {
     const session = await assertAdminSession();
     if (!session) return { success: false as const, message: 'No autorizado' };
 
+    const kind: ImagenLocalKind = input.kind === 'logo' ? 'logo' : 'cover';
     const publicId = (input.publicId ?? '').trim();
     if (!publicId) return { success: false as const, message: 'public_id inválido' };
 
@@ -90,53 +106,85 @@ export async function guardarImagenLocalAction(input: {
 
     // Fallback a timestamp si el cliente no mandó version (no debería pasar).
     const version = input.version ?? Math.floor(Date.now() / 1000);
-    const imagenUrl = urlEntrega(publicId, {
-      width: 1400,
-      height: 900,
-      crop: 'fill',
-      version,
-    });
+    const imagenUrl = urlEntrega(publicId, entregaOpts(kind, version));
 
     const [prev] = await db
-      .select({ imagenPublicId: landingConfig.imagenPublicId })
+      .select({
+        imagenPublicId: landingConfig.imagenPublicId,
+        logoPublicId: landingConfig.logoPublicId,
+      })
       .from(landingConfig)
       .where(eq(landingConfig.restauranteId, session.restauranteId))
       .limit(1);
 
     const now = new Date();
-    await withTenant(claimsFromSession(session), (tx) =>
-      tx
-        .insert(landingConfig)
-        .values({
-          restauranteId: session.restauranteId,
-          imagenUrl,
-          imagenPublicId: publicId,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: landingConfig.restauranteId,
-          set: {
+    if (kind === 'logo') {
+      await withTenant(claimsFromSession(session), (tx) =>
+        tx
+          .insert(landingConfig)
+          .values({
+            restauranteId: session.restauranteId,
+            logoUrl: imagenUrl,
+            logoPublicId: publicId,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: landingConfig.restauranteId,
+            set: {
+              logoUrl: imagenUrl,
+              logoPublicId: publicId,
+              updatedAt: now,
+            },
+          }),
+      );
+      if (prev?.logoPublicId && prev.logoPublicId !== publicId) {
+        const del = await borrarImagenCloudinary(prev.logoPublicId);
+        if (!del.ok) {
+          console.warn(
+            '[guardarImagenLocalAction] no se pudo borrar logo anterior',
+            prev.logoPublicId,
+            del.result,
+          );
+        }
+      }
+    } else {
+      await withTenant(claimsFromSession(session), (tx) =>
+        tx
+          .insert(landingConfig)
+          .values({
+            restauranteId: session.restauranteId,
             imagenUrl,
             imagenPublicId: publicId,
             updatedAt: now,
-          },
-        }),
-    );
-
-    // Mismo public_id (`…/cover`) se pisa con overwrite; si cambió, borramos el anterior.
-    if (prev?.imagenPublicId && prev.imagenPublicId !== publicId) {
-      const del = await borrarImagenCloudinary(prev.imagenPublicId);
-      if (!del.ok) {
-        console.warn(
-          '[guardarImagenLocalAction] no se pudo borrar asset anterior',
-          prev.imagenPublicId,
-          del.result,
-        );
+          })
+          .onConflictDoUpdate({
+            target: landingConfig.restauranteId,
+            set: {
+              imagenUrl,
+              imagenPublicId: publicId,
+              updatedAt: now,
+            },
+          }),
+      );
+      if (prev?.imagenPublicId && prev.imagenPublicId !== publicId) {
+        const del = await borrarImagenCloudinary(prev.imagenPublicId);
+        if (!del.ok) {
+          console.warn(
+            '[guardarImagenLocalAction] no se pudo borrar asset anterior',
+            prev.imagenPublicId,
+            del.result,
+          );
+        }
       }
     }
 
     await revalidateLanding(session.restauranteId);
-    return { success: true as const, imagenUrl, imagenPublicId: publicId };
+    return {
+      success: true as const,
+      kind,
+      imagenUrl,
+      imagenPublicId: publicId,
+    };
   } catch (error) {
     console.error('[guardarImagenLocalAction]', error);
     return { success: false as const, message: 'No se pudo guardar la imagen' };
@@ -144,21 +192,27 @@ export async function guardarImagenLocalAction(input: {
 }
 
 /**
- * Quita la portada del local: primero destruye el asset en Cloudinary
- * (`uploader.destroy`) y solo si eso sale bien limpia la DB.
+ * Quita la portada o el logo: primero destruye el asset en Cloudinary
+ * y solo si eso sale bien limpia la DB.
  */
-export async function eliminarImagenLocalAction() {
+export async function eliminarImagenLocalAction(kind: ImagenLocalKind = 'cover') {
   try {
     const session = await assertAdminSession();
     if (!session) return { success: false as const, message: 'No autorizado' };
 
+    const k: ImagenLocalKind = kind === 'logo' ? 'logo' : 'cover';
+
     const [prev] = await db
-      .select({ imagenPublicId: landingConfig.imagenPublicId })
+      .select({
+        imagenPublicId: landingConfig.imagenPublicId,
+        logoPublicId: landingConfig.logoPublicId,
+      })
       .from(landingConfig)
       .where(eq(landingConfig.restauranteId, session.restauranteId))
       .limit(1);
 
-    const publicId = prev?.imagenPublicId?.trim() ?? '';
+    const publicId =
+      (k === 'logo' ? prev?.logoPublicId : prev?.imagenPublicId)?.trim() ?? '';
 
     // 1) Borrar en Cloudinary primero para no dejar huérfanos.
     if (publicId) {
@@ -174,24 +228,45 @@ export async function eliminarImagenLocalAction() {
 
     // 2) Limpiar referencia en DB.
     const now = new Date();
-    await withTenant(claimsFromSession(session), (tx) =>
-      tx
-        .insert(landingConfig)
-        .values({
-          restauranteId: session.restauranteId,
-          imagenUrl: '',
-          imagenPublicId: '',
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: landingConfig.restauranteId,
-          set: {
+    if (k === 'logo') {
+      await withTenant(claimsFromSession(session), (tx) =>
+        tx
+          .insert(landingConfig)
+          .values({
+            restauranteId: session.restauranteId,
+            logoUrl: '',
+            logoPublicId: '',
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: landingConfig.restauranteId,
+            set: {
+              logoUrl: '',
+              logoPublicId: '',
+              updatedAt: now,
+            },
+          }),
+      );
+    } else {
+      await withTenant(claimsFromSession(session), (tx) =>
+        tx
+          .insert(landingConfig)
+          .values({
+            restauranteId: session.restauranteId,
             imagenUrl: '',
             imagenPublicId: '',
             updatedAt: now,
-          },
-        }),
-    );
+          })
+          .onConflictDoUpdate({
+            target: landingConfig.restauranteId,
+            set: {
+              imagenUrl: '',
+              imagenPublicId: '',
+              updatedAt: now,
+            },
+          }),
+      );
+    }
 
     await revalidateLanding(session.restauranteId);
     return { success: true as const, deletedFromCloudinary: Boolean(publicId) };

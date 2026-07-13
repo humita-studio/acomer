@@ -11,7 +11,9 @@ import {
   ExternalLink,
   Sparkles,
   Store,
+  Users,
   UtensilsCrossed,
+  Wallet,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,6 +31,8 @@ const ICONS: Record<OnboardingStepId, LucideIcon> = {
   menu: UtensilsCrossed,
   mesas: Armchair,
   pagos: CreditCard,
+  caja: Wallet,
+  staff: Users,
   landing: Store,
 };
 
@@ -54,7 +58,7 @@ function setCollapsed(tenantId: string, value: boolean) {
 }
 
 /**
- * Checklist de primer día: menú → mesas → MP → landing.
+ * Checklist de primer día: menú → mesas → MP → caja (+ staff/landing opcionales).
  * La X solo lo **minimiza** (queda una barra para reabrir).
  * Se oculta del todo solo cuando lo obligatorio está completo.
  */
@@ -147,11 +151,12 @@ export function OnboardingChecklist({
                 <Sparkles className="size-4" aria-hidden />
               </span>
               <h2 className="font-heading text-base font-semibold sm:text-lg">
-                Configurá {nombreRestaurante} en 3 pasos
+                Configurá {nombreRestaurante} en {status.total} pasos
               </h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              Cuando termines, tus clientes ya pueden pedir por QR y pagar.
+              Cuando termines, tus clientes ya pueden pedir por QR y cobrás en
+              caja o con Mercado Pago.
             </p>
           </div>
           <Button

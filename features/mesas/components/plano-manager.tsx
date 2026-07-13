@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
+import { useConfirm } from '@/shared/hooks/use-confirm';
 import type { PlanoData } from '@/features/mesas/plano-data';
 import { getPlanoDataAction } from '@/features/mesas/plano-actions';
 import {
@@ -64,6 +65,7 @@ export function PlanoManager({
   const canTakeOrders = hasPermission(userRole as RoleType, 'canTakeOrders');
   const esMozo = userRole === 'mozo';
   const queryClient = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
   const [qrOpen, setQrOpen] = useState(false);
   // Mozos ven por defecto solo sus mesas; admin/owner ven todas.
   const [filtroMozo, setFiltroMozo] = useState<FiltroMozo>(esMozo ? 'mias' : 'todas');
@@ -213,9 +215,12 @@ export function PlanoManager({
     if (dirty || guardando) {
       const ok = await acciones.flushSave();
       if (!ok) {
-        const forzar = confirm(
-          'No se pudieron guardar todos los cambios. ¿Salir igual y perder lo pendiente?',
-        );
+        const forzar = await confirm({
+          title: 'No se pudieron guardar todos los cambios',
+          description: '¿Salir igual y perder lo pendiente?',
+          confirmLabel: 'Salir sin guardar',
+          variant: 'destructive',
+        });
         if (!forzar) return;
       }
     }
@@ -241,6 +246,8 @@ export function PlanoManager({
 
   return (
     <div className="space-y-6">
+      {acciones.dialogs}
+      {confirmDialog}
       {/* Page header — Figma Admin / Mesas */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">

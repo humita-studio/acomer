@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { queryKeys } from '@/shared/query/keys';
 import {
   obtenerVariantesMenu,
@@ -50,8 +51,9 @@ export function useAgregarVariante() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al agregar la variante');
+      toast.error(error instanceof Error ? error.message : 'Error al agregar la variante');
     },
+    onSuccess: () => toast.success('Variante agregada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -79,8 +81,9 @@ export function useEditarPrecioVariante() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al actualizar el precio');
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar el precio');
     },
+    onSuccess: () => toast.success('Precio de variante actualizado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -108,8 +111,9 @@ export function useEliminarVariante() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al eliminar la variante');
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar la variante');
     },
+    onSuccess: () => toast.success('Variante eliminada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -139,8 +143,9 @@ export function useMarcarVarianteDefault() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al actualizar la variante por defecto');
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar la variante por defecto');
     },
+    onSuccess: () => toast.success('Variante predeterminada actualizada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },

@@ -28,7 +28,7 @@ test.describe('Landing marketing', () => {
         timeout: 15_000,
       });
     } else {
-      // Fallback: el copy de 14 días no debe aparecer
+      // Fallback: sin sección de precios, no inventar trial viejo de 14 días
       await expect(page.getByText(/14 días/i)).toHaveCount(0);
     }
   });

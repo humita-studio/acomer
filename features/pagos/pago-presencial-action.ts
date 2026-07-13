@@ -40,7 +40,7 @@ export async function pedirCuentaPresencialAction(
     }
 
     // 1 + 2 en paralelo bajo RLS público del tenant.
-    const [sesion, pedidosMesa] = await withPublicTenant(tenantId, (tx) =>
+    const [sesion, pedidosMesa, entrega] = await withPublicTenant(tenantId, (tx) =>
       Promise.all([
         tx.query.sesionesMesa.findFirst({
           where: (t, { eq, and }) => and(eq(t.id, sesionMesaId), eq(t.restauranteId, tenantId)),
@@ -48,6 +48,10 @@ export async function pedirCuentaPresencialAction(
         tx.query.pedidos.findMany({
           where: (t, { eq, and, ne }) =>
             and(eq(t.sesionMesaId, sesionMesaId), ne(t.estado, 'Cancelado')),
+        }),
+        tx.query.datosEntrega.findFirst({
+          where: (t, { eq }) => eq(t.sesionMesaId, sesionMesaId),
+          columns: { costoEnvio: true },
         }),
       ]),
     );
@@ -60,7 +64,9 @@ export async function pedirCuentaPresencialAction(
       return { success: false, message: 'No hay pedidos para cobrar.' };
     }
 
-    const totalPedidos = pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0);
+    const costoEnvio = Number(entrega?.costoEnvio ?? 0) || 0;
+    const totalPedidos =
+      pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0) + costoEnvio;
 
     // 3: pagos ya aprobados y tx pendiente existente en paralelo.
     const [pagosAprobados, existingTx] = await Promise.all([

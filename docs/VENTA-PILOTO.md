@@ -11,12 +11,15 @@ Usalo en demos, onboarding y handoff al dueño.
 > cocina en vivo, mesas, takeaway/delivery, reservas y cobros con Mercado Pago
 > — todo en un solo panel.
 
-**Sí podés decir:** 14 días de prueba reales al registrarse; después pagan el mes
-con Mercado Pago desde **Plan y facturación**. Básico limita a 15 mesas.
+**Sí podés decir:** gratis por ahora, sin tarjeta y con **todo el producto**
+(mesas, reservas, online, MP, promos). Cuando habilitemos cobro, se avisa.
 
-**No digas (por ahora):** multi-sucursal, API pública, facturación AFIP automática.
+**No digas (por ahora):** multi-sucursal, API pública, facturación AFIP automática;
+tampoco digas que Pro “incluye” cosas que Básico no (hoy no hay gate por plan).
 
-**Pilotos gratis:** `billing_status = 'exempt'` en ese restaurante (SQL).
+**Flag de producto:** `BILLING_COBRO_HABILITADO = false` en
+`features/billing/plans.ts` → sin hard-gate, sin límite de mesas, sin banner de pago.
+Cuando cobremos, ponerlo en `true` y reintroducir features/límites reales.
 
 ---
 
@@ -24,7 +27,7 @@ con Mercado Pago desde **Plan y facturación**. Básico limita a 15 mesas.
 
 ### Setup (antes de la call)
 
-- [ ] Tenant de demo con menú real (fotos + precios)
+- [ ] Tenant de demo con menú real (nombres + precios; sin fotos de plato por ahora)
 - [ ] ≥ 4 mesas con QR
 - [ ] Mercado Pago de prueba o real vinculado
 - [ ] Caja abierta en el panel
@@ -56,17 +59,17 @@ con Mercado Pago desde **Plan y facturación**. Básico limita a 15 mesas.
 
 Orden recomendado (el checklist del dashboard lo guía):
 
-1. **Menú** — al menos 8–10 productos (o import CSV)
+1. **Menú** — al menos 8–10 productos (o import CSV real desde plantilla)
 2. **Mesas** — crear salón + imprimir QRs (`Generar QR` → Imprimir todos)
 3. **Mercado Pago** — vincular en Configuración → Pagos
-4. **Caja** — abrir turno con fondo inicial
+4. **Caja** — abrir turno con fondo inicial (checklist del dashboard lo pide)
 5. **Probar** — un pedido de mesa de punta a punta
 6. **Staff** — invitar mozo/cocina (contraseña temporal; al entrar cambian clave)
 7. **Online / reservas** — activar solo si los van a usar esa semana
 
 Criterio de “listo”:
 
-> Dueño solo, &lt; 45 min: registra → menú → mesas → MP → pedido de mesa → cobro visible en caja.
+> Dueño solo, &lt; 45 min: registra → menú → mesas → MP → caja → pedido de mesa → cobro visible en caja.
 
 ---
 
@@ -92,8 +95,8 @@ Webhook MP: URL pública + `MP_WEBHOOK_SECRET` en Vercel (ver `DEPLOY.md`).
 ### Oferta piloto sugerida
 
 - Setup asistido (1 h remota o presencial)
-- 14 días trial automáticos; o `exempt` si regalás el mes
-- Self-serve: Básico $14.900 / Pro $29.900 vía MP en `/admin/billing`
+- **Gratis** hasta habilitar cobro (flag `BILLING_COBRO_HABILITADO`)
+- Precios de referencia (cuando se cobre): Básico $14.900 / Pro $29.900
 - Soporte por WhatsApp / email que **vos** atiendas
 
 ### No prometer

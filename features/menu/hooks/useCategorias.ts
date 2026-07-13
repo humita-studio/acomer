@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { queryKeys } from '@/shared/query/keys';
 import {
   obtenerCategoriasMenu,
@@ -47,8 +48,9 @@ export function useCrearCategoria() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al crear la categoría');
+      toast.error(error instanceof Error ? error.message : 'Error al crear la categoría');
     },
+    onSuccess: () => toast.success('Categoría creada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -86,8 +88,9 @@ export function useEditarCategoria() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al actualizar la categoría');
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar la categoría');
     },
+    onSuccess: () => toast.success('Categoría actualizada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -115,8 +118,9 @@ export function useEliminarCategoria() {
     },
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
-      alert(error instanceof Error ? error.message : 'Error al eliminar la categoría');
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar la categoría');
     },
+    onSuccess: () => toast.success('Categoría eliminada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },

@@ -1,13 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { CheckCheck, Copy, ExternalLink } from 'lucide-react';
+import {
+  CheckCheck,
+  Copy,
+  ExternalLink,
+  Map as MapIcon,
+  Pencil,
+  CheckCircle2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Switch } from '@/shared/ui/switch';
+import { Textarea } from '@/shared/ui/textarea';
 import {
   Sheet,
   SheetContent,
@@ -16,8 +25,19 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/shared/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/ui/dialog';
 import { actualizarDeliveryConfigAction } from '@/features/pedidos-online/deliveryConfigActions';
 import type { DeliveryConfig, AgregadosHasta } from '@/features/pedidos-online/deliveryConfig';
+import { ofreceDelivery } from '@/features/pedidos-online/deliveryConfig';
+import type { ZonaPoligono } from '@/features/pedidos-online/zonaMapa';
+import { ZonaEntregaMapaLazy } from '@/features/pedidos-online/components/ZonaEntregaMapaLazy';
 import { cn } from '@/shared/lib/utils';
 
 const MODO_OPCIONES: { value: DeliveryConfig['modo']; label: string; desc: string }[] = [
@@ -76,17 +96,20 @@ function RadioCard({
   );
 }
 
-/** Sheet para configurar los pedidos online (modalidades y agregados). */
+/** Sheet para configurar los pedidos online (modalidades, zona y agregados). */
 export function DeliveryConfigSheet({
   open,
   onOpenChange,
   initialConfig,
   publicPedirUrl,
+  direccionLocal,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initialConfig: DeliveryConfig;
   publicPedirUrl?: string;
+  /** Dirección del local (landing) para centrar el mapa al dibujar. */
+  direccionLocal?: string;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -97,6 +120,7 @@ export function DeliveryConfigSheet({
           <ConfigBody
             initialConfig={initialConfig}
             publicPedirUrl={publicPedirUrl}
+            direccionLocal={direccionLocal}
             onClose={() => onOpenChange(false)}
           />
         )}
@@ -105,24 +129,142 @@ export function DeliveryConfigSheet({
   );
 }
 
+/** Modal grande solo para dibujar/editar la zona en el mapa. */
+function ZonaMapaDialog({
+  open,
+  onOpenChange,
+  value,
+  onConfirm,
+  direccionLocal,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  value: ZonaPoligono | null;
+  onConfirm: (poly: ZonaPoligono | null) => void;
+  direccionLocal?: string;
+}) {
+  // Borrador local: no pisa la config hasta "Usar esta zona".
+  const [draft, setDraft] = useState<ZonaPoligono | null>(value);
+  // Remount del mapa cada vez que se abre (evita estado viejo / tamaño 0).
+  const [openKey, setOpenKey] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(value);
+    setOpenKey((k) => k + 1);
+    // Solo al abrir el modal; no re-sync si `value` cambia estando abierto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex max-h-[min(92vh,900px)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"
+        // Por encima del Sheet de config (también z-50).
+        style={{ zIndex: 60 }}
+        showCloseButton
+      >
+        <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12 text-left">
+          <DialogTitle>Zona de entrega en el mapa</DialogTitle>
+          <DialogDescription>
+            Dibujá el área donde entregás. Tocá para marcar puntos, cerrá la zona y arrastrá
+            los vértices para ajustar.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {open ? (
+            <ZonaEntregaMapaLazy
+              key={openKey}
+              mode="edit"
+              value={draft}
+              onChange={setDraft}
+              direccionLocal={direccionLocal}
+              height="min(58vh, 520px)"
+            />
+          ) : null}
+        </div>
+
+        <DialogFooter className="shrink-0 flex-row flex-wrap justify-between gap-2 border-t px-5 py-3 sm:justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => setDraft(null)}
+            disabled={!draft}
+          >
+            Borrar zona
+          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                onConfirm(draft);
+                onOpenChange(false);
+                toast.success(
+                  draft ? 'Zona lista. Guardá la configuración para aplicar.' : 'Zona quitada del borrador.',
+                );
+              }}
+            >
+              Usar esta zona
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ConfigBody({
   initialConfig,
   publicPedirUrl,
+  direccionLocal,
   onClose,
 }: {
   initialConfig: DeliveryConfig;
   publicPedirUrl?: string;
+  direccionLocal?: string;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [activo, setActivo] = useState(initialConfig.activo);
   const [modo, setModo] = useState<DeliveryConfig['modo']>(initialConfig.modo);
   const [agregadosHasta, setAgregadosHasta] = useState<AgregadosHasta>(initialConfig.agregadosHasta);
+  const [zonaEntrega, setZonaEntrega] = useState(initialConfig.zonaEntrega);
+  const [zonaPoligono, setZonaPoligono] = useState<ZonaPoligono | null>(
+    initialConfig.zonaPoligono,
+  );
+  const [mapaOpen, setMapaOpen] = useState(false);
+  const [costoEnvio, setCostoEnvio] = useState(
+    initialConfig.costoEnvio > 0 ? String(initialConfig.costoEnvio) : '',
+  );
+  const [pedidoMinimo, setPedidoMinimo] = useState(
+    initialConfig.pedidoMinimo > 0 ? String(initialConfig.pedidoMinimo) : '',
+  );
+  const [tiempoEstimadoMin, setTiempoEstimadoMin] = useState(
+    initialConfig.tiempoEstimadoMin != null ? String(initialConfig.tiempoEstimadoMin) : '',
+  );
   const [copiado, setCopiado] = useState(false);
+
+  const muestraEnvio = ofreceDelivery({ modo });
 
   const guardar = useMutation({
     mutationFn: async () => {
-      const res = await actualizarDeliveryConfigAction({ activo, modo, agregadosHasta });
+      const res = await actualizarDeliveryConfigAction({
+        activo,
+        modo,
+        agregadosHasta,
+        zonaEntrega,
+        zonaPoligono,
+        costoEnvio: Number(costoEnvio) || 0,
+        pedidoMinimo: Number(pedidoMinimo) || 0,
+        tiempoEstimadoMin: tiempoEstimadoMin.trim()
+          ? Number(tiempoEstimadoMin)
+          : null,
+      });
       if (!res.success) throw new Error(res.message);
       return res;
     },
@@ -139,7 +281,7 @@ function ConfigBody({
       <SheetHeader className="border-b">
         <SheetTitle>Configuración de pedidos online</SheetTitle>
         <SheetDescription>
-          Activá el canal, elegí retiro y/o envío, y compartí el link con tus clientes.
+          Activá el canal, elegí retiro y/o envío, definí la zona y compartí el link.
         </SheetDescription>
       </SheetHeader>
 
@@ -208,6 +350,128 @@ function ConfigBody({
           ))}
         </div>
 
+        {/* Zona y reglas de envío */}
+        {muestraEnvio ? (
+          <div className="space-y-4 rounded-lg border p-4">
+            <div>
+              <Label className="text-sm font-medium">Zona de entrega</Label>
+              <p className="text-sm text-muted-foreground">
+                Dibujá en el mapa el área donde entregás. Se abre en un modal grande.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMapaOpen(true)}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-xl border-2 border-dashed p-4 text-left transition-colors',
+                zonaPoligono
+                  ? 'border-primary/40 bg-primary/5 hover:bg-primary/10'
+                  : 'border-border hover:border-primary/40 hover:bg-muted/40',
+              )}
+            >
+              <span
+                className={cn(
+                  'flex size-11 shrink-0 items-center justify-center rounded-xl',
+                  zonaPoligono ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                )}
+              >
+                <MapIcon className="size-5" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                {zonaPoligono ? (
+                  <>
+                    <span className="flex items-center gap-1.5 text-sm font-semibold">
+                      <CheckCircle2 className="size-4 text-primary" aria-hidden />
+                      Zona dibujada
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Tocá para editar o arrastrar los puntos en el mapa
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="block text-sm font-semibold">Dibujar zona en el mapa</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {direccionLocal
+                        ? `Se centra cerca de: ${direccionLocal}`
+                        : 'Abrí el mapa y marcá el área de entrega'}
+                    </span>
+                  </>
+                )}
+              </span>
+              <Pencil className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="zona-texto" className="text-sm font-medium">
+                Descripción de la zona (opcional)
+              </Label>
+              <Textarea
+                id="zona-texto"
+                value={zonaEntrega}
+                onChange={(e) => setZonaEntrega(e.target.value)}
+                maxLength={500}
+                rows={2}
+                placeholder="Ej: Palermo, Villa Crespo y alrededores"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="costo-envio" className="text-sm font-medium">
+                  Costo de envío ($)
+                </Label>
+                <Input
+                  id="costo-envio"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="1"
+                  value={costoEnvio}
+                  onChange={(e) => setCostoEnvio(e.target.value)}
+                  placeholder="0 = gratis"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pedido-minimo" className="text-sm font-medium">
+                  Pedido mínimo ($)
+                </Label>
+                <Input
+                  id="pedido-minimo"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="1"
+                  value={pedidoMinimo}
+                  onChange={(e) => setPedidoMinimo(e.target.value)}
+                  placeholder="0 = sin mínimo"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="tiempo-estimado" className="text-sm font-medium">
+                Tiempo estimado (minutos)
+              </Label>
+              <Input
+                id="tiempo-estimado"
+                type="number"
+                inputMode="numeric"
+                min={5}
+                max={1440}
+                step={5}
+                value={tiempoEstimadoMin}
+                onChange={(e) => setTiempoEstimadoMin(e.target.value)}
+                placeholder="Ej: 45 (opcional)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Se usa como referencia de llegada/listo. Vacío = no se muestra.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {/* Agregados después de confirmar */}
         <div className="space-y-2">
           <div>
@@ -237,6 +501,14 @@ function ConfigBody({
           {guardar.isPending ? 'Guardando…' : 'Guardar configuración'}
         </Button>
       </SheetFooter>
+
+      <ZonaMapaDialog
+        open={mapaOpen}
+        onOpenChange={setMapaOpen}
+        value={zonaPoligono}
+        onConfirm={setZonaPoligono}
+        direccionLocal={direccionLocal}
+      />
     </>
   );
 }

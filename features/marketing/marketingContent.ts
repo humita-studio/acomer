@@ -19,6 +19,17 @@ export const NAV_LINKS = [
   { href: '#como-funciona', label: 'Cómo funciona' },
 ] as const;
 
+/**
+ * Contacto comercial / soporte (editable acá hasta tener CRM).
+ * WhatsApp sin + ni espacios; email de ventas.
+ */
+export const CONTACTO = {
+  email: 'hola@acomer.com.ar',
+  /** Solo dígitos con código país, ej. 54911… — vacío = no mostrar WhatsApp */
+  whatsapp: '',
+  label: 'Escribinos',
+} as const;
+
 export type Feature = {
   icon: LucideIcon;
   titulo: string;
@@ -105,39 +116,26 @@ export type Plan = {
 };
 
 /**
- * Planes de la landing (alineados a features/billing/plans.ts).
- * Trial real: 14 días al registrarse.
+ * Oferta de la landing. Hoy el producto es free hasta que habilitemos cobro
+ * (`BILLING_COBRO_HABILITADO` en features/billing/plans.ts). Copy alineado a
+ * lo que el código realmente da: todo el producto, sin límites de plan.
  */
 export const PLANES: Plan[] = [
   {
-    nombre: 'Básico',
-    precio: '$ 14.900',
-    periodo: '/mes',
-    descripcion: 'Para arrancar con lo esencial.',
+    nombre: 'Gratis',
+    precio: '$ 0',
+    periodo: 'por ahora',
+    descripcion:
+      'Todo el producto sin tarjeta ni límites de plan. Cuando habilitemos cobro, te avisamos.',
     features: [
       'Carta digital con QR',
-      'Hasta 15 mesas',
-      'Cocina y cobros',
-      'Reportes del día',
-      '14 días de prueba',
-    ],
-    cta: 'Probar 14 días',
-    ctaHref: '/register',
-  },
-  {
-    nombre: 'Pro',
-    precio: '$ 29.900',
-    periodo: '/mes',
-    descripcion: 'El más elegido por restaurantes en marcha.',
-    features: [
-      'Todo lo de Básico',
       'Mesas ilimitadas',
-      'Reservas + pedidos online',
-      'Cobros con Mercado Pago',
+      'Cocina y cobros (efectivo / MP)',
+      'Reservas y pedidos online',
       'Promociones y reportes',
-      '14 días de prueba',
+      'Roles de staff',
     ],
-    cta: 'Probar 14 días',
+    cta: 'Crear mi local gratis',
     ctaHref: '/register',
     destacado: true,
   },
@@ -146,7 +144,7 @@ export const PLANES: Plan[] = [
     precio: 'Consultar',
     descripcion: 'Setup asistido y acompañamiento para tu local.',
     features: [
-      'Todo lo de Pro',
+      'Todo lo de Gratis',
       'Onboarding dedicado',
       'Soporte prioritario',
       'Prioridad en el roadmap',

@@ -101,7 +101,7 @@ Usá el mismo `MP_WEBHOOK_SECRET` si es la misma aplicación de MP.
 
 Sin `MP_BILLING_ACCESS_TOKEN`:
 
-- el **trial de 14 días** igual funciona  
+- el **trial de 3 meses** igual funciona  
 - el botón “Pagar con Mercado Pago” avisa que falta configurar cobro  
 
 ### Cloudinary (fotos del local / menú)
@@ -156,10 +156,26 @@ node scripts/apply-migration.mjs drizzle/0026_billing.sql
 
 O pegá el SQL en el SQL Editor de Supabase.
 
-**Locales ya existentes** tras la migración: quedan en trial ~14 días (backfill del SQL).  
-**Registros nuevos**: trial 14 días + plan Pro por defecto.
+**Locales ya existentes** tras la migración: quedan en trial según el backfill del SQL.  
+**Registros nuevos**: plan Pro + `billing_status = trial` (el trial se ignora mientras el cobro esté off).
 
-### Pilotos sin cobro
+### Producto free (estado actual)
+
+En `features/billing/plans.ts`:
+
+```ts
+export const BILLING_COBRO_HABILITADO = false;
+```
+
+Con eso en `false`:
+
+- `evaluateBilling` siempre da `accessOk`, sin banner de pago y sin `maxMesas`
+- Landing y `/admin/billing` hablan de gratis, no de Básico vs Pro
+- `iniciarPagoSuscripcionAction` rechaza cobros de suscripción
+
+Cuando el cobro SaaS esté listo: poner el flag en `true` y alinear features/límites reales (mesas, reservas, etc.) con el copy.
+
+### Pilotos sin cobro (cuando el flag esté en true)
 
 ```sql
 UPDATE restaurantes
@@ -233,4 +249,4 @@ Online / reservas: activar en cada módulo si los usan.
 
 ---
 
-*Última actualización alineada al billing self-serve (trial 14 días + Checkout Pro SaaS).*
+*Última actualización alineada al billing self-serve (trial 3 meses + Checkout Pro SaaS).*

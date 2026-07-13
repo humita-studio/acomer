@@ -76,9 +76,21 @@ export function BillingManager({
       <div className="space-y-1">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Plan y facturación</h1>
         <p className="text-sm text-muted-foreground">
-          Gestioná la suscripción de acomer para {view.planNombre.toLowerCase() === view.plan ? 'tu local' : `el plan ${view.planNombre}`}.
+          {view.freeMode
+            ? 'acomer es gratis por ahora. Cuando habilitemos el cobro, vas a poder elegir plan acá.'
+            : `Gestioná la suscripción de acomer para ${view.planNombre.toLowerCase() === view.plan ? 'tu local' : `el plan ${view.planNombre}`}.`}
         </p>
       </div>
+
+      {view.freeMode && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+          <p className="font-medium text-foreground">Producto free · sin límites de plan</p>
+          <p className="mt-1 text-muted-foreground">
+            Tenés acceso a todo (mesas, reservas, pedidos online, Mercado Pago, promos).
+            No hace falta pagar ni elegir plan hasta que activemos el cobro.
+          </p>
+        </div>
+      )}
 
       {pagoState === 'exito' && (
         <div className="rounded-xl border border-success/30 bg-success-subtle p-4 text-sm text-success-foreground">
@@ -104,27 +116,34 @@ export function BillingManager({
             <p className="mt-1 text-sm text-muted-foreground">{view.label}</p>
           </div>
           <Badge variant={view.accessOk ? 'secondary' : 'destructive'}>
-            {view.planNombre}
+            {view.freeMode ? 'Gratis' : view.planNombre}
           </Badge>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-lg bg-muted/50 p-3">
-              <p className="text-xs text-muted-foreground">Prueba hasta</p>
-              <p className="font-medium">
-                {view.trialEndsAt ? formatFecha(view.trialEndsAt) : '—'}
-              </p>
+          {!view.freeMode && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Prueba hasta</p>
+                <p className="font-medium">
+                  {view.trialEndsAt ? formatFecha(view.trialEndsAt) : '—'}
+                </p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Período pago hasta</p>
+                <p className="font-medium">
+                  {view.periodEndsAt ? formatFecha(view.periodEndsAt) : '—'}
+                </p>
+              </div>
             </div>
-            <div className="rounded-lg bg-muted/50 p-3">
-              <p className="text-xs text-muted-foreground">Período pago hasta</p>
-              <p className="font-medium">
-                {view.periodEndsAt ? formatFecha(view.periodEndsAt) : '—'}
-              </p>
-            </div>
-          </div>
+          )}
           {view.maxMesas != null && (
             <p className="text-muted-foreground">
               Límite del plan: hasta <strong>{view.maxMesas} mesas</strong>.
+            </p>
+          )}
+          {view.freeMode && (
+            <p className="text-muted-foreground">
+              Sin límite de mesas ni de funciones. Todo el producto incluido.
             </p>
           )}
           {!view.accessOk && (
@@ -135,88 +154,92 @@ export function BillingManager({
         </CardContent>
       </Card>
 
-      <div className="space-y-3">
-        <h2 className="font-heading text-base font-semibold">Elegí tu plan</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {(Object.keys(PLANES_SAAS) as PlanId[]).map((id) => {
-            const p = PLANES_SAAS[id];
-            const selected = planSel === id || (view.plan === id && id === 'a_medida');
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => elegir(id)}
-                disabled={pending || paying}
-                className={cn(
-                  'flex flex-col rounded-2xl border p-4 text-left transition-colors',
-                  selected
-                    ? 'border-primary ring-1 ring-primary bg-primary/5'
-                    : 'border-border bg-card hover:border-primary/40',
-                  p.destacado && 'sm:scale-[1.02]',
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-display font-semibold">{p.nombre}</span>
-                  {p.destacado && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-primary">
-                      <Sparkles className="size-3" /> Popular
-                    </span>
+      {!view.freeMode && (
+        <>
+          <div className="space-y-3">
+            <h2 className="font-heading text-base font-semibold">Elegí tu plan</h2>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {(Object.keys(PLANES_SAAS) as PlanId[]).map((id) => {
+                const p = PLANES_SAAS[id];
+                const selected = planSel === id || (view.plan === id && id === 'a_medida');
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => elegir(id)}
+                    disabled={pending || paying}
+                    className={cn(
+                      'flex flex-col rounded-2xl border p-4 text-left transition-colors',
+                      selected
+                        ? 'border-primary ring-1 ring-primary bg-primary/5'
+                        : 'border-border bg-card hover:border-primary/40',
+                      p.destacado && 'sm:scale-[1.02]',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-display font-semibold">{p.nombre}</span>
+                      {p.destacado && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-primary">
+                          <Sparkles className="size-3" /> Popular
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 font-display text-2xl font-semibold">
+                      {p.precioMensual != null ? formatPeso(p.precioMensual) : 'Consultar'}
+                      {p.precioMensual != null && (
+                        <span className="text-sm font-normal text-muted-foreground">/mes</span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{p.descripcion}</p>
+                    <ul className="mt-3 flex-1 space-y-1.5">
+                      {p.features.map((f) => (
+                        <li key={f} className="flex gap-1.5 text-xs text-foreground">
+                          <Check className="mt-0.5 size-3 shrink-0 text-success" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {planSel !== 'a_medida' && (
+            <Card>
+              <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium">
+                    Pagar {PLANES_SAAS[planSel].nombre} ·{' '}
+                    {formatPeso(PLANES_SAAS[planSel].precioMensual ?? 0)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    30 días de acceso desde el pago (o se suman si ya tenés período vigente).
+                    Mercado Pago · cuenta de acomer.
+                  </p>
+                  {!view.billingConfigured && (
+                    <p className="mt-2 text-sm text-warning-foreground">
+                      Cobro online no configurado en este entorno. En producción hace falta
+                      MP_BILLING_ACCESS_TOKEN.
+                    </p>
                   )}
                 </div>
-                <p className="mt-2 font-display text-2xl font-semibold">
-                  {p.precioMensual != null ? formatPeso(p.precioMensual) : 'Consultar'}
-                  {p.precioMensual != null && (
-                    <span className="text-sm font-normal text-muted-foreground">/mes</span>
+                <Button
+                  size="lg"
+                  disabled={paying || !view.billingConfigured}
+                  onClick={() => void pagar()}
+                >
+                  {paying ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <CreditCard className="size-4" />
                   )}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{p.descripcion}</p>
-                <ul className="mt-3 flex-1 space-y-1.5">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex gap-1.5 text-xs text-foreground">
-                      <Check className="mt-0.5 size-3 shrink-0 text-success" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {planSel !== 'a_medida' && (
-        <Card>
-          <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-medium">
-                Pagar {PLANES_SAAS[planSel].nombre} ·{' '}
-                {formatPeso(PLANES_SAAS[planSel].precioMensual ?? 0)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                30 días de acceso desde el pago (o se suman si ya tenés período vigente).
-                Mercado Pago · cuenta de acomer.
-              </p>
-              {!view.billingConfigured && (
-                <p className="mt-2 text-sm text-warning-foreground">
-                  Cobro online no configurado en este entorno. En producción hace falta
-                  MP_BILLING_ACCESS_TOKEN.
-                </p>
-              )}
-            </div>
-            <Button
-              size="lg"
-              disabled={paying || !view.billingConfigured}
-              onClick={() => void pagar()}
-            >
-              {paying ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <CreditCard className="size-4" />
-              )}
-              {paying ? 'Redirigiendo…' : 'Pagar con Mercado Pago'}
-            </Button>
-          </CardContent>
-        </Card>
+                  {paying ? 'Redirigiendo…' : 'Pagar con Mercado Pago'}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <Card>

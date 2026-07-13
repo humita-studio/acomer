@@ -34,6 +34,29 @@ import {
   type PedidoCocina,
 } from '@/features/cocina/types';
 
+/** Beep corto al llegar un pedido nuevo (mismo patrón que pedidos online). */
+function beepNuevoPedido() {
+  try {
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    osc.stop(ctx.currentTime + 0.25);
+  } catch {
+    // autoplay / permisos
+  }
+}
+
 /** Destinos válidos al soltar una card (mismas reglas que el backend). */
 const DROP_VALIDO: Record<string, EstadoPedidoCocina[]> = {
   Pendiente: ['En Preparación', 'Listo'],
@@ -452,6 +475,7 @@ export function CocinaManager({
     const channel = supabase
       .channel(`admin_restaurant_${tenantId}`)
       .on('broadcast', { event: 'nuevo_pedido' }, () => {
+        beepNuevoPedido();
         void refreshActivos();
         if (historialCargado) void refreshHistorial();
       })

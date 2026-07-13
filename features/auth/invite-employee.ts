@@ -14,9 +14,17 @@ import {
 } from './validation';
 import { META_MUST_CHANGE_PASSWORD } from './auth-errors';
 
+/** Roles que se pueden asignar al invitar (nunca owner). */
+export type AssignableRole = Exclude<RoleType, 'owner'>;
+
+/** Cómo se entrega el acceso al empleado nuevo. */
+export type InviteMethod = 'temp' | 'email';
+
 export interface InviteEmployeeInput {
   email: string;
-  rol: RoleType;
+  rol: AssignableRole;
+  /** `temp` (default): contraseña temporal. `email`: link de invitación de Supabase. */
+  method?: InviteMethod;
 }
 
 export interface InviteEmployeeResult {
@@ -25,11 +33,35 @@ export interface InviteEmployeeResult {
   userId?: string;
   /**
    * Contraseña temporal generada, presente SOLO cuando se crea una cuenta
-   * nueva. El admin debe entregarla al empleado; no se guarda ni se vuelve a
-   * mostrar. Si el usuario ya existía en Auth no se incluye (conserva su clave).
+   * nueva con método `temp`. El admin debe entregarla al empleado; no se
+   * guarda ni se vuelve a mostrar. Si el usuario ya existía en Auth no se
+   * incluye (conserva su clave).
    */
   tempPassword?: string;
 }
+
+export interface ResetEmployeePasswordResult {
+  success: boolean;
+  message: string;
+  email?: string;
+  /** Contraseña temporal nueva; se muestra una sola vez. */
+  tempPassword?: string;
+}
+
+function appUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+}
+
+function inviteRedirectTo(): string {
+  return `${appUrl()}/auth/callback?next=${encodeURIComponent('/cambiar-password')}`;
+}
+
+const ROL_LABEL: Record<AssignableRole, string> = {
+  admin: 'administrador',
+  cajero: 'cajero',
+  mozo: 'mozo',
+  cocina: 'cocina',
+};
 
 /**
  * Genera una contraseña temporal legible (3 grupos de 4 caracteres, sin
@@ -54,6 +86,10 @@ function generateTempPassword(): string {
 /**
  * Invita a un empleado a unirse al restaurante.
  * Solo owner y admin pueden invitar.
+ *
+ * Métodos:
+ * - `temp` (default): crea cuenta con contraseña temporal (recomendado en local).
+ * - `email`: manda link de invitación de Supabase (requiere email configurado).
  */
 export async function inviteEmployee(
   input: InviteEmployeeInput
@@ -64,7 +100,7 @@ export async function inviteEmployee(
     if (!session || !['owner', 'admin'].includes(session.role)) {
       return {
         success: false,
-        message: 'No tienes permisos para invitar empleados',
+        message: 'No tenés permisos para invitar empleados',
       };
     }
 
@@ -76,48 +112,32 @@ export async function inviteEmployee(
       };
     }
 
+    // Solo el owner puede invitar administradores.
+    if (parsed.data.rol === 'admin' && session.role !== 'owner') {
+      return {
+        success: false,
+        message: 'Solo el propietario puede invitar administradores',
+      };
+    }
+
     // El cliente admin usa la secret key: las operaciones auth.admin requieren
     // privilegios elevados que la publishable key no tiene.
     const supabase = createSupabaseAdminClient();
     const email = parsed.data.email.trim().toLowerCase();
-    const tempPassword = generateTempPassword();
+    const method = parsed.data.method ?? 'temp';
+    const rolLabel = ROL_LABEL[parsed.data.rol];
+    const claims = claimsFromSession(session);
 
-    // 1. Buscar o crear el usuario en Supabase Auth.
-    // must_change_password: al primer login se fuerza /cambiar-password.
-    const { data: signUpData, error: signUpError } = await supabase.auth.admin.createUser({
-      email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: { [META_MUST_CHANGE_PASSWORD]: true },
-    });
-
-    // Solo hay contraseña temporal que mostrar si creamos una cuenta nueva.
-    const createdNewUser = Boolean(signUpData?.user && !signUpError);
-    let finalUserId: string | undefined = signUpData?.user?.id;
-
-    if (signUpError || !signUpData.user) {
-      // Si ya existe en Auth, lo buscamos para asociarlo a este restaurante.
-      const { data: userData, error: listError } = await supabase.auth.admin.listUsers();
-      const existingUser = userData?.users.find(
-        (u) => u.email?.toLowerCase() === email
-      );
-
-      if (!existingUser) {
-        console.error('[inviteEmployee] No se pudo crear el usuario:', signUpError, listError);
-        return {
-          success: false,
-          message: 'Error al crear la cuenta del empleado',
-        };
-      }
-
-      // Verificar si ya tiene un perfil en este restaurante
-      const existingPerfil = await withTenant(claimsFromSession(session), (tx) =>
+    // ¿Ya tiene perfil en este local?
+    const existingByEmail = await findAuthUserByEmail(supabase, email);
+    if (existingByEmail) {
+      const existingPerfil = await withTenant(claims, (tx) =>
         tx
           .select()
           .from(perfilesEmpleados)
           .where(
             and(
-              eq(perfilesEmpleados.userId, existingUser.id),
+              eq(perfilesEmpleados.userId, existingByEmail.id),
               eq(perfilesEmpleados.restauranteId, session.restauranteId),
             ),
           )
@@ -125,44 +145,111 @@ export async function inviteEmployee(
       );
 
       if (existingPerfil[0]) {
+        if (existingPerfil[0].activo) {
+          return {
+            success: false,
+            message: 'Ese email ya está invitado a este local',
+          };
+        }
+        await withTenant(claims, (tx) =>
+          tx
+            .update(perfilesEmpleados)
+            .set({
+              activo: true,
+              rol: parsed.data.rol,
+              updatedAt: new Date(),
+            })
+            .where(eq(perfilesEmpleados.id, existingPerfil[0].id)),
+        );
         return {
-          success: false,
-          message: 'El empleado ya está invitado a este restaurante',
+          success: true,
+          message: `${email} ya tenía cuenta: se reactivó como ${rolLabel}. Que ingrese con su contraseña actual.`,
+          userId: existingByEmail.id,
         };
       }
 
-      finalUserId = existingUser.id;
+      // Usuario Auth existe pero no en este local: solo asociamos el perfil.
+      await withTenant(claims, (tx) =>
+        tx.insert(perfilesEmpleados).values({
+          userId: existingByEmail.id,
+          restauranteId: session.restauranteId,
+          rol: parsed.data.rol,
+          activo: true,
+        }),
+      );
+      return {
+        success: true,
+        message: `${email} ya tenía cuenta y fue agregado como ${rolLabel}. Que ingrese con su contraseña actual.`,
+        userId: existingByEmail.id,
+      };
     }
 
-    if (!finalUserId) {
-      return { success: false, message: 'No se pudo determinar el ID del usuario' };
+    // --- Usuario nuevo ---
+    if (method === 'email') {
+      const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+        email,
+        {
+          data: { [META_MUST_CHANGE_PASSWORD]: true },
+          redirectTo: inviteRedirectTo(),
+        },
+      );
+
+      if (inviteError || !invited.user) {
+        console.error('[inviteEmployee] inviteUserByEmail:', inviteError);
+        return {
+          success: false,
+          message:
+            'No se pudo enviar el email de invitación. Probá con contraseña temporal o revisá el SMTP de Supabase.',
+        };
+      }
+
+      await withTenant(claims, (tx) =>
+        tx.insert(perfilesEmpleados).values({
+          userId: invited.user.id,
+          restauranteId: session.restauranteId,
+          rol: parsed.data.rol,
+          activo: true,
+        }),
+      );
+
+      return {
+        success: true,
+        message: `Invitación enviada a ${email} como ${rolLabel}. Que revise su bandeja (y spam) y elija contraseña desde el link.`,
+        userId: invited.user.id,
+      };
     }
 
-    // 2. Crear el perfil del empleado en la tabla perfiles_empleados
-    await withTenant(claimsFromSession(session), (tx) =>
+    // Método temp: crear con contraseña temporal legible.
+    const tempPassword = generateTempPassword();
+    const { data: signUpData, error: signUpError } = await supabase.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { [META_MUST_CHANGE_PASSWORD]: true },
+    });
+
+    if (signUpError || !signUpData.user) {
+      console.error('[inviteEmployee] createUser:', signUpError);
+      return {
+        success: false,
+        message: 'No se pudo crear la cuenta del empleado. Probá de nuevo.',
+      };
+    }
+
+    await withTenant(claims, (tx) =>
       tx.insert(perfilesEmpleados).values({
-        userId: finalUserId!,
+        userId: signUpData.user.id,
         restauranteId: session.restauranteId,
         rol: parsed.data.rol,
         activo: true,
       }),
     );
 
-    // 3. Devolver la contraseña temporal solo si creamos la cuenta. Si el
-    // usuario ya existía en Auth, conserva su contraseña y debe usar esa.
-    if (createdNewUser) {
-      return {
-        success: true,
-        message: `${email} fue agregado como ${parsed.data.rol}. Entregale la contraseña temporal: al ingresar se le pedirá elegir una propia.`,
-        userId: finalUserId,
-        tempPassword,
-      };
-    }
-
     return {
       success: true,
-      message: `${email} ya tenía cuenta y fue agregado como ${parsed.data.rol}. Que ingrese con su contraseña actual.`,
-      userId: finalUserId,
+      message: `${email} fue agregado como ${rolLabel}. Entregale la contraseña temporal: al ingresar se le pedirá elegir una propia.`,
+      userId: signUpData.user.id,
+      tempPassword,
     };
   } catch (error) {
     console.error('[inviteEmployee] Error:', error);
@@ -173,12 +260,127 @@ export async function inviteEmployee(
   }
 }
 
+/** Busca un usuario de Auth por email (paginado; alcanza para locales chicos). */
+async function findAuthUserByEmail(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  email: string,
+): Promise<{ id: string; email?: string } | null> {
+  const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  if (error) {
+    console.error('[findAuthUserByEmail]', error);
+    return null;
+  }
+  const found = data?.users.find((u) => u.email?.toLowerCase() === email);
+  return found ? { id: found.id, email: found.email } : null;
+}
+
+/**
+ * Genera una contraseña temporal nueva para un empleado y fuerza el cambio
+ * al próximo login. Se muestra una sola vez al admin.
+ */
+export async function resetEmployeePassword(
+  perfilId: string,
+): Promise<ResetEmployeePasswordResult> {
+  try {
+    const session = await getCurrentSession();
+
+    if (!session || !['owner', 'admin'].includes(session.role)) {
+      return {
+        success: false,
+        message: 'No tenés permisos para resetear contraseñas',
+      };
+    }
+
+    const parsed = perfilIdSchema.safeParse({ perfilId });
+    if (!parsed.success) {
+      return { success: false, message: parsed.error.issues[0]?.message ?? 'Datos inválidos' };
+    }
+
+    const [target] = await withTenant(claimsFromSession(session), (tx) =>
+      tx
+        .select({
+          id: perfilesEmpleados.id,
+          userId: perfilesEmpleados.userId,
+          rol: perfilesEmpleados.rol,
+          activo: perfilesEmpleados.activo,
+        })
+        .from(perfilesEmpleados)
+        .where(
+          and(
+            eq(perfilesEmpleados.id, parsed.data.perfilId),
+            eq(perfilesEmpleados.restauranteId, session.restauranteId),
+          ),
+        )
+        .limit(1),
+    );
+
+    if (!target) {
+      return { success: false, message: 'Empleado no encontrado' };
+    }
+    if (target.rol === 'owner') {
+      return {
+        success: false,
+        message: 'No se puede resetear la contraseña del propietario desde acá',
+      };
+    }
+    if (target.userId === session.user.id) {
+      return {
+        success: false,
+        message: 'Para cambiar tu contraseña usá “Olvidé mi contraseña” en el login',
+      };
+    }
+    if (target.rol === 'admin' && session.role !== 'owner') {
+      return {
+        success: false,
+        message: 'Solo el propietario puede resetear la contraseña de un administrador',
+      };
+    }
+    if (!target.activo) {
+      return {
+        success: false,
+        message: 'Activá al empleado antes de resetearle la contraseña',
+      };
+    }
+
+    const supabase = createSupabaseAdminClient();
+    const tempPassword = generateTempPassword();
+
+    const { data: updated, error } = await supabase.auth.admin.updateUserById(target.userId, {
+      password: tempPassword,
+      user_metadata: { [META_MUST_CHANGE_PASSWORD]: true },
+    });
+
+    if (error) {
+      console.error('[resetEmployeePassword]', error);
+      return {
+        success: false,
+        message: 'No se pudo generar la nueva contraseña. Probá de nuevo.',
+      };
+    }
+
+    const email = updated.user.email?.toLowerCase() ?? '';
+
+    return {
+      success: true,
+      message: `Nueva contraseña temporal para ${email || 'el empleado'}. Entregásela: al ingresar deberá elegir una propia.`,
+      email: email || undefined,
+      tempPassword,
+    };
+  } catch (error) {
+    console.error('[resetEmployeePassword] Error:', error);
+    return {
+      success: false,
+      message: 'Error al resetear la contraseña',
+    };
+  }
+}
+
 /**
  * Actualiza el rol de un empleado.
  */
 export async function updateEmployeeRole(
   perfilId: string,
-  nuevoRol: RoleType
+  nuevoRol: AssignableRole,
 ): Promise<{ success: boolean; message: string }> {
   try {
     const session = await getCurrentSession();
@@ -186,7 +388,7 @@ export async function updateEmployeeRole(
     if (!session || !['owner', 'admin'].includes(session.role)) {
       return {
         success: false,
-        message: 'No tienes permisos para actualizar empleados',
+        message: 'No tenés permisos para actualizar empleados',
       };
     }
 
@@ -195,11 +397,38 @@ export async function updateEmployeeRole(
       return { success: false, message: parsed.error.issues[0]?.message ?? 'Datos inválidos' };
     }
 
-    // Solo owner puede cambiar el rol de admin
+    // Solo owner puede asignar rol admin
     if (parsed.data.nuevoRol === 'admin' && session.role !== 'owner') {
       return {
         success: false,
-        message: 'Solo el propietario puede crear administradores',
+        message: 'Solo el propietario puede asignar administradores',
+      };
+    }
+
+    // No permitir cambiar el rol del owner del local.
+    const [target] = await withTenant(claimsFromSession(session), (tx) =>
+      tx
+        .select({
+          id: perfilesEmpleados.id,
+          rol: perfilesEmpleados.rol,
+        })
+        .from(perfilesEmpleados)
+        .where(
+          and(
+            eq(perfilesEmpleados.id, parsed.data.perfilId),
+            eq(perfilesEmpleados.restauranteId, session.restauranteId),
+          ),
+        )
+        .limit(1),
+    );
+
+    if (!target) {
+      return { success: false, message: 'Empleado no encontrado' };
+    }
+    if (target.rol === 'owner') {
+      return {
+        success: false,
+        message: 'No se puede cambiar el rol del propietario',
       };
     }
 
@@ -217,7 +446,7 @@ export async function updateEmployeeRole(
 
     return {
       success: true,
-      message: `Rol actualizado a ${parsed.data.nuevoRol}`,
+      message: `Rol actualizado a ${ROL_LABEL[parsed.data.nuevoRol]}`,
     };
   } catch (error) {
     console.error('[updateEmployeeRole] Error:', error);
@@ -240,7 +469,7 @@ export async function deactivateEmployee(
     if (!session || !['owner', 'admin'].includes(session.role)) {
       return {
         success: false,
-        message: 'No tienes permisos para desactivar empleados',
+        message: 'No tenés permisos para desactivar empleados',
       };
     }
 
@@ -286,7 +515,7 @@ export async function activateEmployee(
     if (!session || !['owner', 'admin'].includes(session.role)) {
       return {
         success: false,
-        message: 'No tienes permisos para activar empleados',
+        message: 'No tenés permisos para activar empleados',
       };
     }
 

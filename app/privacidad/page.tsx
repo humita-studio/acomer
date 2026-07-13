@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BrandMark } from '@/features/marketing/components/BrandMark';
+import { CONTACTO } from '@/features/marketing/marketingContent';
 
 export const metadata: Metadata = {
   title: 'Política de privacidad',
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacidadPage() {
-  const actualizado = '12 de julio de 2026';
+  const actualizado = '13 de julio de 2026';
 
   return (
     <main className="min-h-dvh bg-muted/30">
@@ -98,8 +99,15 @@ export default function PrivacidadPage() {
             <h2 className="font-heading text-base font-semibold">6. Derechos</h2>
             <p>
               Podés solicitar acceso, actualización o eliminación de tus datos personales
-              de cuenta escribiéndonos por el canal de soporte. Los comensales deben
-              dirigirse al restaurante correspondiente por los datos de su pedido.
+              de cuenta escribiendo a{' '}
+              <a
+                href={`mailto:${CONTACTO.email}`}
+                className="font-medium text-primary hover:underline"
+              >
+                {CONTACTO.email}
+              </a>
+              . Los comensales deben dirigirse al restaurante correspondiente por los datos
+              de su pedido.
             </p>
           </section>
 

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BrandMark } from '@/features/marketing/components/BrandMark';
+import { CONTACTO } from '@/features/marketing/marketingContent';
+import { BILLING_COBRO_HABILITADO, TRIAL_DAYS } from '@/features/billing/plans';
 
 export const metadata: Metadata = {
   title: 'Términos y condiciones',
@@ -8,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default function TerminosPage() {
-  const actualizado = '12 de julio de 2026';
+  const actualizado = '13 de julio de 2026';
 
   return (
     <main className="min-h-dvh bg-muted/30">
@@ -69,12 +71,25 @@ export default function TerminosPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="font-heading text-base font-semibold">4. Suscripción al Servicio</h2>
-            <p>
-              Los precios publicados en la web son de referencia. Durante la etapa piloto
-              el plan y el cobro del SaaS se acuerdan con el equipo de acomer. Podemos
-              modificar funcionalidades o precios con aviso razonable.
-            </p>
+            <h2 className="font-heading text-base font-semibold">4. Acceso al Servicio y precios</h2>
+            {BILLING_COBRO_HABILITADO ? (
+              <p>
+                Al registrarte podés usar el Servicio durante un período de prueba de{' '}
+                {TRIAL_DAYS} días. Luego podés suscribirte a un plan de pago desde el panel
+                (Plan y facturación) con Mercado Pago. Los precios publicados en la web son
+                de referencia y pueden actualizarse con aviso razonable. El plan “A medida”
+                se acuerda por separado.
+              </p>
+            ) : (
+              <p>
+                Hoy el Servicio se ofrece <strong>sin cargo</strong> para locales nuevos,
+                con acceso al producto completo y sin límites de plan. Los precios que
+                figuran en la web son de referencia para cuando habilitemos el cobro de la
+                suscripción. Te avisaremos con anticipación razonable antes de empezar a
+                cobrar; podrás elegir un plan o dejar de usar el Servicio. El plan “A
+                medida” (setup asistido) se acuerda por separado.
+              </p>
+            )}
           </section>
 
           <section className="space-y-2">
@@ -100,8 +115,14 @@ export default function TerminosPage() {
           <section className="space-y-2">
             <h2 className="font-heading text-base font-semibold">7. Contacto</h2>
             <p>
-              Consultas sobre estos términos: escribinos desde el flujo de registro o al
-              canal de contacto que te hayamos asignado al dar de alta el local.
+              Consultas sobre estos términos:{' '}
+              <a
+                href={`mailto:${CONTACTO.email}`}
+                className="font-medium text-primary hover:underline"
+              >
+                {CONTACTO.email}
+              </a>
+              .
             </p>
           </section>
         </div>

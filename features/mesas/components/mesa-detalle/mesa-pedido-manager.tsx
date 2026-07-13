@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { DoorOpen, Minus, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { liberarMesaAction } from '@/features/mesas/mesas-actions';
 import { useTicketMesa, useAgregarItemsStaff } from '@/features/comanda/use-ticket-mesa';
 import { queryKeys } from '@/shared/query/keys';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
+import { useConfirm } from '@/shared/hooks/use-confirm';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import type { ProductoMenu, CategoriaMenu, ModificadorMenu } from '@/features/carta/types';
@@ -48,6 +50,7 @@ export function MesaPedidoManager({
 }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
   const [activeCategory, setActiveCategory] = useState<string>(categorias[0]?.id || '');
   const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
   const [cantidad, setCantidad] = useState(1);
@@ -180,16 +183,25 @@ export function MesaPedidoManager({
   const freeSubtotal = (parseFloat(freePrecio.replace(',', '.')) || 0) * freeCantidad;
 
   const handleLiberar = async () => {
-    if (!confirm('¿Liberar la mesa? Se cerrará la sesión actual.')) return;
+    const ok = await confirm({
+      title: '¿Liberar la mesa?',
+      description: 'Se cierra la sesión actual. El ticket deja de estar activo.',
+      confirmLabel: 'Liberar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setIsLiberating(true);
     setError(null);
     const res = await liberarMesaAction(mesaId);
     setIsLiberating(false);
     if (res.success) {
+      toast.success('Mesa liberada');
       router.push('/admin/mesas');
       router.refresh();
     } else {
-      setError(res.message || 'No se pudo liberar la mesa');
+      const msg = res.message || 'No se pudo liberar la mesa';
+      setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -198,6 +210,7 @@ export function MesaPedidoManager({
 
   return (
     <div className="space-y-4">
+      {confirmDialog}
       {canLiberar && (
         <div className="flex justify-end">
           <Button

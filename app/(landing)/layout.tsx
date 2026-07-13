@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 const title = 'acomer — El sistema operativo de tu restaurante';
 const description =
-  'Carta digital con QR, pedidos online, reservas, mesas, cobros con Mercado Pago y reportes. Probá gratis 14 días.';
+  'Carta digital con QR, pedidos online, reservas, mesas, cobros con Mercado Pago y reportes. Gratis por ahora, sin tarjeta.';
 
 export const metadata: Metadata = {
   title: {

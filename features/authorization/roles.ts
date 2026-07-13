@@ -45,7 +45,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canTakeOrders: true,
     canManageMenu: true,
     canManagePrices: true,
-    canManageStaff: false, // El admin no puede crear otros admins
+    // Puede invitar/activar staff; solo owner puede asignar rol admin (en invite-employee).
+    canManageStaff: true,
     canManageTables: true,
     canViewReports: true,
     canProcessPayments: true,

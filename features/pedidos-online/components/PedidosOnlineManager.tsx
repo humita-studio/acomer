@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -298,19 +299,29 @@ function EntregadoCardBody({ orden }: { orden: Orden }) {
 // Envoltorio arrastrable. El cuerpo original se atenúa mientras se arrastra; el
 // clon que sigue al cursor lo dibuja el <DragOverlay> (sin recortarse al cruzar
 // columnas).
-function DraggableCard({ orden, children }: { orden: Orden; children: ReactNode }) {
+function DraggableCard({
+  orden,
+  highlighted,
+  children,
+}: {
+  orden: Orden;
+  highlighted?: boolean;
+  children: ReactNode;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: orden.sesionMesaId,
     data: { orden },
   });
   return (
     <div
+      id={`orden-${orden.sesionMesaId}`}
       ref={setNodeRef}
       {...listeners}
       {...attributes}
       className={cn(
         'touch-none cursor-grab rounded-lg outline-none ring-primary focus-visible:ring-2 active:cursor-grabbing',
         isDragging && 'opacity-30',
+        highlighted && 'ring-2 ring-primary shadow-md',
       )}
     >
       {children}
@@ -324,6 +335,7 @@ function Columna({
   items,
   now,
   activeOrden,
+  highlightSesionId,
   onAdvance,
   onCancel,
 }: {
@@ -332,6 +344,7 @@ function Columna({
   items: Orden[];
   now: number;
   activeOrden: Orden | null;
+  highlightSesionId?: string | null;
   onAdvance: (sesionMesaId: string, nuevoEstado: string) => void;
   onCancel: (orden: Orden) => void;
 }) {
@@ -362,7 +375,11 @@ function Columna({
           <p className="px-1 py-6 text-center text-xs text-muted-foreground">Sin pedidos</p>
         ) : (
           items.map((o) => (
-            <DraggableCard key={o.sesionMesaId} orden={o}>
+            <DraggableCard
+              key={o.sesionMesaId}
+              orden={o}
+              highlighted={highlightSesionId === o.sesionMesaId}
+            >
               {esEntregado ? (
                 <EntregadoCardBody orden={o} />
               ) : (
@@ -402,14 +419,19 @@ export function PedidosOnlineManager({
   initialOrdenes,
   initialConfig,
   publicPedirUrl,
+  direccionLocal,
 }: {
   tenantId: string;
   initialOrdenes: Orden[];
   initialConfig: DeliveryConfig;
   /** URL pública del menú online del local (para copiar / abrir). */
   publicPedirUrl?: string;
+  /** Dirección del local (landing) para centrar el mapa de zona. */
+  direccionLocal?: string;
 }) {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const highlightSesionId = searchParams.get('sesion');
   const ordenesKey = queryKeys.ordenesExternas(tenantId);
   const [configOpen, setConfigOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Orden | null>(null);
@@ -433,6 +455,18 @@ export function PedidosOnlineManager({
     },
     initialData: initialOrdenes,
   });
+
+  // Llegada desde el buscador del admin (?sesion=): scrollea hasta la tarjeta resaltada.
+  useEffect(() => {
+    if (!highlightSesionId) return;
+    if (!ordenes.some((o) => o.sesionMesaId === highlightSesionId)) return;
+    const t = window.setTimeout(() => {
+      document
+        .getElementById(`orden-${highlightSesionId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [highlightSesionId, ordenes]);
 
   // Realtime: invalidar cuando entra/cambia un pedido externo o cuando se
   // confirma un pago (mesa_pagada / pago_parcial los emite el webhook de MP),
@@ -490,10 +524,14 @@ export function PedidosOnlineManager({
     },
     onError: (_e, _vars, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(ordenesKey, ctx.prev);
-      alert('No se pudo actualizar el pedido.');
+      toast.error('No se pudo actualizar el pedido.');
     },
     onSuccess: (res) => {
-      if (!res.success) alert(res.message);
+      if (!res.success) {
+        toast.error(res.message || 'No se pudo actualizar el pedido.');
+        return;
+      }
+      toast.success('Pedido actualizado');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ordenesKey });
@@ -711,6 +749,7 @@ export function PedidosOnlineManager({
               items={porEstado(c.estado)}
               now={now}
               activeOrden={activeOrden}
+              highlightSesionId={highlightSesionId}
               onAdvance={advance}
               onCancel={setCancelTarget}
             />
@@ -735,6 +774,7 @@ export function PedidosOnlineManager({
         onOpenChange={setConfigOpen}
         initialConfig={initialConfig}
         publicPedirUrl={publicPedirUrl}
+        direccionLocal={direccionLocal}
       />
 
       {/* Confirmar cancelación */}

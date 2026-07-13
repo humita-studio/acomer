@@ -467,6 +467,9 @@ export const datosEntrega = pgTable(
     telefono: text('telefono').notNull(),
     direccion: text('direccion'),
     referencia: text('referencia'),
+    // Pin del cliente en el mapa (si el local tiene zona dibujada).
+    lat: real('lat'),
+    lng: real('lng'),
     costoEnvio: numeric('costo_envio', { precision: 10, scale: 2 }).notNull().default('0'),
     estadoEntrega: text('estado_entrega').notNull().default('Recibido'),
     horaEstimada: timestamp('hora_estimada', { withTimezone: true }),
@@ -547,7 +550,7 @@ export const reservasConfig = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull().unique(),
-    activo: boolean('activo').notNull().default(true), // reservas online habilitadas
+    activo: boolean('activo').notNull().default(false), // reservas online: off hasta activar
     // array de turnos con nombre y rango: { nombre, desde, hasta, activo }
     turnos: jsonb('turnos').notNull().default([
       { nombre: 'Almuerzo', desde: '12:00', hasta: '15:30', activo: true },
@@ -577,9 +580,19 @@ export const deliveryConfig = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull().unique(),
-    activo: boolean('activo').notNull().default(true), // pedidos online habilitados
+    activo: boolean('activo').notNull().default(false), // pedidos online: off hasta activar
     modo: text('modo').notNull().default('ambos'), // ambos | takeaway | delivery
     agregadosHasta: text('agregados_hasta').notNull().default('preparacion'), // no | preparacion | listo
+    // Zona de cobertura en texto libre (barrios, radio, etc.). Complementa el mapa.
+    zonaEntrega: text('zona_entrega').notNull().default(''),
+    // Polígono GeoJSON de cobertura: { type:'Polygon', coordinates:[[[lng,lat],…]] }.
+    zonaPoligono: jsonb('zona_poligono'),
+    // Costo fijo de envío en pesos (0 = gratis / a confirmar en local).
+    costoEnvio: numeric('costo_envio', { precision: 10, scale: 2 }).notNull().default('0'),
+    // Mínimo del carrito (sin envío) para aceptar delivery. 0 = sin mínimo.
+    pedidoMinimo: numeric('pedido_minimo', { precision: 10, scale: 2 }).notNull().default('0'),
+    // Tiempo estimado de entrega/preparación en minutos. null = no mostrar.
+    tiempoEstimadoMin: integer('tiempo_estimado_min'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -607,6 +620,8 @@ export const landingConfig = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     restauranteId: uuid('restaurant_id').notNull().unique(),
     descripcion: text('descripcion').notNull().default(''), // tagline ("Cocina de barrio · Parrilla")
+    // Texto más largo tipo "sobre el local" (historia, especialidades, etc.).
+    sobre: text('sobre').notNull().default(''),
     direccion: text('direccion').notNull().default(''),
     // 7 días indexados por getDay() (0=Dom … 6=Sáb): { cerrado, desde, hasta }.
     horarios: jsonb('horarios').notNull().default([
@@ -621,14 +636,18 @@ export const landingConfig = pgTable(
     // Qué tarjetas se muestran: { verCarta, pedirOnline, reservar, qr }.
     acciones: jsonb('acciones')
       .notNull()
-      .default({ verCarta: true, pedirOnline: true, reservar: true, qr: true }),
-    colorMarca: text('color_marca').notNull().default('terracota'), // terracota | ambar | verde
+      .default({ verCarta: true, pedirOnline: false, reservar: false, qr: true }),
+    // terracota | ambar | verde | azul | bordo | negro | rosa | indigo
+    colorMarca: text('color_marca').notNull().default('terracota'),
     // Contacto/redes: { whatsapp, instagram, telefono }.
     redes: jsonb('redes').notNull().default({ whatsapp: '', instagram: '', telefono: '' }),
     // Portada del local en Cloudinary. URL de entrega ya optimizada (f_auto,q_auto).
     imagenUrl: text('imagen_url').notNull().default(''),
     // public_id en Cloudinary para borrar/reemplazar sin dejar huérfanos.
     imagenPublicId: text('imagen_public_id').notNull().default(''),
+    // Logo circular / cuadrado del local (Cloudinary).
+    logoUrl: text('logo_url').notNull().default(''),
+    logoPublicId: text('logo_public_id').notNull().default(''),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -640,7 +659,7 @@ export const landingConfig = pgTable(
     }).onDelete('cascade'),
     colorMarcaCheck: check(
       'landing_config_color_marca_check',
-      sql`color_marca IN ('terracota','ambar','verde')`,
+      sql`color_marca IN ('terracota','ambar','verde','azul','bordo','negro','rosa','indigo')`,
     ),
   })
 )

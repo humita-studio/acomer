@@ -1,6 +1,9 @@
 /**
  * Catálogo de planes SaaS (source of truth del producto).
  * Precios en ARS enteros. "a_medida" no se cobra online.
+ *
+ * Mientras `BILLING_COBRO_HABILITADO` sea false, no se enforcean límites ni
+ * hard-gates de acceso (ver access.ts). Flip a true cuando el cobro SaaS esté listo.
  */
 
 export type PlanId = 'basico' | 'pro' | 'a_medida';
@@ -15,40 +18,49 @@ export type PlanDef = {
   destacado?: boolean;
 };
 
-export const TRIAL_DAYS = 14;
+/**
+ * Cobro de suscripción acomer deshabilitado: producto free para todos.
+ * Cuando esté listo el cobro (MP billing + gate real), poner en true.
+ */
+export const BILLING_COBRO_HABILITADO = false;
+
+/** Duración del trial al registrarse (3 meses). */
+export const TRIAL_DAYS = 90;
 /** Días de gracia tras vencer trial/período antes del hard gate. */
 export const GRACE_DAYS = 3;
 /** Duración del período al aprobar un pago (días). */
 export const PERIOD_DAYS = 30;
 
+/**
+ * Features del producto completo. Hoy no hay gate por plan: todos usan todo.
+ * Cuando se habilite cobro, acá se reintroduce la diferenciación real.
+ */
+const FEATURES_TODO = [
+  'Carta digital con QR',
+  'Mesas ilimitadas',
+  'Cocina y cobros (efectivo / MP)',
+  'Reservas y pedidos online',
+  'Promociones y reportes',
+  'Roles de staff',
+] as const;
+
 export const PLANES_SAAS: Record<PlanId, PlanDef> = {
   basico: {
     id: 'basico',
     nombre: 'Básico',
+    // Precios de referencia para cuando se habilite cobro.
     precioMensual: 14_900,
-    maxMesas: 15,
-    descripcion: 'Para arrancar con lo esencial.',
-    features: [
-      'Carta digital con QR',
-      'Hasta 15 mesas',
-      'Cocina y cobros',
-      'Reportes del día',
-    ],
+    maxMesas: null,
+    descripcion: 'Mismo producto; precio de referencia futuro.',
+    features: [...FEATURES_TODO],
   },
   pro: {
     id: 'pro',
     nombre: 'Pro',
     precioMensual: 29_900,
     maxMesas: null,
-    descripcion: 'El más elegido por restaurantes en marcha.',
-    features: [
-      'Todo lo de Básico',
-      'Mesas ilimitadas',
-      'Reservas + pedidos online',
-      'Cobros con Mercado Pago',
-      'Promociones y reportes',
-      'Roles de staff',
-    ],
+    descripcion: 'Mismo producto; precio de referencia futuro.',
+    features: [...FEATURES_TODO],
     destacado: true,
   },
   a_medida: {
@@ -58,7 +70,7 @@ export const PLANES_SAAS: Record<PlanId, PlanDef> = {
     maxMesas: null,
     descripcion: 'Setup asistido y acompañamiento.',
     features: [
-      'Todo lo de Pro',
+      ...FEATURES_TODO,
       'Onboarding dedicado',
       'Soporte prioritario',
       'Prioridad en el roadmap',

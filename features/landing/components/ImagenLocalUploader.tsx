@@ -21,22 +21,54 @@ import {
   eliminarImagenLocalAction,
   guardarImagenLocalAction,
   obtenerFirmaUploadImagenAction,
+  type ImagenLocalKind,
 } from '../imagenLocalActions';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
 const MAX_ORIGINAL_BYTES = 12 * 1024 * 1024; // 12 MB antes de comprimir
 
+const COPY: Record<
+  ImagenLocalKind,
+  { title: string; description: string; alt: string; aspect: string; hint: string; compressMax: number }
+> = {
+  cover: {
+    title: 'Foto del local',
+    description:
+      'Portada de tu página pública. Arrastrá una imagen o hacé click. Se optimiza automáticamente (WebP/AVIF) para que pese poco.',
+    alt: 'Portada del local',
+    aspect: 'aspect-[16/10]',
+    hint: 'JPG, PNG o WebP. Recomendado horizontal (16:10). Se redimensiona a máx. 1600 px y se comprime antes de subir. Al quitar, se borra también en Cloudinary.',
+    compressMax: 1600,
+  },
+  logo: {
+    title: 'Logo',
+    description:
+      'Logo del local (cuadrado). Aparece en el hero de la landing. Fondo transparente o blanco funciona bien.',
+    alt: 'Logo del local',
+    aspect: 'aspect-square max-w-[200px]',
+    hint: 'JPG, PNG o WebP. Preferible cuadrado. Se recorta a 400×400. Al quitar, se borra también en Cloudinary.',
+    compressMax: 800,
+  },
+};
+
 type Props = {
   imagenUrl: string;
+  /** Portada del hero o logo. Default: cover. */
+  kind?: ImagenLocalKind;
   onChanged?: (next: { imagenUrl: string; imagenPublicId: string }) => void;
 };
 
 /**
- * Sube la portada del local a Cloudinary con compresión previa en el browser.
+ * Sube portada o logo del local a Cloudinary con compresión previa en el browser.
  * Soporta click y drag-and-drop.
  * Flujo: comprimir → firma server → upload directo a Cloudinary → persistir public_id.
  */
-export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props) {
+export function ImagenLocalUploader({
+  imagenUrl: initialUrl,
+  kind = 'cover',
+  onChanged,
+}: Props) {
+  const meta = COPY[kind];
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -79,8 +111,8 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
       try {
         // 1) Comprimir en el cliente (menos bytes por la red y en Cloudinary).
         const compressed = await compressImage(file, {
-          maxWidth: 1600,
-          maxHeight: 1600,
+          maxWidth: meta.compressMax,
+          maxHeight: meta.compressMax,
           quality: 0.82,
           preferWebp: true,
         });
@@ -90,7 +122,7 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
         );
 
         // 2) Firma de Cloudinary (API secret solo en el server).
-        const firma = await obtenerFirmaUploadImagenAction();
+        const firma = await obtenerFirmaUploadImagenAction(kind);
         if (!firma.success) {
           throw new Error(firma.message ?? 'No se pudo firmar la subida');
         }
@@ -127,6 +159,7 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
         // 4) Persistir en nuestra DB (con version de Cloudinary para romper caché).
         const saved = await guardarImagenLocalAction({
           publicId: result.public_id as string,
+          kind,
           version: result.version as number | string | undefined,
           secureUrl: result.secure_url as string | undefined,
         });
@@ -140,7 +173,7 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
           imagenPublicId: saved.imagenPublicId,
         });
         setProgress(100);
-        toast.success('Imagen actualizada');
+        toast.success(kind === 'logo' ? 'Logo actualizado' : 'Imagen actualizada');
         router.refresh();
       } catch (e) {
         console.error('[ImagenLocalUploader]', e);
@@ -152,7 +185,7 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
         resetInput();
       }
     },
-    [onChanged, router],
+    [onChanged, router, kind, meta.compressMax],
   );
 
   const pickFromDataTransfer = (dt: DataTransfer | null): File | null => {
@@ -217,14 +250,18 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
     setUploading(true);
     setStatusText('Eliminando de Cloudinary…');
     try {
-      const res = await eliminarImagenLocalAction();
+      const res = await eliminarImagenLocalAction(kind);
       if (!res.success) throw new Error(res.message ?? 'No se pudo eliminar');
       setPreview('');
       onChanged?.({ imagenUrl: '', imagenPublicId: '' });
       toast.success(
         res.deletedFromCloudinary
-          ? 'Imagen eliminada de Cloudinary'
-          : 'Imagen quitada',
+          ? kind === 'logo'
+            ? 'Logo eliminado de Cloudinary'
+            : 'Imagen eliminada de Cloudinary'
+          : kind === 'logo'
+            ? 'Logo quitado'
+            : 'Imagen quitada',
       );
       router.refresh();
     } catch (e) {
@@ -242,17 +279,14 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Foto del local</CardTitle>
-        <CardDescription>
-          Portada de tu página pública. Arrastrá una imagen o hacé click. Se optimiza
-          automáticamente (WebP/AVIF) para que pese poco.
-        </CardDescription>
+        <CardTitle>{meta.title}</CardTitle>
+        <CardDescription>{meta.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div
           role="button"
           tabIndex={0}
-          aria-label={preview ? 'Cambiar foto del local' : 'Subir foto del local'}
+          aria-label={preview ? `Cambiar ${meta.alt.toLowerCase()}` : `Subir ${meta.alt.toLowerCase()}`}
           aria-disabled={uploading}
           onClick={openPicker}
           onKeyDown={(e) => {
@@ -266,7 +300,9 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
           onDragOver={onDragOver}
           onDrop={onDrop}
           className={cn(
-            'relative aspect-[16/10] w-full cursor-pointer overflow-hidden rounded-xl border-2 border-dashed bg-muted transition-colors outline-none',
+            'relative w-full cursor-pointer overflow-hidden rounded-xl border-2 border-dashed bg-muted transition-colors outline-none',
+            meta.aspect,
+            kind === 'logo' && 'rounded-full',
             'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             isDragging && 'border-primary bg-primary/5 ring-2 ring-primary/30',
             !isDragging && 'border-muted-foreground/25 hover:border-muted-foreground/40',
@@ -278,16 +314,18 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
               // key fuerza remount cuando cambia la URL versionada (evita flash de la vieja).
               key={preview}
               src={preview}
-              alt="Portada del local"
+              alt={meta.alt}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, 480px"
+              sizes={kind === 'logo' ? '200px' : '(max-width: 768px) 100vw, 480px'}
               unoptimized
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
               <Upload className="size-8 opacity-50" aria-hidden />
-              <p className="text-sm font-medium">Arrastrá una foto acá</p>
+              <p className="text-sm font-medium">
+                {kind === 'logo' ? 'Arrastrá el logo acá' : 'Arrastrá una foto acá'}
+              </p>
               <p className="text-xs">o hacé click para elegir un archivo</p>
             </div>
           )}
@@ -322,7 +360,13 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" disabled={uploading} onClick={openPicker}>
             <ImagePlus className="mr-2 size-4" />
-            {preview ? 'Cambiar foto' : 'Subir foto'}
+            {preview
+              ? kind === 'logo'
+                ? 'Cambiar logo'
+                : 'Cambiar foto'
+              : kind === 'logo'
+                ? 'Subir logo'
+                : 'Subir foto'}
           </Button>
           {preview ? (
             <Button
@@ -341,10 +385,7 @@ export function ImagenLocalUploader({ imagenUrl: initialUrl, onChanged }: Props)
           ) : null}
         </div>
 
-        <Label className="text-xs font-normal text-muted-foreground">
-          JPG, PNG o WebP. Recomendado horizontal (16:10). Se redimensiona a máx. 1600 px y se
-          comprime antes de subir. Al quitar, se borra también en Cloudinary.
-        </Label>
+        <Label className="text-xs font-normal text-muted-foreground">{meta.hint}</Label>
       </CardContent>
     </Card>
   );

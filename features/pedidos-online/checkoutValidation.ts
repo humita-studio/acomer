@@ -2,6 +2,13 @@
  * Validación cliente del checkout de pedidos online (mensajes en español).
  */
 
+import {
+  cumplePedidoMinimo,
+  type DeliveryConfig,
+  type ModoPedido,
+} from './deliveryConfig';
+import { isLatLng, puntoEnZona, type LatLng } from './zonaMapa';
+
 export function normalizarTelefono(raw: string): string {
   return raw.replace(/[^\d+]/g, '').trim();
 }
@@ -15,9 +22,15 @@ export function telefonoValido(raw: string): boolean {
 export function validarCheckoutCliente(input: {
   nombre: string;
   telefono: string;
-  tipo: 'takeaway' | 'delivery';
+  tipo: ModoPedido;
   direccion?: string;
   itemsCount: number;
+  /** Subtotal del carrito con descuentos (sin envío). */
+  subtotalCarrito?: number;
+  /** Config de delivery del local (pedido mínimo + zona). */
+  deliveryConfig?: Pick<DeliveryConfig, 'pedidoMinimo' | 'zonaPoligono'>;
+  /** Pin del cliente en el mapa. */
+  pin?: LatLng | null;
 }): string | null {
   if (input.itemsCount <= 0) return 'Tu carrito está vacío. Sumá algo del menú.';
   if (input.nombre.trim().length < 2) return 'Ingresá tu nombre.';
@@ -29,6 +42,23 @@ export function validarCheckoutCliente(input: {
     const dir = (input.direccion ?? '').trim();
     if (dir.length < 5) return 'Ingresá la dirección de entrega completa.';
     if (dir.length > 300) return 'La dirección es demasiado larga.';
+    if (
+      input.deliveryConfig &&
+      input.subtotalCarrito != null &&
+      !cumplePedidoMinimo(input.deliveryConfig, 'delivery', input.subtotalCarrito)
+    ) {
+      const min = Number(input.deliveryConfig.pedidoMinimo) || 0;
+      return `El pedido mínimo para envío es $${min.toLocaleString('es-AR')}.`;
+    }
+    const poly = input.deliveryConfig?.zonaPoligono ?? null;
+    if (poly) {
+      if (!input.pin || !isLatLng(input.pin)) {
+        return 'Marcá tu ubicación en el mapa, dentro de la zona de entrega.';
+      }
+      if (!puntoEnZona(poly, input.pin)) {
+        return 'Tu ubicación está fuera de la zona de entrega.';
+      }
+    }
   }
   return null;
 }

@@ -21,7 +21,7 @@ export async function pedirCuentaAction(
     }
 
     // 1. Sesión + pedidos + pagos ya aprobados bajo RLS público del tenant.
-    const { sesion, pedidosMesa, pagosAprobados } = await withPublicTenant(
+    const { sesion, pedidosMesa, pagosAprobados, costoEnvio } = await withPublicTenant(
       tenantId,
       async (tx) => {
         const sesion = await tx.query.sesionesMesa.findFirst({
@@ -37,7 +37,17 @@ export async function pedirCuentaAction(
           where: (t, { eq, and }) =>
             and(eq(t.sesionMesaId, sesionMesaId), eq(t.estado, 'Aprobado')),
         });
-        return { sesion, pedidosMesa, pagosAprobados };
+        // Envío de delivery (0 en retiro/salón).
+        const entrega = await tx.query.datosEntrega.findFirst({
+          where: (t, { eq }) => eq(t.sesionMesaId, sesionMesaId),
+          columns: { costoEnvio: true },
+        });
+        return {
+          sesion,
+          pedidosMesa,
+          pagosAprobados,
+          costoEnvio: Number(entrega?.costoEnvio ?? 0) || 0,
+        };
       },
     );
 
@@ -49,7 +59,8 @@ export async function pedirCuentaAction(
       return { success: false, message: 'No hay pedidos para cobrar.' };
     }
 
-    const totalPedidos = pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0);
+    const totalPedidos =
+      pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0) + costoEnvio;
     const totalPagado = pagosAprobados.reduce((acc, tx) => acc + Number(tx.monto), 0);
     const saldoPendiente = totalPedidos - totalPagado;
 

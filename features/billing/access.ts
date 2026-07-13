@@ -1,4 +1,9 @@
-import { planDef, GRACE_DAYS, type PlanId } from './plans';
+import {
+  planDef,
+  GRACE_DAYS,
+  BILLING_COBRO_HABILITADO,
+  type PlanId,
+} from './plans';
 
 export type BillingStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'exempt';
 
@@ -17,6 +22,8 @@ export type BillingSnapshot = {
   maxMesas: number | null;
   precioMensual: number | null;
   label: string;
+  /** true mientras el producto es free (sin cobro SaaS). */
+  freeMode: boolean;
 };
 
 function asPlan(v: string | null | undefined): PlanId {
@@ -44,6 +51,9 @@ function daysBetween(from: Date, to: Date): number {
 /**
  * Evalúa acceso al panel a partir de los campos de billing del restaurante.
  * Pura: sin DB ni env.
+ *
+ * Con `BILLING_COBRO_HABILITADO === false`: siempre acceso ok, sin banner de
+ * pago y sin límite de mesas (producto free hasta poder cobrar).
  */
 export function evaluateBilling(input: {
   plan?: string | null;
@@ -58,6 +68,24 @@ export function evaluateBilling(input: {
   let status = asStatus(input.billingStatus);
   const trialEndsAt = input.trialEndsAt ? new Date(input.trialEndsAt) : null;
   const periodEndsAt = input.periodEndsAt ? new Date(input.periodEndsAt) : null;
+
+  // Free hasta poder cobrar: no hard-gate, no banner, no límite de mesas.
+  if (!BILLING_COBRO_HABILITADO) {
+    return {
+      plan,
+      planNombre: def.nombre,
+      billingStatus: status === 'exempt' ? 'exempt' : status,
+      trialEndsAt,
+      periodEndsAt,
+      accessOk: true,
+      showPayBanner: false,
+      daysLeft: null,
+      maxMesas: null,
+      precioMensual: def.precioMensual,
+      label: status === 'exempt' ? 'Exento (piloto)' : 'Gratis · hasta habilitar cobro',
+      freeMode: true,
+    };
+  }
 
   let accessOk = true;
   let showPayBanner = false;
@@ -77,6 +105,7 @@ export function evaluateBilling(input: {
       maxMesas: def.maxMesas,
       precioMensual: def.precioMensual,
       label: 'Exento (piloto)',
+      freeMode: false,
     };
   }
 
@@ -155,5 +184,6 @@ export function evaluateBilling(input: {
     maxMesas: def.maxMesas,
     precioMensual: def.precioMensual,
     label,
+    freeMode: false,
   };
 }

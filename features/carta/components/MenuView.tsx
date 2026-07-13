@@ -18,6 +18,7 @@ import {
   ICONOS_CATEGORIA_MAP,
   resolveIconoCategoria,
 } from '@/features/menu/categoriaVisual';
+import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import type { CategoriaMenu, ProductoMenu } from '../types';
 import type {
@@ -108,7 +109,7 @@ function ProductoCard({
           {prod.variantes.length > 0 && (
             <span className="font-normal text-muted-foreground">desde </span>
           )}
-          ${Number(prod.precio).toFixed(2)}
+          {formatPeso(prod.precio)}
         </p>
       </div>
       {/* Target táctil ≥44px */}
@@ -142,8 +143,10 @@ export function MenuView({
   const [selectedProduct, setSelectedProduct] = useState<ProductoMenu | null>(null);
   const [isCalling, setIsCalling] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(autoAbrirPago);
-  // Browse: todo cerrado; el comensal abre lo que le interesa (scroll corto).
-  const [openCategories, setOpenCategories] = useState<string[]>([]);
+  // Primera categoría abierta: la carta no se ve vacía al escanear el QR.
+  const [openCategories, setOpenCategories] = useState<string[]>(() =>
+    categorias[0] ? [categorias[0].id] : [],
+  );
   const [feedback, setFeedback] = useState<MenuFeedback | null>(null);
 
   const showFeedback = useCallback((next: MenuFeedback) => {

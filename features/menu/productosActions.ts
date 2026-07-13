@@ -145,7 +145,7 @@ export async function crearProducto(data: {
 
     revalidatePath('/admin/menu');
     revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Producto creado exitosamente' };
+    return { success: true, message: 'Producto creado' };
   } catch (error) {
     console.error('[crearProducto]', error);
     return { success: false, message: 'Error al crear el producto' };
@@ -347,7 +347,7 @@ export async function modificarPrecioProducto(productoId: string, nuevoPrecio: n
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManagePrices')) {
-      return { success: false, message: 'No tienes permiso para modificar precios' };
+      return { success: false, message: 'No tenés permiso para modificar precios' };
     }
 
     await withTenant(claimsFromSession(session), (db) =>

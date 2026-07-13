@@ -16,6 +16,7 @@ import {
 } from '@/shared/ui/sheet';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
+import { formatPeso } from '@/shared/lib/format';
 
 type FloatingCartProps = {
   cart: CartApi;
@@ -108,7 +109,7 @@ export function FloatingCart({
                 </span>
                 Ver Pedido
               </span>
-              <span className="text-lg tabular-nums">${granTotal.toFixed(2)}</span>
+              <span className="text-lg tabular-nums">{formatPeso(granTotal)}</span>
             </Button>
           </div>
         </div>
@@ -148,7 +149,7 @@ export function FloatingCart({
                             </p>
                           )}
                         </div>
-                        <span className="font-semibold tabular-nums">${item.subtotal.toFixed(2)}</span>
+                        <span className="font-semibold tabular-nums">{formatPeso(item.subtotal)}</span>
                       </div>
                     </div>
                   ))}
@@ -175,7 +176,11 @@ export function FloatingCart({
                             </p>
                           )}
                           <p className="mt-1 font-medium tabular-nums">
-                            ${((item.precioUnitario + item.modificadores.reduce((s,m)=>s+m.precioExtra,0)) * item.cantidad).toFixed(2)}
+                            {formatPeso(
+                              (item.precioUnitario +
+                                item.modificadores.reduce((s, m) => s + m.precioExtra, 0)) *
+                                item.cantidad,
+                            )}
                           </p>
                         </div>
 
@@ -239,7 +244,7 @@ export function FloatingCart({
                         <span className="truncate text-sm font-medium">{p.nombre}</span>
                       </span>
                       <span className="shrink-0 text-sm font-semibold tabular-nums">
-                        −${p.descuento.toFixed(2)}
+                        −{formatPeso(p.descuento)}
                       </span>
                     </div>
                   ))}
@@ -250,21 +255,21 @@ export function FloatingCart({
                 <div className="mb-4 space-y-1">
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>Subtotal</span>
-                    <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
+                    <span className="tabular-nums">{formatPeso(totalBorrador)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm text-success-foreground">
                     <span>Descuento</span>
-                    <span className="tabular-nums">−${descuento.toFixed(2)}</span>
+                    <span className="tabular-nums">−{formatPeso(descuento)}</span>
                   </div>
                   <div className="flex items-center justify-between border-t pt-1.5 text-lg font-bold">
                     <span>A enviar ahora</span>
-                    <span className="tabular-nums">${totalBorradorNeto.toFixed(2)}</span>
+                    <span className="tabular-nums">{formatPeso(totalBorradorNeto)}</span>
                   </div>
                 </div>
               ) : (
                 <div className="mb-4 flex items-center justify-between text-lg font-bold">
                   <span>A enviar ahora</span>
-                  <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
+                  <span className="tabular-nums">{formatPeso(totalBorrador)}</span>
                 </div>
               )}
               <Button

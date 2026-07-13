@@ -3,7 +3,13 @@
  * Define los pasos fijos; el estado `done` lo calcula el server action.
  */
 
-export type OnboardingStepId = 'menu' | 'mesas' | 'pagos' | 'landing';
+export type OnboardingStepId =
+  | 'menu'
+  | 'mesas'
+  | 'pagos'
+  | 'caja'
+  | 'staff'
+  | 'landing';
 
 export type OnboardingStepStatus = {
   id: OnboardingStepId;
@@ -18,7 +24,7 @@ export type OnboardingStatus = {
   hechos: number;
   /** Total de pasos obligatorios. */
   total: number;
-  /** true si menú + mesas + pagos están listos. */
+  /** true si los pasos required están listos. */
   listo: boolean;
   /** Slug del local (para link a la página pública). */
   slug: string;
@@ -58,6 +64,22 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     href: '/admin/configuracion',
     cta: 'Configurar pagos',
     required: true,
+  },
+  {
+    id: 'caja',
+    titulo: 'Abrí la caja',
+    descripcion: 'Abrí un turno con fondo inicial. Sin caja no cobrás efectivo ni vendés en mostrador.',
+    href: '/admin/caja',
+    cta: 'Ir a caja',
+    required: true,
+  },
+  {
+    id: 'staff',
+    titulo: 'Invitá al equipo',
+    descripcion: 'Mozo, cocina o cajero con contraseña temporal.',
+    href: '/admin/staff',
+    cta: 'Invitar staff',
+    required: false,
   },
   {
     id: 'landing',

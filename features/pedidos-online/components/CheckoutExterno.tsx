@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MapPinned, Clock } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatPeso } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/button';
@@ -15,8 +15,14 @@ import {
 } from '@/shared/ui/sheet';
 import { getCartTotal, type CartItem, type CartPromoResumen } from '@/features/carta/cart';
 import { crearPedidoExternoAction } from '../pedidoExternoActions';
-import type { ModoPedido } from '../deliveryConfig';
+import {
+  costoEnvioEfectivo,
+  type DeliveryConfig,
+  type ModoPedido,
+} from '../deliveryConfig';
 import { validarCheckoutCliente } from '../checkoutValidation';
+import type { LatLng } from '../zonaMapa';
+import { ZonaEntregaMapaLazy } from './ZonaEntregaMapaLazy';
 
 type Tipo = 'takeaway' | 'delivery';
 
@@ -46,6 +52,7 @@ export function CheckoutExterno({
   tenantSlug,
   cartItems,
   modos,
+  deliveryConfig,
   promoResumen = null,
   onPedidoCreado,
 }: {
@@ -54,6 +61,8 @@ export function CheckoutExterno({
   tenantSlug: string;
   cartItems: CartItem[];
   modos: ModoPedido[];
+  /** Config del local (zona, costo, mínimo, tiempo). */
+  deliveryConfig: DeliveryConfig;
   promoResumen?: CartPromoResumen | null;
   onPedidoCreado: (sesionId: string, tipo: Tipo) => void;
 }) {
@@ -63,6 +72,7 @@ export function CheckoutExterno({
   const [telefono, setTelefono] = useState('');
   const [direccion, setDireccion] = useState('');
   const [referencia, setReferencia] = useState('');
+  const [pin, setPin] = useState<LatLng | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,9 +80,17 @@ export function CheckoutExterno({
     if (!opciones.includes(tipo)) setTipo(opciones[0]);
   }, [opciones, tipo]);
 
+  // Al cambiar a takeaway limpiamos el pin (no aplica).
+  useEffect(() => {
+    if (tipo !== 'delivery') setPin(null);
+  }, [tipo]);
+
   const subtotal = getCartTotal(cartItems);
   const descuento = promoResumen && promoResumen.descuento > 0 ? promoResumen.descuento : 0;
-  const total = Math.max(0, subtotal - descuento);
+  const subtotalNeto = Math.max(0, subtotal - descuento);
+  const envio = costoEnvioEfectivo(deliveryConfig, tipo);
+  const total = subtotalNeto + envio;
+  const tieneMapa = Boolean(deliveryConfig.zonaPoligono);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +102,9 @@ export function CheckoutExterno({
       tipo,
       direccion,
       itemsCount: cartItems.length,
+      subtotalCarrito: subtotalNeto,
+      deliveryConfig,
+      pin,
     });
     if (clienteErr) {
       setError(clienteErr);
@@ -100,6 +121,8 @@ export function CheckoutExterno({
           telefono: telefono.trim(),
           direccion: tipo === 'delivery' ? direccion.trim() : undefined,
           referencia: tipo === 'delivery' ? referencia.trim() || undefined : undefined,
+          lat: tipo === 'delivery' ? pin?.lat : undefined,
+          lng: tipo === 'delivery' ? pin?.lng : undefined,
         },
         cartItems.map((i) => ({
           productoId: i.productoId,
@@ -203,6 +226,48 @@ export function CheckoutExterno({
 
             {tipo === 'delivery' ? (
               <>
+                {(deliveryConfig.zonaEntrega ||
+                  deliveryConfig.tiempoEstimadoMin ||
+                  deliveryConfig.pedidoMinimo > 0) && (
+                  <div className="space-y-2 rounded-lg border bg-muted/40 p-3 text-sm">
+                    {deliveryConfig.zonaEntrega ? (
+                      <p className="flex items-start gap-2 text-muted-foreground">
+                        <MapPinned className="mt-0.5 size-4 shrink-0" aria-hidden />
+                        <span>
+                          <span className="font-medium text-foreground">Zona de entrega: </span>
+                          {deliveryConfig.zonaEntrega}
+                        </span>
+                      </p>
+                    ) : null}
+                    {deliveryConfig.tiempoEstimadoMin ? (
+                      <p className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="size-4 shrink-0" aria-hidden />
+                        Tiempo estimado: ~{deliveryConfig.tiempoEstimadoMin} min
+                      </p>
+                    ) : null}
+                    {deliveryConfig.pedidoMinimo > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Pedido mínimo: {formatPeso(deliveryConfig.pedidoMinimo)}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+
+                {tieneMapa && open ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium tracking-[0.2px] text-muted-foreground">
+                      Marcá tu ubicación en el mapa
+                    </p>
+                    <ZonaEntregaMapaLazy
+                      mode="pick"
+                      value={deliveryConfig.zonaPoligono}
+                      pin={pin}
+                      onPinChange={setPin}
+                      height={300}
+                    />
+                  </div>
+                ) : null}
+
                 <Campo label="Dirección">
                   <Input
                     value={direccion}
@@ -221,9 +286,6 @@ export function CheckoutExterno({
                     placeholder="Ej: timbre roto, golpear"
                   />
                 </Campo>
-                <p className="text-xs text-muted-foreground">
-                  El costo de envío lo confirma el local si aplica.
-                </p>
               </>
             ) : null}
 
@@ -235,18 +297,30 @@ export function CheckoutExterno({
           </div>
 
           <div className="space-y-3 border-t bg-muted/40 p-5">
-            {descuento > 0 ? (
-              <div className="space-y-1 text-sm">
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span className="tabular-nums">{formatPeso(subtotal)}</span>
-                </div>
-                <div className="flex items-center justify-between text-success-foreground">
-                  <span>Descuento</span>
-                  <span className="tabular-nums">−{formatPeso(descuento)}</span>
-                </div>
-              </div>
-            ) : null}
+            <div className="space-y-1 text-sm">
+              {descuento > 0 || envio > 0 ? (
+                <>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">{formatPeso(subtotal)}</span>
+                  </div>
+                  {descuento > 0 ? (
+                    <div className="flex items-center justify-between text-success-foreground">
+                      <span>Descuento</span>
+                      <span className="tabular-nums">−{formatPeso(descuento)}</span>
+                    </div>
+                  ) : null}
+                  {tipo === 'delivery' ? (
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Envío</span>
+                      <span className="tabular-nums">
+                        {envio > 0 ? formatPeso(envio) : 'Gratis'}
+                      </span>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
             <Button
               type="submit"
               disabled={enviando || cartItems.length === 0}

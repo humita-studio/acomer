@@ -3,6 +3,8 @@ import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
 import { ahoraLocal, estaAbierto, horarioDeHoy } from '@/features/landing/landingConfig';
 import { LandingHero } from '@/features/landing/components/LandingHero';
 import { LandingAcciones } from '@/features/landing/components/LandingAcciones';
+import { obtenerDeliveryConfig } from '@/features/pedidos-online/deliveryConfigActions';
+import { ofreceDelivery } from '@/features/pedidos-online/deliveryConfig';
 
 // El badge "Abierto/Cerrado" depende de la hora actual: renderizamos siempre
 // fresco en vez de servir una versión cacheada.
@@ -24,9 +26,23 @@ export default async function TenantPage({ params }: { params: Promise<{ tenant:
   const rest = await getTenantDetails(tenant);
   if (!rest || rest.deletedAt) return <NoEncontrado />;
 
-  const config = await obtenerLandingConfig(rest.id);
+  const [config, delivery] = await Promise.all([
+    obtenerLandingConfig(rest.id),
+    obtenerDeliveryConfig(rest.id),
+  ]);
   const ahora = ahoraLocal();
   const abierto = estaAbierto(config.horarios, ahora);
+
+  const deliveryInfo =
+    delivery.activo && ofreceDelivery(delivery)
+      ? {
+          zonaEntrega: delivery.zonaEntrega,
+          zonaPoligono: delivery.zonaPoligono,
+          costoEnvio: delivery.costoEnvio,
+          pedidoMinimo: delivery.pedidoMinimo,
+          tiempoEstimadoMin: delivery.tiempoEstimadoMin,
+        }
+      : null;
 
   return (
     <main className="min-h-screen bg-background">
@@ -39,11 +55,14 @@ export default async function TenantPage({ params }: { params: Promise<{ tenant:
           horarioTexto={horarioDeHoy(config.horarios, ahora)}
           colorMarca={config.colorMarca}
           imagenUrl={config.imagenUrl}
+          logoUrl={config.logoUrl}
         />
         <LandingAcciones
           acciones={config.acciones}
           colorMarca={config.colorMarca}
           redes={config.redes}
+          sobre={config.sobre}
+          deliveryInfo={deliveryInfo}
         />
       </div>
     </main>

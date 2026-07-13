@@ -15,7 +15,12 @@ import {
 } from '@/features/pedidos/crearPedidoCore';
 import { entregaACocina } from '@/features/pedidos/estadoSync';
 import { obtenerDeliveryConfig } from './deliveryConfigActions';
-import { modosPermitidos } from './deliveryConfig';
+import {
+  costoEnvioEfectivo,
+  cumplePedidoMinimo,
+  modosPermitidos,
+} from './deliveryConfig';
+import { isLatLng, puntoEnZona, type LatLng } from './zonaMapa';
 
 type TipoExterno = 'takeaway' | 'delivery';
 
@@ -34,6 +39,9 @@ type Contacto = {
   telefono: string;
   direccion?: string;
   referencia?: string;
+  /** Pin en el mapa (requerido si el local tiene zona dibujada). */
+  lat?: number;
+  lng?: number;
   costoEnvio?: number;
   horaEstimada?: string; // ISO
 };
@@ -133,6 +141,52 @@ export async function crearPedidoExternoAction(
       return { success: false, message: 'Esa modalidad de pedido no está disponible' };
     }
 
+    // Subtotal server-side (sin confiar en el cliente) para pedido mínimo.
+    const subtotalServidor = lineasResueltas.reduce((acc, linea) => {
+      const extras = linea.mods.reduce((s, m) => s + m.precio, 0);
+      return acc + (linea.precio + extras) * linea.cantidad;
+    }, 0);
+    if (!cumplePedidoMinimo(config, tipo, subtotalServidor)) {
+      const min = config.pedidoMinimo;
+      return {
+        success: false,
+        message: `El pedido mínimo para envío es $${min.toLocaleString('es-AR')}`,
+      };
+    }
+
+    // Si hay zona dibujada, el pin es obligatorio y debe caer dentro.
+    let pin: LatLng | null = null;
+    if (tipo === 'delivery' && config.zonaPoligono) {
+      const candidate = { lat: Number(contacto.lat), lng: Number(contacto.lng) };
+      if (!isLatLng(candidate)) {
+        return {
+          success: false,
+          message: 'Marcá tu ubicación en el mapa, dentro de la zona de entrega.',
+        };
+      }
+      if (!puntoEnZona(config.zonaPoligono, candidate)) {
+        return { success: false, message: 'Tu ubicación está fuera de la zona de entrega.' };
+      }
+      pin = candidate;
+    } else if (
+      tipo === 'delivery' &&
+      contacto.lat != null &&
+      contacto.lng != null &&
+      isLatLng({ lat: Number(contacto.lat), lng: Number(contacto.lng) })
+    ) {
+      pin = { lat: Number(contacto.lat), lng: Number(contacto.lng) };
+    }
+
+    // Costo de envío y ETA siempre desde la config del local (no del cliente).
+    const costoEnvio = costoEnvioEfectivo(config, tipo);
+    let horaEstimada: Date | null = null;
+    if (contacto.horaEstimada) {
+      const d = new Date(contacto.horaEstimada);
+      if (!Number.isNaN(d.getTime())) horaEstimada = d;
+    } else if (config.tiempoEstimadoMin && config.tiempoEstimadoMin > 0) {
+      horaEstimada = new Date(Date.now() + config.tiempoEstimadoMin * 60_000);
+    }
+
     const { sesionId } = await withPublicTenant(tenantId, async (tx) => {
       const [sesion] = await tx
         .insert(sesionesMesa)
@@ -150,8 +204,10 @@ export async function crearPedidoExternoAction(
           telefono: contacto.telefono.trim(),
           direccion: contacto.direccion?.trim() || null,
           referencia: contacto.referencia?.trim() || null,
-          costoEnvio: (contacto.costoEnvio ?? 0).toString(),
-          horaEstimada: contacto.horaEstimada ? new Date(contacto.horaEstimada) : null,
+          lat: pin?.lat ?? null,
+          lng: pin?.lng ?? null,
+          costoEnvio: costoEnvio.toFixed(2),
+          horaEstimada,
           estadoEntrega: 'Recibido',
         }),
         inserirPedidoDesdeLineas(tx, { tenantId, sesionMesaId: sesion.id, lineas: lineasResueltas }),

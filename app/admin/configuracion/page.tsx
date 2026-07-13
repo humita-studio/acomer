@@ -15,13 +15,13 @@ import { Skeleton } from '@/shared/ui/skeleton';
 
 function ConfigSkeleton() {
     return (
-        <div className="flex-1 space-y-4 p-8 pt-6">
-            <Skeleton className="h-8 w-72" />
+        <div className="flex-1 space-y-6">
+            <Skeleton className="h-9 w-56" />
+            <Skeleton className="h-4 w-72" />
             <Skeleton className="h-10 w-48" />
             <div className="max-w-2xl space-y-4">
-                <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+                <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
                     <Skeleton className="h-5 w-32" />
-                    <Skeleton className="h-9 w-full" />
                     <Skeleton className="h-9 w-full" />
                     <Skeleton className="h-9 w-full" />
                     <Skeleton className="h-9 w-full" />
@@ -74,9 +74,14 @@ async function ConfigContent() {
     const mpConnectUrl = `https://auth.mercadopago.com/authorization?client_id=${MP_CLIENT_ID}&response_type=code&platform_id=mp&state=${session.restauranteId}&redirect_uri=${REDIRECT_URI}`;
 
     return (
-        <div className="flex-1 space-y-4 p-8 pt-6">
-            <div className="flex items-center justify-between space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">Configuración del Restaurante</h2>
+        <div className="flex-1 space-y-6">
+            <div className="space-y-1">
+                <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Configuración
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Landing pública del local y medios de pago.
+                </p>
             </div>
 
             <Tabs defaultValue="landing" className="space-y-4">
@@ -97,80 +102,77 @@ async function ConfigContent() {
                     />
                 </TabsContent>
 
-                <TabsContent value="pagos">
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <div className="col-span-4 space-y-4">
-                            <div className="rounded-xl border bg-card p-6 shadow-sm">
-                                <h3 className="text-xl font-semibold mb-4">Pasarela de Pagos</h3>
-                                <p className="text-sm text-muted-foreground mb-6">
-                                    Vinculá Mercado Pago para cobrar online desde la carta, el
-                                    mostrador y los pedidos. Efectivo y tarjeta en mesa siguen
-                                    disponibles sin configuración.
-                                </p>
+                <TabsContent value="pagos" className="outline-none">
+                    <div className="max-w-xl space-y-4">
+                        <div className="rounded-xl border bg-card p-6 shadow-sm">
+                            <h3 className="mb-1 text-lg font-semibold">Mercado Pago</h3>
+                            <p className="mb-6 text-sm text-muted-foreground">
+                                Vinculá tu cuenta para cobrar online desde la carta, el
+                                mostrador y los pedidos. Efectivo y tarjeta siguen
+                                disponibles sin configuración.
+                            </p>
 
-                                {!isMpConnected ? (
-                                    <div className="mb-4 rounded-lg border border-warning/30 bg-warning-subtle p-3 text-sm text-warning-foreground">
-                                        Todavía no hay una cuenta de Mercado Pago vinculada. Sin
-                                        eso, los clientes no pueden pagar online.
-                                    </div>
-                                ) : null}
-
-                                <form action={guardarConfiguracionPagosAction} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Proveedor Activo</label>
-                                        <select
-                                            name="proveedor"
-                                            defaultValue={proveedorDefault}
-                                            className="w-full p-2 border rounded-md bg-background"
-                                        >
-                                            <option value="mercado_pago_oauth">Mercado Pago (OAuth)</option>
-                                            {allowMock ? (
-                                                <option value="mock">Simulador (solo desarrollo)</option>
-                                            ) : null}
-                                        </select>
-                                        {allowMock ? (
-                                            <p className="text-xs text-muted-foreground">
-                                                El simulador solo aparece en desarrollo. No usar en
-                                                locales reales.
-                                            </p>
-                                        ) : null}
-                                    </div>
-
-                                    {isMpConnected && (
-                                        <div className="p-3 bg-success-subtle border border-success/30 rounded-md text-success-foreground text-sm flex items-center gap-2">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                                            Cuenta de Mercado Pago vinculada correctamente.
-                                        </div>
-                                    )}
-
-                                    <div className="pt-4 flex flex-col gap-3">
-                                        <SubmitButton className="w-full">
-                                            Guardar Preferencia
-                                        </SubmitButton>
-                                    </div>
-                                </form>
-
-                                <div className="mt-6 pt-6 border-t">
-                                    <h4 className="text-sm font-medium mb-3">Conexión con Mercado Pago</h4>
-                                    {!isMpConnected ? (
-                                        <a
-                                            href={mpConnectUrl}
-                                            className="block w-full text-center bg-[#009EE3] hover:bg-[#0088C4] text-white p-2 rounded-md transition-colors font-medium"
-                                        >
-                                            Vincular cuenta de Mercado Pago
-                                        </a>
-                                    ) : (
-                                        <a
-                                            href={mpConnectUrl}
-                                            className="block w-full text-center border border-[#009EE3] text-[#009EE3] hover:bg-blue-50 p-2 rounded-md transition-colors font-medium"
-                                        >
-                                            Reconectar Mercado Pago
-                                        </a>
-                                    )}
-                                    <p className="text-xs text-muted-foreground mt-2 text-center">
-                                        Al vincular tu cuenta autorizás a la aplicación a crear pagos en tu nombre.
-                                    </p>
+                            {!isMpConnected ? (
+                                <div className="mb-4 rounded-lg border border-warning/30 bg-warning-subtle p-3 text-sm text-warning-foreground">
+                                    Todavía no hay una cuenta de Mercado Pago vinculada. Sin
+                                    eso, los clientes no pueden pagar online.
                                 </div>
+                            ) : (
+                                <div className="mb-4 flex items-center gap-2 rounded-lg border border-success/30 bg-success-subtle p-3 text-sm text-success-foreground">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                                    Cuenta vinculada correctamente.
+                                </div>
+                            )}
+
+                            <form action={guardarConfiguracionPagosAction} className="space-y-4">
+                                <div className="space-y-2">
+                                    <label htmlFor="proveedor" className="text-sm font-medium">
+                                      Proveedor activo
+                                    </label>
+                                    <select
+                                        id="proveedor"
+                                        name="proveedor"
+                                        defaultValue={proveedorDefault}
+                                        className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                                    >
+                                        <option value="mercado_pago_oauth">Mercado Pago (OAuth)</option>
+                                        {allowMock ? (
+                                            <option value="mock">Simulador (solo desarrollo)</option>
+                                        ) : null}
+                                    </select>
+                                    {allowMock ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            El simulador solo aparece en desarrollo. No usar en
+                                            locales reales.
+                                        </p>
+                                    ) : null}
+                                </div>
+
+                                <SubmitButton className="w-full">
+                                    Guardar preferencia
+                                </SubmitButton>
+                            </form>
+
+                            <div className="mt-6 space-y-3 border-t pt-6">
+                                <h4 className="text-sm font-medium">Conexión con Mercado Pago</h4>
+                                {!isMpConnected ? (
+                                    <a
+                                        href={mpConnectUrl}
+                                        className="flex h-10 w-full items-center justify-center rounded-md bg-[#009EE3] px-4 text-sm font-medium text-white transition-colors hover:bg-[#0088C4]"
+                                    >
+                                        Vincular cuenta de Mercado Pago
+                                    </a>
+                                ) : (
+                                    <a
+                                        href={mpConnectUrl}
+                                        className="flex h-10 w-full items-center justify-center rounded-md border border-[#009EE3] px-4 text-sm font-medium text-[#009EE3] transition-colors hover:bg-[#009EE3]/10"
+                                    >
+                                        Reconectar Mercado Pago
+                                    </a>
+                                )}
+                                <p className="text-center text-xs text-muted-foreground">
+                                    Al vincular tu cuenta autorizás a la aplicación a crear pagos en tu nombre.
+                                </p>
                             </div>
                         </div>
                     </div>

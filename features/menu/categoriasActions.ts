@@ -42,7 +42,7 @@ export async function crearCategoria(input: CategoriaInput) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageMenu')) {
-      return { success: false, message: 'No tienes permiso para gestionar el menú' };
+      return { success: false, message: 'No tenés permiso para gestionar el menú' };
     }
 
     const nombre = input.nombre.trim();
@@ -63,7 +63,7 @@ export async function crearCategoria(input: CategoriaInput) {
 
     revalidatePath('/admin/menu');
     revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Categoría creada exitosamente' };
+    return { success: true, message: 'Categoría creada' };
   } catch (error) {
     console.error('[crearCategoria]', error);
     return { success: false, message: 'Error al crear la categoría' };
@@ -74,7 +74,7 @@ export async function editarCategoria(id: string, input: CategoriaInput) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageMenu')) {
-      return { success: false, message: 'No tienes permiso para gestionar el menú' };
+      return { success: false, message: 'No tenés permiso para gestionar el menú' };
     }
 
     const nombre = input.nombre.trim();
@@ -109,7 +109,7 @@ export async function eliminarCategoria(id: string) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageMenu')) {
-      return { success: false, message: 'No tienes permiso para gestionar el menú' };
+      return { success: false, message: 'No tenés permiso para gestionar el menú' };
     }
 
     // Soft delete

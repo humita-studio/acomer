@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { BrandMark } from './BrandMark';
-import { NAV_LINKS } from '../marketingContent';
+import { CONTACTO, NAV_LINKS } from '../marketingContent';
 
 /**
  * Footer de la landing: marca + tagline, columnas de links (producto y cuenta) y
@@ -8,6 +8,9 @@ import { NAV_LINKS } from '../marketingContent';
  */
 export function MarketingFooter() {
   const anio = new Date().getFullYear();
+  const waHref = CONTACTO.whatsapp
+    ? `https://wa.me/${CONTACTO.whatsapp}`
+    : null;
 
   return (
     <footer className="border-t border-border bg-background">
@@ -37,7 +40,7 @@ export function MarketingFooter() {
             </ul>
           </nav>
 
-          <nav aria-label="Cuenta">
+          <nav aria-label="Cuenta y contacto">
             <h2 className="text-sm font-semibold text-foreground">Cuenta</h2>
             <ul className="mt-3 space-y-2">
               <li>
@@ -56,6 +59,26 @@ export function MarketingFooter() {
                   Ingresar
                 </Link>
               </li>
+              <li>
+                <a
+                  href={`mailto:${CONTACTO.email}`}
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {CONTACTO.email}
+                </a>
+              </li>
+              {waHref ? (
+                <li>
+                  <a
+                    href={waHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    WhatsApp
+                  </a>
+                </li>
+              ) : null}
             </ul>
           </nav>
         </div>

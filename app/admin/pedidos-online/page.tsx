@@ -5,6 +5,7 @@ import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
 import { getOrdenesExternasAction } from '@/features/pedidos-online/pedidoExternoActions';
 import { getDeliveryConfigAction } from '@/features/pedidos-online/deliveryConfigActions';
+import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
 import { PedidosOnlineManager } from '@/features/pedidos-online/components/PedidosOnlineManager';
 import { Skeleton } from '@/shared/ui/skeleton';
 
@@ -43,9 +44,10 @@ async function PedidosContent() {
   if (!session) redirect('/login');
   if (!canAccessSection(session.role, 'delivery')) redirect('/unauthorized');
 
-  const [ordenesRes, configRes, headersList] = await Promise.all([
+  const [ordenesRes, configRes, landing, headersList] = await Promise.all([
     getOrdenesExternasAction(),
     getDeliveryConfigAction(),
+    obtenerLandingConfig(session.restauranteId),
     headers(),
   ]);
   const ordenes = ordenesRes.success ? ordenesRes.ordenes : [];
@@ -62,6 +64,7 @@ async function PedidosContent() {
       initialOrdenes={ordenes as never}
       initialConfig={configRes.config}
       publicPedirUrl={publicPedirUrl}
+      direccionLocal={landing.direccion || undefined}
     />
   );
 }

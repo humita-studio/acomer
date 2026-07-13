@@ -17,7 +17,7 @@ export async function crearMesa(identificador: string) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageTables')) {
-      return { success: false, message: 'No tienes permiso para gestionar mesas' };
+      return { success: false, message: 'No tenés permiso para gestionar mesas' };
     }
 
     await withTenant(claimsFromSession(session), (db) =>
@@ -28,7 +28,7 @@ export async function crearMesa(identificador: string) {
     );
 
     revalidatePath('/admin/mesas');
-    return { success: true, message: 'Mesa creada exitosamente' };
+    return { success: true, message: 'Mesa creada' };
   } catch (error) {
     console.error('[crearMesa]', error);
     return { success: false, message: 'Error al crear la mesa' };
@@ -39,7 +39,7 @@ export async function eliminarMesa(id: string) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageTables')) {
-      return { success: false, message: 'No tienes permiso para gestionar mesas' };
+      return { success: false, message: 'No tenés permiso para gestionar mesas' };
     }
 
     // Soft delete
@@ -68,7 +68,7 @@ export async function liberarMesaAction(mesaId: string) {
     const session = await getCurrentSession();
     // La libera quien gestiona mesas (owner/admin) o quien toma pedidos (mozo)
     if (!session || (!hasPermission(session.role, 'canManageTables') && !hasPermission(session.role, 'canTakeOrders'))) {
-      return { success: false, message: 'No tienes permiso para liberar la mesa' };
+      return { success: false, message: 'No tenés permiso para liberar la mesa' };
     }
 
     const { sesionesMesa } = await import('@/shared/db/schema');
