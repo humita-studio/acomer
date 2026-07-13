@@ -201,8 +201,15 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
     }
     const tenantId = await getTenantBySlug(tenantSlug);
     if (!tenantId) return { success: false, message: 'Restaurante no encontrado' };
-    if (!datos.nombreContacto?.trim() || !datos.telefono?.trim()) {
-      return { success: false, message: 'Nombre y teléfono son obligatorios' };
+    if (!datos.nombreContacto?.trim() || datos.nombreContacto.trim().length < 2) {
+      return { success: false, message: 'Ingresá tu nombre' };
+    }
+    if (!datos.telefono?.trim()) {
+      return { success: false, message: 'Ingresá un teléfono de contacto' };
+    }
+    const telDigits = datos.telefono.replace(/\D/g, '');
+    if (telDigits.length < 8 || telDigits.length > 15) {
+      return { success: false, message: 'Ingresá un teléfono válido (ej. 11 2345 6789)' };
     }
     if (datos.nombreContacto.trim().length > 120 || datos.telefono.trim().length > 40) {
       return { success: false, message: 'Datos de contacto inválidos' };

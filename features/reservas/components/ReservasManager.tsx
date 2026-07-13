@@ -2,7 +2,16 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Settings } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  ArrowRight,
+  CheckCheck,
+  Copy,
+  ExternalLink,
+  Link2,
+  Plus,
+  Settings,
+} from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import {
   useReservasMes,
@@ -39,6 +48,7 @@ export function ReservasManager({
   hastaISO,
   initialReservas,
   config,
+  publicReservarUrl,
 }: {
   tenantId: string;
   fecha: string;
@@ -47,12 +57,14 @@ export function ReservasManager({
   hastaISO: string;
   initialReservas: Reserva[];
   config: ReservasConfig;
+  publicReservarUrl?: string;
 }) {
   const router = useRouter();
   const [diaSel, setDiaSel] = useState(fecha);
   const [mesaElegida, setMesaElegida] = useState<Record<string, { id: string; label: string }>>({});
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [linkCopiado, setLinkCopiado] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{ reserva: Reserva; accion: AccionConfirmable } | null>(null);
 
   // Al navegar de mes (cambia `fecha` por URL) saltamos al día correspondiente.
@@ -156,7 +168,20 @@ export function ReservasManager({
 
   const subtituloHeader =
     `${plural(cuposHoy.reservas, 'reserva hoy', 'reservas hoy')} · ${plural(cuposHoy.cubiertos, 'cubierto', 'cubiertos')}` +
-    (config.maxReservasPorDia ? ` · cupo ${cuposHoy.reservas}/${config.maxReservasPorDia}` : '');
+    (config.maxReservasPorDia ? ` · cupo ${cuposHoy.reservas}/${config.maxReservasPorDia}` : '') +
+    (config.activo ? '' : ' · online apagado');
+
+  const copiarLinkPublico = async () => {
+    if (!publicReservarUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicReservarUrl);
+      setLinkCopiado(true);
+      toast.success('Link de reservas copiado');
+      setTimeout(() => setLinkCopiado(false), 2000);
+    } catch {
+      toast.error('No se pudo copiar el link');
+    }
+  };
 
   const crearReserva = async (datos: NuevaReservaDatos) => {
     try {
@@ -194,7 +219,13 @@ export function ReservasManager({
           <h1 className="font-display text-3xl font-semibold tracking-tight">Reservas</h1>
           <p className="text-sm text-muted-foreground">{subtituloHeader}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {publicReservarUrl ? (
+            <Button variant="outline" size="sm" onClick={() => void copiarLinkPublico()}>
+              {linkCopiado ? <CheckCheck className="size-4" /> : <Link2 className="size-4" />}
+              {linkCopiado ? 'Link copiado' : 'Link público'}
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => setConfigOpen(true)}>
             <Settings /> Configuración
           </Button>
@@ -203,6 +234,42 @@ export function ReservasManager({
           </Button>
         </div>
       </div>
+
+      {!config.activo ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-4 py-3 text-sm text-warning-foreground">
+          <p>
+            Las reservas <strong>online están apagadas</strong>. El link público no toma
+            pedidos; igual podés cargar reservas a mano.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => setConfigOpen(true)}>
+            Activar online
+          </Button>
+        </div>
+      ) : null}
+
+      {config.activo && publicReservarUrl && cuposHoy.reservas === 0 && reservas.length === 0 ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-dashed bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="font-medium">Compartí el link de reservas</p>
+            <p className="text-sm text-muted-foreground">
+              Tus clientes reservan en la web y aparecen acá en tiempo real.
+            </p>
+            <p className="truncate font-mono text-xs text-muted-foreground">{publicReservarUrl}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => void copiarLinkPublico()}>
+              {linkCopiado ? <CheckCheck className="size-4" /> : <Copy className="size-4" />}
+              Copiar
+            </Button>
+            <Button type="button" size="sm" asChild>
+              <a href={publicReservarUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-4" />
+                Abrir
+              </a>
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,360px)_1fr]">
         <ReservasCalendar
@@ -227,26 +294,35 @@ export function ReservasManager({
 
           {reservasDelDia.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border bg-card py-10 text-center">
-              <p className="text-muted-foreground">No hay reservas para este día.</p>
-              {proximoDiaEnMes ? (
-                <Button variant="outline" size="sm" onClick={() => setDiaSel(proximoDiaEnMes)}>
-                  Próximo día con reservas
-                  <span className="text-muted-foreground">· {diaLegible(proximoDiaEnMes)}</span>
-                  <ArrowRight />
+              <p className="font-medium text-foreground">Sin reservas este día</p>
+              <p className="max-w-xs text-sm text-muted-foreground">
+                Cargá una a mano o esperá que entren por el link público.
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button size="sm" onClick={() => setNuevaOpen(true)}>
+                  <Plus className="size-4" />
+                  Nueva reserva
                 </Button>
-              ) : proximoDiaOtroMes ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/admin/reservas?fecha=${proximoDiaOtroMes}`)}
-                >
-                  Próximo día con reservas
-                  <span className="text-muted-foreground">· {diaLegibleLargo(proximoDiaOtroMes)}</span>
-                  <ArrowRight />
-                </Button>
-              ) : buscandoProxima ? (
-                <p className="text-xs text-muted-foreground">Buscando próximas reservas…</p>
-              ) : null}
+                {proximoDiaEnMes ? (
+                  <Button variant="outline" size="sm" onClick={() => setDiaSel(proximoDiaEnMes)}>
+                    Próximo día
+                    <span className="text-muted-foreground">· {diaLegible(proximoDiaEnMes)}</span>
+                    <ArrowRight />
+                  </Button>
+                ) : proximoDiaOtroMes ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/admin/reservas?fecha=${proximoDiaOtroMes}`)}
+                  >
+                    Próximo día
+                    <span className="text-muted-foreground">· {diaLegibleLargo(proximoDiaOtroMes)}</span>
+                    <ArrowRight />
+                  </Button>
+                ) : buscandoProxima ? (
+                  <p className="text-xs text-muted-foreground">Buscando próximas reservas…</p>
+                ) : null}
+              </div>
             </div>
           ) : (
             <div className="space-y-6">

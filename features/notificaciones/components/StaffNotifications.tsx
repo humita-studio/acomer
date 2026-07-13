@@ -286,6 +286,14 @@ export function StaffNotifications({
           { important: true },
         );
       })
+      .on('broadcast', { event: 'reserva_nueva' }, () => {
+        push(
+          'Nueva reserva',
+          'Entró una reserva online. Revisala en la agenda.',
+          '/admin/reservas',
+          { important: true },
+        );
+      })
       .on('broadcast', { event: 'cuenta_solicitada' }, () => {
         push('Cuenta solicitada', 'Una mesa pidió la cuenta', '/admin/cobros');
       })

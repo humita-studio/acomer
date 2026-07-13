@@ -44,7 +44,19 @@ export function ReservaCard({
       {/* Contacto */}
       <div className="min-w-[140px] flex-1">
         <p className="font-semibold text-foreground">{reserva.nombreContacto}</p>
-        <p className="text-[13px] text-muted-foreground">{reserva.telefono}</p>
+        {reserva.telefono ? (
+          <a
+            href={`https://wa.me/${reserva.telefono.replace(/\D/g, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[13px] text-muted-foreground hover:text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {reserva.telefono}
+          </a>
+        ) : (
+          <p className="text-[13px] text-muted-foreground">Sin teléfono</p>
+        )}
         {reserva.notas && <p className="mt-0.5 text-xs text-muted-foreground">{reserva.notas}</p>}
       </div>
 
