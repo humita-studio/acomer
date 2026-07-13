@@ -3,10 +3,12 @@ import postgres from 'postgres'
 
 import * as schema from './schema'
 
-const connectionString = process.env.DATABASE_URL
-
-if (!connectionString) {
-  throw new Error('DATABASE_URL is required to initialize Drizzle.')
+function getConnectionString(): string {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is required to initialize Drizzle.')
+  }
+  return connectionString
 }
 
 /**
@@ -28,7 +30,7 @@ const globalForDb = globalThis as typeof globalThis & {
 
 function createClient() {
   const isProd = process.env.NODE_ENV === 'production'
-  return postgres(connectionString, {
+  return postgres(getConnectionString(), {
     // Prefetch/prepared statements no son compatibles con el pooler transaction mode.
     prepare: false,
     max: isProd ? 3 : 5,
