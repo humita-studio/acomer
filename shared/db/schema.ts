@@ -27,12 +27,68 @@ export const restaurantes = pgTable(
     nombre: text('nombre').notNull(),
     slug: text('slug').notNull().unique(),
     activo: boolean('activo').notNull().default(true),
+    /** Plan SaaS: basico | pro | a_medida */
+    plan: text('plan').notNull().default('pro'),
+    /**
+     * trial = prueba gratis; active = al día; past_due = vencido;
+     * cancelled = cancelado; exempt = piloto sin cobro (manual).
+     */
+    billingStatus: text('billing_status').notNull().default('trial'),
+    trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+    /** Fin del período pago (renovable con cada cobro SaaS). */
+    periodEndsAt: timestamp('period_ends_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => ({
     slugIdx: uniqueIndex('restaurantes_slug_idx').on(table.slug),
+    planCheck: check(
+      'restaurantes_plan_check',
+      sql`plan IN ('basico','pro','a_medida')`,
+    ),
+    billingStatusCheck: check(
+      'restaurantes_billing_status_check',
+      sql`billing_status IN ('trial','active','past_due','cancelled','exempt')`,
+    ),
   })
+)
+
+/**
+ * Cobros de la suscripción SaaS (acomer cobra al local).
+ * Distinto de transacciones_pago (el local cobra al comensal).
+ */
+export const pagosSuscripcion = pgTable(
+  'pagos_suscripcion',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    plan: text('plan').notNull(),
+    monto: numeric('monto', { precision: 12, scale: 2 }).notNull(),
+    estado: text('estado').notNull().default('pending'), // pending | approved | rejected | cancelled
+    mpPreferenceId: text('mp_preference_id'),
+    mpPaymentId: text('mp_payment_id'),
+    periodStart: timestamp('period_start', { withTimezone: true }),
+    periodEnd: timestamp('period_end', { withTimezone: true }),
+    metadata: jsonb('metadata').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'pagos_suscripcion_restaurant_id_fk',
+    }).onDelete('cascade'),
+    estadoCheck: check(
+      'pagos_suscripcion_estado_check',
+      sql`estado IN ('pending','approved','rejected','cancelled')`,
+    ),
+    planCheck: check(
+      'pagos_suscripcion_plan_check',
+      sql`plan IN ('basico','pro','a_medida')`,
+    ),
+    restauranteIdx: index('pagos_suscripcion_restaurant_idx').on(table.restauranteId),
+  }),
 )
 
 // ============================================================================
@@ -993,6 +1049,14 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   movimientosCaja: many(movimientosCaja),
   datosEntrega: many(datosEntrega),
   reservas: many(reservas),
+  pagosSuscripcion: many(pagosSuscripcion),
+}))
+
+export const pagosSuscripcionRelations = relations(pagosSuscripcion, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [pagosSuscripcion.restauranteId],
+    references: [restaurantes.id],
+  }),
 }))
 
 export const perfilesEmpleadosRelations = relations(perfilesEmpleados, ({ one }) => ({

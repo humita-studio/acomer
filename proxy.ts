@@ -16,8 +16,12 @@ export async function proxy(req: NextRequest) {
   const path = url.pathname;
 
   // --- 1. Refresh de sesión Supabase (necesario para mantener cookies actualizadas) ---
+  // Clonar headers para poder inyectar pathname (gate de billing en layout admin).
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-pathname', path);
+
   let response = NextResponse.next({
-    request: { headers: req.headers },
+    request: { headers: requestHeaders },
   });
 
   const supabase = createServerClient(
@@ -33,9 +37,11 @@ export async function proxy(req: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             req.cookies.set(name, value)
           );
-          // Re-crear response con headers actualizados
+          // Re-crear response con headers actualizados (mantener x-pathname)
+          const nextHeaders = new Headers(req.headers);
+          nextHeaders.set('x-pathname', path);
           response = NextResponse.next({
-            request: { headers: req.headers },
+            request: { headers: nextHeaders },
           });
           // Setear cookies en el response (para que el browser las reciba)
           cookiesToSet.forEach(({ name, value, options }) =>

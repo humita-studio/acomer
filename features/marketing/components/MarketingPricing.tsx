@@ -21,8 +21,8 @@ export function MarketingPricing() {
             Planes simples, sin sorpresas
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Precios de referencia. Creá tu local y configurá en minutos; el
-            plan se cierra con nosotros.
+            14 días de prueba al crear tu local. Después pagás el mes con Mercado
+            Pago, sin permanencia.
           </p>
         </div>
 

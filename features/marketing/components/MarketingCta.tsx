@@ -17,8 +17,8 @@ export function MarketingCta() {
           Sumá tecnología a tu salón hoy
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-lg text-white/85">
-          Creá tu local en minutos: menú, mesas, QR y cobros. Te acompañamos en
-          la puesta en marcha.
+          14 días gratis al registrarte. Configurás menú, mesas y cobros; después
+          elegís plan y pagás con Mercado Pago.
         </p>
 
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
@@ -28,7 +28,7 @@ export function MarketingCta() {
             className="bg-white text-primary hover:bg-white/90"
           >
             <Link href="/register">
-              Crear mi local
+              Probar 14 días
               <ArrowRight />
             </Link>
           </Button>

@@ -81,12 +81,22 @@ tener doble CDN y problemas de SSL (errores `525` / `526`), y el plan free de Cl
 | `CLOUDINARY_API_KEY` | API Key de Cloudinary (firma de uploads) | `123456789012345` |
 | `CLOUDINARY_API_SECRET` | API Secret de Cloudinary (**solo server**) | `...` |
 | `ALLOW_PAYMENT_MOCK` | (Opcional) `true` para habilitar el simulador de pagos fuera de dev | solo si hace falta demo forzada |
+| `MP_BILLING_ACCESS_TOKEN` | Access token de la cuenta MP de **acomer** (cobra suscripciones SaaS) | `APP_USR-…` o `TEST-…` |
+| `MP_PLATFORM_ACCESS_TOKEN` | Alias opcional de `MP_BILLING_ACCESS_TOKEN` | |
 
 > **No commitees secretos.** El `.env` local no debe subirse al repo; cargá estos valores
 > directamente en el panel de Vercel.
 >
-> En **producción** el proveedor mock de pagos está deshabilitado salvo
+> En **producción** el proveedor mock de pagos (del local) está deshabilitado salvo
 > `ALLOW_PAYMENT_MOCK=true`.
+>
+> **Billing SaaS:** el local paga a acomer con Checkout Pro usando
+> `MP_BILLING_ACCESS_TOKEN`. Webhook: `https://acomer.com.ar/api/webhooks/billing/mp`
+> (misma firma `MP_WEBHOOK_SECRET` si la app es la misma). Migración:
+> `drizzle/0026_billing.sql`.
+>
+> Pilotos sin cobro: en SQL
+> `UPDATE restaurantes SET billing_status = 'exempt' WHERE slug = '…';`
 
 ---
 

@@ -105,9 +105,8 @@ export type Plan = {
 };
 
 /**
- * Planes de referencia (piloto).
- * Los precios son orientativos; el cobro del SaaS todavía se cierra a mano.
- * No prometer límites ni features que el producto no aplica automáticamente.
+ * Planes de la landing (alineados a features/billing/plans.ts).
+ * Trial real: 14 días al registrarse.
  */
 export const PLANES: Plan[] = [
   {
@@ -117,11 +116,12 @@ export const PLANES: Plan[] = [
     descripcion: 'Para arrancar con lo esencial.',
     features: [
       'Carta digital con QR',
-      'Mesas y plano del salón',
+      'Hasta 15 mesas',
       'Cocina y cobros',
       'Reportes del día',
+      '14 días de prueba',
     ],
-    cta: 'Crear mi local',
+    cta: 'Probar 14 días',
     ctaHref: '/register',
   },
   {
@@ -131,13 +131,13 @@ export const PLANES: Plan[] = [
     descripcion: 'El más elegido por restaurantes en marcha.',
     features: [
       'Todo lo de Básico',
-      'Reservas online',
-      'Takeaway y delivery',
+      'Mesas ilimitadas',
+      'Reservas + pedidos online',
       'Cobros con Mercado Pago',
       'Promociones y reportes',
-      'Roles de staff',
+      '14 días de prueba',
     ],
-    cta: 'Crear mi local',
+    cta: 'Probar 14 días',
     ctaHref: '/register',
     destacado: true,
   },
@@ -147,8 +147,7 @@ export const PLANES: Plan[] = [
     descripcion: 'Setup asistido y acompañamiento para tu local.',
     features: [
       'Todo lo de Pro',
-      'Onboarding guiado',
-      'Roles y permisos de equipo',
+      'Onboarding dedicado',
       'Soporte prioritario',
       'Prioridad en el roadmap',
     ],

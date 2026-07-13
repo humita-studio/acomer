@@ -11,11 +11,12 @@ Usalo en demos, onboarding y handoff al dueño.
 > cocina en vivo, mesas, takeaway/delivery, reservas y cobros con Mercado Pago
 > — todo en un solo panel.
 
-**No digas (por ahora):** multi-sucursal, API, “14 días gratis automáticos”,
-límites de mesas del plan Básico (no se aplican en el producto).
+**Sí podés decir:** 14 días de prueba reales al registrarse; después pagan el mes
+con Mercado Pago desde **Plan y facturación**. Básico limita a 15 mesas.
 
-**Precios:** de referencia en la landing; el plan se cierra con vos (transferencia /
-acuerdo).
+**No digas (por ahora):** multi-sucursal, API pública, facturación AFIP automática.
+
+**Pilotos gratis:** `billing_status = 'exempt'` en ese restaurante (SQL).
 
 ---
 
@@ -91,8 +92,8 @@ Webhook MP: URL pública + `MP_WEBHOOK_SECRET` en Vercel (ver `DEPLOY.md`).
 ### Oferta piloto sugerida
 
 - Setup asistido (1 h remota o presencial)
-- Mes de prueba o mes incluido
-- Precio de referencia: Básico / Pro de la landing
+- 14 días trial automáticos; o `exempt` si regalás el mes
+- Self-serve: Básico $14.900 / Pro $29.900 vía MP en `/admin/billing`
 - Soporte por WhatsApp / email que **vos** atiendas
 
 ### No prometer

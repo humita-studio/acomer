@@ -12,6 +12,7 @@ import {
   ChevronsUpDown,
   LayoutGrid,
   LogOut,
+  CreditCard,
   Settings,
   TicketPercent,
   UtensilsCrossed,
@@ -43,7 +44,7 @@ import {
 } from '@/shared/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
 
-type Section = Parameters<typeof canAccessSection>[1] | 'dashboard';
+type Section = Parameters<typeof canAccessSection>[1] | 'dashboard' | 'billing';
 
 type NavLink = {
   href: string;
@@ -83,6 +84,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/reportes', label: 'Reportes', section: 'reports', icon: BarChart3 },
       { href: '/admin/staff', label: 'Empleados', section: 'staff', icon: Users },
       { href: '/admin/promociones', label: 'Promociones', section: 'menu', icon: TicketPercent },
+      { href: '/admin/billing', label: 'Plan y facturación', section: 'billing', icon: CreditCard },
       { href: '/admin/configuracion', label: 'Configuración', section: 'settings', icon: Settings },
     ],
   },
@@ -111,9 +113,11 @@ export function AppSidebar({
 
   const inicial = (nombreRestaurante?.trim()?.[0] ?? '?').toUpperCase();
 
-  const canSee = (link: NavLink) =>
-    link.section === 'dashboard' ||
-    canAccessSection(role, link.section as Exclude<Section, 'dashboard'>);
+  const canSee = (link: NavLink) => {
+    if (link.section === 'dashboard') return true;
+    if (link.section === 'billing') return role === 'owner' || role === 'admin';
+    return canAccessSection(role, link.section as Exclude<Section, 'dashboard' | 'billing'>);
+  };
 
   const isLinkActive = (href: string) =>
     pathname === href || (href !== '/admin' && !!pathname?.startsWith(href));

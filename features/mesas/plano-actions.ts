@@ -188,6 +188,20 @@ export async function crearMesaEnPlano(
     const limpio = (identificador || '').trim();
     if (!limpio) return { success: false, message: 'El identificador no puede estar vacío' };
 
+    // Límite de mesas del plan (Básico = 15).
+    const { getBillingSnapshotAction } = await import('@/features/billing/billingActions');
+    const billing = await getBillingSnapshotAction();
+    if (billing?.maxMesas != null) {
+      const { countMesasActivas } = await import('@/features/billing/limits');
+      const n = await countMesasActivas(session.restauranteId);
+      if (n >= billing.maxMesas) {
+        return {
+          success: false,
+          message: `Tu plan permite hasta ${billing.maxMesas} mesas. Pasate a Pro o eliminá alguna mesa.`,
+        };
+      }
+    }
+
     const res = await withTenant(claimsFromSession(session), async (db) => {
       // Validar que el ambiente pertenece al restaurante
       const [amb] = await db
