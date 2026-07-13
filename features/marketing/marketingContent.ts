@@ -104,7 +104,11 @@ export type Plan = {
   destacado?: boolean;
 };
 
-/** Planes de precios. */
+/**
+ * Planes de referencia (piloto).
+ * Los precios son orientativos; el cobro del SaaS todavía se cierra a mano.
+ * No prometer límites ni features que el producto no aplica automáticamente.
+ */
 export const PLANES: Plan[] = [
   {
     nombre: 'Básico',
@@ -113,11 +117,11 @@ export const PLANES: Plan[] = [
     descripcion: 'Para arrancar con lo esencial.',
     features: [
       'Carta digital con QR',
-      'Hasta 15 mesas',
-      'Reportes básicos',
-      'Soporte por email',
+      'Mesas y plano del salón',
+      'Cocina y cobros',
+      'Reportes del día',
     ],
-    cta: 'Probar gratis',
+    cta: 'Crear mi local',
     ctaHref: '/register',
   },
   {
@@ -127,28 +131,28 @@ export const PLANES: Plan[] = [
     descripcion: 'El más elegido por restaurantes en marcha.',
     features: [
       'Todo lo de Básico',
-      'Mesas ilimitadas',
-      'Reservas + Delivery',
+      'Reservas online',
+      'Takeaway y delivery',
       'Cobros con Mercado Pago',
-      'Reportes avanzados',
-      'Soporte prioritario',
+      'Promociones y reportes',
+      'Roles de staff',
     ],
-    cta: 'Probar gratis',
+    cta: 'Crear mi local',
     ctaHref: '/register',
     destacado: true,
   },
   {
     nombre: 'A medida',
-    precio: 'A medida',
-    descripcion: 'Para cadenas y multilocal.',
+    precio: 'Consultar',
+    descripcion: 'Setup asistido y acompañamiento para tu local.',
     features: [
       'Todo lo de Pro',
-      'Multi-sucursal',
-      'Roles y permisos',
-      'Integraciones / API',
-      'Onboarding dedicado',
+      'Onboarding guiado',
+      'Roles y permisos de equipo',
+      'Soporte prioritario',
+      'Prioridad en el roadmap',
     ],
-    cta: 'Hablar con ventas',
+    cta: 'Hablar con nosotros',
     ctaHref: '/register',
   },
 ];

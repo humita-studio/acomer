@@ -6,6 +6,7 @@ import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { withTenant } from '@/shared/db/secure-wrapper';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { isPaymentMockAllowed } from './mock-enabled';
 
 export async function guardarConfiguracionPagosAction(formData: FormData) {
   const session = await getCurrentSession();
@@ -20,6 +21,12 @@ export async function guardarConfiguracionPagosAction(formData: FormData) {
 
   if (!proveedor) {
     throw new Error('Falta el proveedor');
+  }
+
+  if (proveedor === 'mock' && !isPaymentMockAllowed()) {
+    throw new Error(
+      'El simulador de pagos no está disponible en producción. Usá Mercado Pago.',
+    );
   }
 
   await withTenant(claimsFromSession(session), async (db) => {

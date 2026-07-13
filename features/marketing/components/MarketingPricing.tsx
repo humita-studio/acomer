@@ -21,7 +21,8 @@ export function MarketingPricing() {
             Planes simples, sin sorpresas
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Probá gratis 14 días. Sin tarjeta, sin permanencia.
+            Precios de referencia. Creá tu local y configurá en minutos; el
+            plan se cierra con nosotros.
           </p>
         </div>
 

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { db } from '@/shared/db';
 import { guardarConfiguracionPagosAction } from '@/features/pagos/configuracion-actions';
+import { isPaymentMockAllowed } from '@/features/pagos/mock-enabled';
 import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
 import { LandingConfigForm } from '@/features/landing/components/LandingConfigForm';
 import { SubdominioForm } from '@/features/tenant/components/SubdominioForm';
@@ -56,7 +57,15 @@ async function ConfigContent() {
     const dominioBase = host.replace(/^app\./, '') || 'acomer.com.ar';
 
     const creds = (config?.credenciales ?? {}) as { access_token?: string };
-    const isMpConnected = !!creds.access_token && config?.proveedor === 'mercado_pago_oauth';
+    const isMpConnected =
+        !!creds.access_token &&
+        (config?.proveedor === 'mercado_pago_oauth' || config?.proveedor === 'mercado_pago');
+    const allowMock = isPaymentMockAllowed();
+    // En prod no mostramos mock; si el local tenía mock, forzamos selector a MP.
+    const proveedorDefault =
+        config?.proveedor === 'mock' && !allowMock
+            ? 'mercado_pago_oauth'
+            : config?.proveedor || 'mercado_pago_oauth';
 
     const MP_CLIENT_ID = process.env.NEXT_PUBLIC_MP_CLIENT_ID;
     const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/webhooks/pagos/mp-oauth`;
@@ -94,20 +103,37 @@ async function ConfigContent() {
                             <div className="rounded-xl border bg-card p-6 shadow-sm">
                                 <h3 className="text-xl font-semibold mb-4">Pasarela de Pagos</h3>
                                 <p className="text-sm text-muted-foreground mb-6">
-                                    Configura cómo tus clientes pagarán desde la Carta Digital. Por defecto, puedes usar Mercado Pago o nuestro entorno de simulación (Mock).
+                                    Vinculá Mercado Pago para cobrar online desde la carta, el
+                                    mostrador y los pedidos. Efectivo y tarjeta en mesa siguen
+                                    disponibles sin configuración.
                                 </p>
+
+                                {!isMpConnected ? (
+                                    <div className="mb-4 rounded-lg border border-warning/30 bg-warning-subtle p-3 text-sm text-warning-foreground">
+                                        Todavía no hay una cuenta de Mercado Pago vinculada. Sin
+                                        eso, los clientes no pueden pagar online.
+                                    </div>
+                                ) : null}
 
                                 <form action={guardarConfiguracionPagosAction} className="space-y-4">
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium">Proveedor Activo</label>
                                         <select
                                             name="proveedor"
-                                            defaultValue={config?.proveedor || 'mercado_pago_oauth'}
+                                            defaultValue={proveedorDefault}
                                             className="w-full p-2 border rounded-md bg-background"
                                         >
-                                            <option value="mercado_pago_oauth">Mercado Pago (Conexión Automática)</option>
-                                            <option value="mock">Simulador (Modo Pruebas)</option>
+                                            <option value="mercado_pago_oauth">Mercado Pago (OAuth)</option>
+                                            {allowMock ? (
+                                                <option value="mock">Simulador (solo desarrollo)</option>
+                                            ) : null}
                                         </select>
+                                        {allowMock ? (
+                                            <p className="text-xs text-muted-foreground">
+                                                El simulador solo aparece en desarrollo. No usar en
+                                                locales reales.
+                                            </p>
+                                        ) : null}
                                     </div>
 
                                     {isMpConnected && (
@@ -131,7 +157,7 @@ async function ConfigContent() {
                                             href={mpConnectUrl}
                                             className="block w-full text-center bg-[#009EE3] hover:bg-[#0088C4] text-white p-2 rounded-md transition-colors font-medium"
                                         >
-                                            Vincular cuenta de Mercado Pago!
+                                            Vincular cuenta de Mercado Pago
                                         </a>
                                     ) : (
                                         <a
@@ -142,7 +168,7 @@ async function ConfigContent() {
                                         </a>
                                     )}
                                     <p className="text-xs text-muted-foreground mt-2 text-center">
-                                        Al vincular tu cuenta autorizas a la aplicación a crear pagos en tu nombre.
+                                        Al vincular tu cuenta autorizás a la aplicación a crear pagos en tu nombre.
                                     </p>
                                 </div>
                             </div>

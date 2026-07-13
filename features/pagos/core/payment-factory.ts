@@ -2,6 +2,7 @@ import { db } from '../../../shared/db/client';
 import type { PaymentProvider } from './payment-provider.interface';
 import { MercadoPagoProvider } from '../providers/mercado-pago.provider';
 import { MockProvider } from '../providers/mock.provider';
+import { isPaymentMockAllowed } from '../mock-enabled';
 
 export async function getPaymentProvider(restaurantId: string): Promise<PaymentProvider> {
   // Buscar configuración activa para el restaurante
@@ -29,10 +30,15 @@ export async function getPaymentProvider(restaurantId: string): Promise<PaymentP
       }
       return new MercadoPagoProvider(creds.access_token, restaurantId);
     }
-      
+
     case 'mock':
+      if (!isPaymentMockAllowed()) {
+        throw new Error(
+          'El simulador de pagos no está disponible en producción. Vinculá Mercado Pago en Configuración.',
+        );
+      }
       return new MockProvider();
-      
+
     default:
       throw new Error(`Proveedor de pagos no soportado: ${config.proveedor}`);
   }

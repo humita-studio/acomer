@@ -80,9 +80,13 @@ tener doble CDN y problemas de SSL (errores `525` / `526`), y el plan free de Cl
 | `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Cloud name de Cloudinary (subida de fotos del local) | `mi-cloud` |
 | `CLOUDINARY_API_KEY` | API Key de Cloudinary (firma de uploads) | `123456789012345` |
 | `CLOUDINARY_API_SECRET` | API Secret de Cloudinary (**solo server**) | `...` |
+| `ALLOW_PAYMENT_MOCK` | (Opcional) `true` para habilitar el simulador de pagos fuera de dev | solo si hace falta demo forzada |
 
 > **No commitees secretos.** El `.env` local no debe subirse al repo; cargá estos valores
 > directamente en el panel de Vercel.
+>
+> En **producción** el proveedor mock de pagos está deshabilitado salvo
+> `ALLOW_PAYMENT_MOCK=true`.
 
 ---
 

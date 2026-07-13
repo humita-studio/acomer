@@ -60,8 +60,16 @@ export function MarketingFooter() {
           </nav>
         </div>
 
-        <div className="mt-10 border-t border-border pt-6 text-sm text-muted-foreground">
-          © {anio} acomer. Hecho en Argentina.
+        <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>© {anio} acomer. Hecho en Argentina.</p>
+          <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1">
+            <Link href="/terminos" className="hover:text-foreground">
+              Términos
+            </Link>
+            <Link href="/privacidad" className="hover:text-foreground">
+              Privacidad
+            </Link>
+          </nav>
         </div>
       </div>
     </footer>

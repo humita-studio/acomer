@@ -70,6 +70,7 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
   const [descripcion, setDescripcion] = useState('');
   const [direccion, setDireccion] = useState('');
   const [colorMarca, setColorMarca] = useState<ColorMarca>('terracota');
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const subdominio = normalizarSubdominio(subdominioRaw);
@@ -78,9 +79,13 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
 
   const okPaso1 = emailValido(email) && password.length >= 8 && password === password2;
   const okPaso2 = nombreLocal.trim().length >= 2 && !errorSub && subdominio.length >= SUBDOMINIO_MIN;
+  const okPaso3 = aceptaTerminos;
 
   const crear = useMutation({
     mutationFn: async () => {
+      if (!aceptaTerminos) {
+        throw new Error('Tenés que aceptar los términos y la política de privacidad.');
+      }
       const res = await registrarLocalAction({
         email,
         password,
@@ -332,6 +337,26 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
               </Select>
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={aceptaTerminos}
+              onChange={(e) => setAceptaTerminos(e.target.checked)}
+              className="mt-1 size-4 accent-primary"
+            />
+            <span className="text-muted-foreground">
+              Acepto los{' '}
+              <Link href="/terminos" target="_blank" className="font-medium text-primary hover:underline">
+                términos y condiciones
+              </Link>{' '}
+              y la{' '}
+              <Link href="/privacidad" target="_blank" className="font-medium text-primary hover:underline">
+                política de privacidad
+              </Link>
+              .
+            </span>
+          </label>
         </div>
       )}
 
@@ -356,7 +381,7 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
           </Button>
         )}
         {paso === 2 && (
-          <Button onClick={() => crear.mutate()} disabled={crear.isPending}>
+          <Button onClick={() => crear.mutate()} disabled={crear.isPending || !okPaso3}>
             {crear.isPending ? (
               <>
                 <Loader2 className="size-4 animate-spin" /> Creando…
