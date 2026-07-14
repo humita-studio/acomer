@@ -3,7 +3,9 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { Label } from '@/shared/ui/label';
+import { parseMontoInput } from '@/shared/lib/format';
 import {
   Sheet,
   SheetContent,
@@ -123,13 +125,23 @@ export function PromocionFormSheet({
                       ? 'Precio del combo'
                       : 'Descuento ($)'}
                 </Label>
-                <Input
-                  id="promo-valor"
-                  type="number"
-                  min={0}
-                  value={form.valor}
-                  onChange={(e) => setForm((f) => ({ ...f, valor: Number(e.target.value) }))}
-                />
+                {form.tipo === 'porcentaje' ? (
+                  <Input
+                    id="promo-valor"
+                    type="number"
+                    min={0}
+                    value={form.valor}
+                    onChange={(e) => setForm((f) => ({ ...f, valor: Number(e.target.value) }))}
+                  />
+                ) : (
+                  <MoneyInput
+                    id="promo-valor"
+                    value={form.valor || ''}
+                    onValueChange={(v) =>
+                      setForm((f) => ({ ...f, valor: parseMontoInput(v) ?? 0 }))
+                    }
+                  />
+                )}
               </div>
             )}
           </div>
@@ -260,13 +272,11 @@ export function PromocionFormSheet({
 
             <div className="space-y-1.5">
               <Label className="text-xs">Monto mínimo del pedido</Label>
-              <Input
-                type="number"
-                min={0}
+              <MoneyInput
                 placeholder="Sin mínimo"
                 value={form.condiciones.montoMinimo ?? ''}
-                onChange={(e) =>
-                  updateCond({ montoMinimo: e.target.value ? Number(e.target.value) : null })
+                onValueChange={(v) =>
+                  updateCond({ montoMinimo: v ? (parseMontoInput(v) ?? null) : null })
                 }
               />
             </div>

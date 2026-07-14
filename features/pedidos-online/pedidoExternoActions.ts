@@ -1,7 +1,7 @@
 'use server';
 
-import { sesionesMesa, datosEntrega } from '@/shared/db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { sesionesMesa, datosEntrega, pedidos } from '@/shared/db/schema';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
@@ -13,8 +13,14 @@ import {
   inserirPedidoDesdeLineas,
   type PedidoItemInput,
 } from '@/features/pedidos/crearPedidoCore';
+import { entregaACocina } from '@/features/pedidos/estadoSync';
 import { obtenerDeliveryConfig } from './deliveryConfigActions';
-import { modosPermitidos } from './deliveryConfig';
+import {
+  costoEnvioEfectivo,
+  cumplePedidoMinimo,
+  modosPermitidos,
+} from './deliveryConfig';
+import { isLatLng, puntoEnZona, type LatLng } from './zonaMapa';
 
 type TipoExterno = 'takeaway' | 'delivery';
 
@@ -33,6 +39,9 @@ type Contacto = {
   telefono: string;
   direccion?: string;
   referencia?: string;
+  /** Pin en el mapa (requerido si el local tiene zona dibujada). */
+  lat?: number;
+  lng?: number;
   costoEnvio?: number;
   horaEstimada?: string; // ISO
 };
@@ -40,7 +49,7 @@ type Contacto = {
 /** Avisa al panel admin que entró/cambió un pedido externo. */
 async function broadcastOrdenExterna(
   tenantId: string,
-  event: 'orden_externa_nueva' | 'orden_externa_actualizada',
+  event: 'orden_externa_nueva' | 'orden_externa_actualizada' | 'nuevo_pedido',
   payload: Record<string, unknown>,
 ) {
   try {
@@ -65,6 +74,9 @@ export async function crearPedidoExternoAction(
   items: PedidoItemInput[],
 ) {
   try {
+    if (!tenantSlug?.trim() || tenantSlug.length > 64) {
+      return { success: false, message: 'Restaurante inválido' };
+    }
     const tenantId = await getTenantBySlug(tenantSlug);
     if (!tenantId) {
       return { success: false, message: 'Restaurante no encontrado' };
@@ -73,14 +85,35 @@ export async function crearPedidoExternoAction(
       return { success: false, message: 'Tipo de pedido inválido' };
     }
 
-    const itemsLimpios = (items ?? []).filter((i) => i.productoId && i.cantidad > 0);
+    const itemsLimpios = (items ?? [])
+      .filter((i) => i.productoId && i.cantidad > 0)
+      .slice(0, 50)
+      .map((i) => ({
+        ...i,
+        cantidad: Math.min(99, Math.max(1, Math.floor(Number(i.cantidad) || 0))),
+      }))
+      .filter((i) => i.cantidad > 0);
     if (itemsLimpios.length === 0) {
       return { success: false, message: 'El carrito está vacío' };
     }
-    if (!contacto.nombreContacto?.trim() || !contacto.telefono?.trim()) {
-      return { success: false, message: 'Nombre y teléfono son obligatorios' };
+    if (!contacto.nombreContacto?.trim() || contacto.nombreContacto.trim().length < 2) {
+      return { success: false, message: 'Ingresá tu nombre' };
     }
-    if (tipo === 'delivery' && !contacto.direccion?.trim()) {
+    if (!contacto.telefono?.trim()) {
+      return { success: false, message: 'Ingresá un teléfono de contacto' };
+    }
+    const telDigits = contacto.telefono.replace(/\D/g, '');
+    if (telDigits.length < 8 || telDigits.length > 15) {
+      return { success: false, message: 'Ingresá un teléfono válido (ej. 11 2345 6789)' };
+    }
+    if (
+      contacto.nombreContacto.trim().length > 120 ||
+      contacto.telefono.trim().length > 40 ||
+      (contacto.direccion?.trim().length ?? 0) > 300
+    ) {
+      return { success: false, message: 'Datos de contacto inválidos' };
+    }
+    if (tipo === 'delivery' && (!contacto.direccion?.trim() || contacto.direccion.trim().length < 5)) {
       return { success: false, message: 'La dirección es obligatoria para envíos' };
     }
 
@@ -108,6 +141,52 @@ export async function crearPedidoExternoAction(
       return { success: false, message: 'Esa modalidad de pedido no está disponible' };
     }
 
+    // Subtotal server-side (sin confiar en el cliente) para pedido mínimo.
+    const subtotalServidor = lineasResueltas.reduce((acc, linea) => {
+      const extras = linea.mods.reduce((s, m) => s + m.precio, 0);
+      return acc + (linea.precio + extras) * linea.cantidad;
+    }, 0);
+    if (!cumplePedidoMinimo(config, tipo, subtotalServidor)) {
+      const min = config.pedidoMinimo;
+      return {
+        success: false,
+        message: `El pedido mínimo para envío es $${min.toLocaleString('es-AR')}`,
+      };
+    }
+
+    // Si hay zona dibujada, el pin es obligatorio y debe caer dentro.
+    let pin: LatLng | null = null;
+    if (tipo === 'delivery' && config.zonaPoligono) {
+      const candidate = { lat: Number(contacto.lat), lng: Number(contacto.lng) };
+      if (!isLatLng(candidate)) {
+        return {
+          success: false,
+          message: 'Marcá tu ubicación en el mapa, dentro de la zona de entrega.',
+        };
+      }
+      if (!puntoEnZona(config.zonaPoligono, candidate)) {
+        return { success: false, message: 'Tu ubicación está fuera de la zona de entrega.' };
+      }
+      pin = candidate;
+    } else if (
+      tipo === 'delivery' &&
+      contacto.lat != null &&
+      contacto.lng != null &&
+      isLatLng({ lat: Number(contacto.lat), lng: Number(contacto.lng) })
+    ) {
+      pin = { lat: Number(contacto.lat), lng: Number(contacto.lng) };
+    }
+
+    // Costo de envío y ETA siempre desde la config del local (no del cliente).
+    const costoEnvio = costoEnvioEfectivo(config, tipo);
+    let horaEstimada: Date | null = null;
+    if (contacto.horaEstimada) {
+      const d = new Date(contacto.horaEstimada);
+      if (!Number.isNaN(d.getTime())) horaEstimada = d;
+    } else if (config.tiempoEstimadoMin && config.tiempoEstimadoMin > 0) {
+      horaEstimada = new Date(Date.now() + config.tiempoEstimadoMin * 60_000);
+    }
+
     const { sesionId } = await withPublicTenant(tenantId, async (tx) => {
       const [sesion] = await tx
         .insert(sesionesMesa)
@@ -125,8 +204,10 @@ export async function crearPedidoExternoAction(
           telefono: contacto.telefono.trim(),
           direccion: contacto.direccion?.trim() || null,
           referencia: contacto.referencia?.trim() || null,
-          costoEnvio: (contacto.costoEnvio ?? 0).toString(),
-          horaEstimada: contacto.horaEstimada ? new Date(contacto.horaEstimada) : null,
+          lat: pin?.lat ?? null,
+          lng: pin?.lng ?? null,
+          costoEnvio: costoEnvio.toFixed(2),
+          horaEstimada,
           estadoEntrega: 'Recibido',
         }),
         inserirPedidoDesdeLineas(tx, { tenantId, sesionMesaId: sesion.id, lineas: lineasResueltas }),
@@ -138,6 +219,11 @@ export async function crearPedidoExternoAction(
     // Fire-and-forget: el broadcast no afecta al comensal y no debe alargar el
     // tiempo de respuesta percibido. Los errores se loguean dentro de la función.
     void broadcastOrdenExterna(tenantId, 'orden_externa_nueva', { sesionMesaId: sesionId, tipo });
+    // Misma señal que el salón: cocina y campana del panel escuchan `nuevo_pedido`.
+    void broadcastOrdenExterna(tenantId, 'nuevo_pedido', {
+      sesionMesaId: sesionId,
+      etiqueta: tipo === 'delivery' ? 'Delivery' : 'Takeaway',
+    });
 
     return { success: true, sesionId, tenantId };
   } catch (error) {
@@ -269,6 +355,8 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
       return { success: false, message: 'Estado inválido' };
     }
 
+    const estadoCocina = entregaACocina(nuevoEstado);
+
     await withTenant(claimsFromSession(session), async (tx) => {
       await tx
         .update(datosEntrega)
@@ -279,6 +367,20 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
             eq(datosEntrega.restauranteId, session.restauranteId),
           ),
         );
+
+      // Espejo en KDS: el tablero de cocina lee `pedidos.estado`.
+      if (estadoCocina) {
+        await tx
+          .update(pedidos)
+          .set({ estado: estadoCocina, updatedAt: new Date() })
+          .where(
+            and(
+              eq(pedidos.sesionMesaId, sesionMesaId),
+              eq(pedidos.restauranteId, session.restauranteId),
+              ne(pedidos.estado, 'Cancelado'),
+            ),
+          );
+      }
 
       // Entregado/Cancelado cierran la sesión; volver a un estado en curso (p. ej.
       // arrastrando la tarjeta hacia atrás en el tablero) la reabre.
@@ -298,6 +400,13 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
       sesionMesaId,
       estadoEntrega: nuevoEstado,
     });
+    // Cocina escucha `pedido_estado` / `nuevo_pedido` para refrescar el KDS.
+    if (estadoCocina) {
+      await broadcastOrdenExterna(session.restauranteId, 'nuevo_pedido', {
+        sesionMesaId,
+        estado: estadoCocina,
+      });
+    }
 
     // Avisar al cliente que está siguiendo su pedido (canal de su sesión), para
     // que la pantalla de seguimiento avance el estado sin recargar.

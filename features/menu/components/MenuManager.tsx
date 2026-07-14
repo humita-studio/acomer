@@ -23,11 +23,16 @@ import {
 import { useAdicionales } from '@/features/menu/hooks/useAdicionales';
 import { useVariantes } from '@/features/menu/hooks/useVariantes';
 import type { CategoriaMenu, ProductoMenu, Adicional, Variante } from '@/features/menu/types';
+import {
+  colorCategoriaMeta,
+  ICONOS_CATEGORIA_MAP,
+  resolveIconoCategoria,
+} from '@/features/menu/categoriaVisual';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
+import { useConfirm } from '@/shared/hooks/use-confirm';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Card } from '@/shared/ui/card';
-import { useConfirm } from '@/shared/ui/confirm-dialog';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Badge } from '@/shared/ui/badge';
@@ -68,6 +73,7 @@ export function MenuManager({
   const eliminarProducto = useEliminarProducto();
   const cambiarDisponibilidad = useCambiarDisponibilidad();
   const duplicarProducto = useDuplicarProducto();
+  const { confirm, confirmDialog } = useConfirm();
 
   const role = userRole as RoleType;
   const canManage = hasPermission(role, 'canManageMenu');
@@ -86,6 +92,7 @@ export function MenuManager({
   }>({ mode: 'crear' });
   const [dialogKey, setDialogKey] = useState(0);
   const [categoriaDialogOpen, setCategoriaDialogOpen] = useState(false);
+  const [categoriaEditando, setCategoriaEditando] = useState<CategoriaMenu | null>(null);
   const [importarDialogOpen, setImportarDialogOpen] = useState(false);
 
   const abrirCrear = () => {
@@ -98,9 +105,17 @@ export function MenuManager({
     setDialogKey((k) => k + 1);
     setProductoDialogOpen(true);
   };
+  const abrirNuevaCategoria = () => {
+    setCategoriaEditando(null);
+    setCategoriaDialogOpen(true);
+  };
+  const abrirEditarCategoria = (c: CategoriaMenu) => {
+    setCategoriaEditando(c);
+    setCategoriaDialogOpen(true);
+  };
 
   const categoriasMap = useMemo(
-    () => new Map(categorias.map((c) => [c.id, c.nombre])),
+    () => new Map(categorias.map((c) => [c.id, c])),
     [categorias]
   );
 
@@ -141,8 +156,6 @@ export function MenuManager({
     });
   }, [productos, categoriaActiva, filtro, busqueda]);
 
-  const { confirm, dialog: confirmDialog } = useConfirm();
-
   const handleToggleDisponible = (producto: ProductoMenu, disponible: boolean) => {
     cambiarDisponibilidad.mutate({ productoId: producto.id, disponible });
   };
@@ -150,36 +163,32 @@ export function MenuManager({
     duplicarProducto.mutate(producto.id);
   };
   const handleEliminar = async (producto: ProductoMenu) => {
-    if (
-      await confirm({
-        titulo: `¿Eliminar ${producto.nombre}?`,
-        descripcion: 'El producto dejará de aparecer en la carta.',
-        confirmLabel: 'Eliminar',
-        destructivo: true,
-      })
-    ) {
-      eliminarProducto.mutate(producto.id);
-    }
+    const ok = await confirm({
+      title: `¿Eliminar “${producto.nombre}”?`,
+      description: 'Se saca del menú. Los pedidos históricos no se modifican.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (ok) eliminarProducto.mutate(producto.id);
   };
   const handleEliminarCategoria = async (c: CategoriaMenu) => {
-    if (
-      await confirm({
-        titulo: `¿Eliminar la categoría ${c.nombre}?`,
-        confirmLabel: 'Eliminar',
-        destructivo: true,
-      })
-    ) {
-      eliminarCategoria.mutate(c.id);
-      if (categoriaActiva === c.id) setCategoriaActiva('todos');
-    }
+    const ok = await confirm({
+      title: `¿Eliminar la categoría “${c.nombre}”?`,
+      description: 'Solo se puede eliminar si no tiene productos.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    eliminarCategoria.mutate(c.id);
+    if (categoriaActiva === c.id) setCategoriaActiva('todos');
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {confirmDialog}
       {/* Encabezado */}
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Menú</h1>
           <p className="text-sm text-muted-foreground">
             {productos.length} {productos.length === 1 ? 'producto' : 'productos'} en{' '}
@@ -188,7 +197,7 @@ export function MenuManager({
           </p>
         </div>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button variant="outline" onClick={() => setImportarDialogOpen(true)}>
               <Upload className="size-4" />
               Importar
@@ -201,10 +210,10 @@ export function MenuManager({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        {/* Rail de categorías */}
-        <Card className="h-fit gap-0 py-0">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
+        {/* Rail de categorías: sticky mientras se scrollea el listado de productos */}
+        <Card className="flex max-h-[min(70vh,40rem)] flex-col gap-0 overflow-hidden py-0 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-3.5rem-3rem)]">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Categorías
             </span>
@@ -212,14 +221,14 @@ export function MenuManager({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => setCategoriaDialogOpen(true)}
+                onClick={abrirNuevaCategoria}
                 aria-label="Nueva categoría"
               >
                 <Plus className="size-4" />
               </Button>
             )}
           </div>
-          <ul className="space-y-0.5 p-2">
+          <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain p-2">
             <li>
               <CategoriaItem
                 nombre="Todos"
@@ -235,17 +244,29 @@ export function MenuManager({
                   count={conteoPorCategoria.get(c.id) ?? 0}
                   activa={categoriaActiva === c.id}
                   onSelect={() => setCategoriaActiva(c.id)}
+                  color={c.color}
+                  icono={c.icono}
                   ocultarCount={canManage}
                 />
                 {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => handleEliminarCategoria(c)}
-                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1 text-muted-foreground opacity-0 transition group-hover/cat:opacity-100 hover:text-destructive"
-                    aria-label={`Eliminar ${c.nombre}`}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 gap-0.5 opacity-100 transition sm:opacity-0 sm:group-hover/cat:opacity-100 sm:group-focus-within/cat:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => abrirEditarCategoria(c)}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label={`Editar ${c.nombre}`}
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEliminarCategoria(c)}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                      aria-label={`Eliminar ${c.nombre}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 )}
               </li>
             ))}
@@ -258,9 +279,9 @@ export function MenuManager({
         </Card>
 
         {/* Tabla de productos */}
-        <Card className="gap-0 py-0">
+        <Card className="min-w-0 gap-0 overflow-hidden py-0">
           <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={busqueda}
@@ -270,7 +291,11 @@ export function MenuManager({
                 aria-label="Buscar producto"
               />
             </div>
-            <Tabs value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
+            <Tabs
+              value={filtro}
+              onValueChange={(v) => setFiltro(v as Filtro)}
+              className="shrink-0"
+            >
               <TabsList>
                 <TabsTrigger value="todos">Todos</TabsTrigger>
                 <TabsTrigger value="disponibles">Disponibles</TabsTrigger>
@@ -280,37 +305,75 @@ export function MenuManager({
           </div>
 
           {productosFiltrados.length === 0 ? (
-            <div className="px-6 py-16 text-center text-sm text-muted-foreground">
-              {productos.length === 0
-                ? 'Todavía no cargaste productos.'
-                : 'No hay productos que coincidan con la búsqueda.'}
+            <div className="flex flex-col items-center px-6 py-16 text-center">
+              {productos.length === 0 ? (
+                <>
+                  <div className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <Utensils className="size-7" aria-hidden />
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold text-foreground">
+                    Todavía no cargaste productos
+                  </h3>
+                  <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                    Sumá el menú a mano o importá un CSV. En minutos tus clientes ya pueden pedir.
+                  </p>
+                  {canManage ? (
+                    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                      <Button onClick={abrirCrear}>
+                        <Plus className="size-4" />
+                        Nuevo producto
+                      </Button>
+                      <Button variant="outline" onClick={() => setImportarDialogOpen(true)}>
+                        <Upload className="size-4" />
+                        Importar CSV
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No hay productos que coincidan con la búsqueda.
+                </p>
+              )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="w-full min-w-0 overflow-x-hidden">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col className="w-auto" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[6.5rem]" />
+                  <col className="w-[5.5rem]" />
+                  <col className="w-11" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
-                    <th className="px-4 py-2.5 font-medium">Producto</th>
-                    <th className="px-4 py-2.5 font-medium">Categoría</th>
-                    <th className="px-4 py-2.5 font-medium">Precio</th>
-                    <th className="px-4 py-2.5 font-medium">Disponible</th>
-                    <th className="w-10 px-4 py-2.5" aria-label="Acciones" />
+                    <th className="px-3 py-2.5 font-medium sm:px-4">Producto</th>
+                    <th className="px-2 py-2.5 font-medium sm:px-4">Categoría</th>
+                    <th className="px-2 py-2.5 font-medium sm:px-4">Precio</th>
+                    <th className="px-2 py-2.5 font-medium sm:px-4">Disp.</th>
+                    <th className="px-1 py-2.5 sm:px-2" aria-label="Acciones" />
                   </tr>
                 </thead>
                 <tbody>
-                  {productosFiltrados.map((p) => (
-                    <ProductoRow
-                      key={p.id}
-                      producto={p}
-                      variantes={variantesPorProducto.get(p.id) ?? []}
-                      categoriaNombre={categoriasMap.get(p.categoriaId) ?? 'Sin categoría'}
-                      canManage={canManage}
-                      onEditar={abrirEditar}
-                      onToggle={handleToggleDisponible}
-                      onDuplicar={handleDuplicar}
-                      onEliminar={handleEliminar}
-                    />
-                  ))}
+                  {productosFiltrados.map((p) => {
+                    const cat = categoriasMap.get(p.categoriaId);
+                    return (
+                      <ProductoRow
+                        key={p.id}
+                        producto={p}
+                        variantes={variantesPorProducto.get(p.id) ?? []}
+                        categoriaNombre={cat?.nombre ?? 'Sin categoría'}
+                        categoriaColor={cat?.color}
+                        categoriaIcono={cat?.icono}
+                        canManage={canManage}
+                        onEditar={abrirEditar}
+                        onToggle={handleToggleDisponible}
+                        onDuplicar={handleDuplicar}
+                        onEliminar={handleEliminar}
+                      />
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -331,7 +394,14 @@ export function MenuManager({
         canManagePrices={canManagePrices}
         defaultCategoriaId={categoriaActiva !== 'todos' ? categoriaActiva : undefined}
       />
-      <NuevaCategoriaDialog open={categoriaDialogOpen} onOpenChange={setCategoriaDialogOpen} />
+      <NuevaCategoriaDialog
+        open={categoriaDialogOpen}
+        onOpenChange={(open) => {
+          setCategoriaDialogOpen(open);
+          if (!open) setCategoriaEditando(null);
+        }}
+        categoria={categoriaEditando}
+      />
       <ImportarDialog open={importarDialogOpen} onOpenChange={setImportarDialogOpen} />
     </div>
   );
@@ -346,28 +416,49 @@ function CategoriaItem({
   count,
   activa,
   onSelect,
+  color,
+  icono,
   ocultarCount,
 }: {
   nombre: string;
   count: number;
   activa: boolean;
   onSelect: () => void;
+  color?: string;
+  icono?: string;
   ocultarCount?: boolean;
 }) {
+  const meta = color ? colorCategoriaMeta(color) : null;
+  const Icon = icono ? ICONOS_CATEGORIA_MAP[resolveIconoCategoria(icono)] : null;
+
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
         'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-        activa ? 'bg-accent font-medium text-accent-foreground' : 'text-foreground hover:bg-muted'
+        activa && !meta && 'bg-accent font-medium text-accent-foreground',
+        activa && meta && 'font-medium',
+        !activa && 'text-foreground hover:bg-muted'
       )}
+      style={activa && meta ? { backgroundColor: meta.soft, color: meta.hex } : undefined}
     >
-      <span className="truncate">{nombre}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        {meta && Icon ? (
+          <span
+            className="flex size-6 shrink-0 items-center justify-center rounded-md text-white"
+            style={{ backgroundColor: meta.hex }}
+            aria-hidden
+          >
+            <Icon className="size-3.5" />
+          </span>
+        ) : null}
+        <span className="truncate">{nombre}</span>
+      </span>
       <span
         className={cn(
           'shrink-0 text-xs tabular-nums transition-opacity',
-          activa ? 'text-accent-foreground/70' : 'text-muted-foreground',
+          activa ? 'opacity-70' : 'text-muted-foreground',
           ocultarCount && 'group-hover/cat:opacity-0'
         )}
       >
@@ -385,6 +476,8 @@ function ProductoRow({
   producto,
   variantes,
   categoriaNombre,
+  categoriaColor,
+  categoriaIcono,
   canManage,
   onEditar,
   onToggle,
@@ -394,12 +487,16 @@ function ProductoRow({
   producto: ProductoMenu;
   variantes: Variante[];
   categoriaNombre: string;
+  categoriaColor?: string;
+  categoriaIcono?: string;
   canManage: boolean;
   onEditar: (p: ProductoMenu) => void;
   onToggle: (p: ProductoMenu, disponible: boolean) => void;
   onDuplicar: (p: ProductoMenu) => void;
   onEliminar: (p: ProductoMenu) => void;
 }) {
+  const catMeta = colorCategoriaMeta(categoriaColor);
+  const CatIcon = ICONOS_CATEGORIA_MAP[resolveIconoCategoria(categoriaIcono)];
   const disponible = producto.activo;
   // Un producto con variantes no tiene precio base: mostramos "desde $X".
   const precioLabel =
@@ -408,11 +505,11 @@ function ProductoRow({
       : formatPeso(producto.precio);
   return (
     <tr className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
+      <td className="min-w-0 overflow-hidden px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <span
             className={cn(
-              'flex size-9 shrink-0 items-center justify-center rounded-lg',
+              'flex size-8 shrink-0 items-center justify-center rounded-lg sm:size-9',
               disponible
                 ? 'bg-success-subtle text-success-foreground'
                 : 'bg-muted text-muted-foreground'
@@ -420,23 +517,38 @@ function ProductoRow({
           >
             <Utensils className="size-4" />
           </span>
-          <div className="min-w-0">
-            <p className="truncate font-medium text-foreground">{producto.nombre}</p>
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <p className="truncate font-medium text-foreground" title={producto.nombre}>
+              {producto.nombre}
+            </p>
             {producto.descripcion && (
-              <p className="truncate text-xs text-muted-foreground">{producto.descripcion}</p>
+              <p
+                className="truncate text-xs text-muted-foreground"
+                title={producto.descripcion}
+              >
+                {producto.descripcion}
+              </p>
             )}
           </div>
         </div>
       </td>
-      <td className="px-4 py-3">
-        <Badge variant="secondary" className="font-medium">
-          {categoriaNombre}
+      <td className="min-w-0 overflow-hidden px-2 py-3 sm:px-4">
+        <Badge
+          variant="secondary"
+          className="max-w-full min-w-0 gap-1 font-medium sm:gap-1.5"
+          style={{ backgroundColor: catMeta.soft, color: catMeta.hex, borderColor: 'transparent' }}
+          title={categoriaNombre}
+        >
+          <CatIcon className="size-3 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">{categoriaNombre}</span>
         </Badge>
       </td>
-      <td className="px-4 py-3 font-medium tabular-nums whitespace-nowrap">
-        {precioLabel}
+      <td className="min-w-0 overflow-hidden px-2 py-3 font-medium tabular-nums sm:px-4">
+        <span className="block truncate" title={precioLabel}>
+          {precioLabel}
+        </span>
       </td>
-      <td className="px-4 py-3">
+      <td className="min-w-0 px-2 py-3 sm:px-4">
         <div className="flex items-center gap-2">
           <Switch
             checked={disponible}
@@ -447,7 +559,7 @@ function ProductoRow({
           />
           <span
             className={cn(
-              'text-sm',
+              'hidden text-sm lg:inline',
               disponible ? 'text-muted-foreground' : 'font-medium text-destructive'
             )}
           >
@@ -455,7 +567,7 @@ function ProductoRow({
           </span>
         </div>
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="w-11 px-1 py-3 text-right sm:px-2">
         {canManage && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

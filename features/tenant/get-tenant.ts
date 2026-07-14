@@ -27,8 +27,9 @@ export const getTenantBySlug = cache(async (slug: string): Promise<string | null
 
 /**
  * Obtiene los detalles completos del restaurante.
+ * Cacheado por request (metadata + page + opengraph-image).
  */
-export async function getTenantDetails(slug: string) {
+export const getTenantDetails = cache(async (slug: string) => {
   try {
     const tenant = await db
       .select()
@@ -41,7 +42,7 @@ export async function getTenantDetails(slug: string) {
     console.error(`[getTenantDetails] Error fetching tenant details for slug "${slug}":`, error);
     return null;
   }
-}
+});
 
 /**
  * Valida que un restaurante existe y está activo.

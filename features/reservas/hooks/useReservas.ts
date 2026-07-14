@@ -90,10 +90,21 @@ export function useCambiarEstadoReserva(tenantId: string, mesKey: string) {
   return useMutation({
     mutationFn: ({ id, estado }: { id: string; estado: string }) =>
       cambiarEstadoReservaAction(id, estado as never),
-    onSuccess: (res) => {
-      if (!res.success) toast.error(res.message ?? 'No se pudo actualizar la reserva');
+    onSuccess: (res, vars) => {
+      if (!res.success) {
+        toast.error(res.message ?? 'No se pudo actualizar la reserva');
+      } else {
+        const msg: Record<string, string> = {
+          Confirmada: 'Reserva confirmada',
+          Cumplida: 'Reserva marcada como cumplida',
+          Cancelada: 'Reserva cancelada',
+          NoShow: 'Marcada como no-show',
+        };
+        toast.success(msg[vars.estado] ?? 'Reserva actualizada');
+      }
       queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) });
     },
+    onError: () => toast.error('No se pudo actualizar la reserva'),
   });
 }
 
@@ -102,10 +113,16 @@ export function useSentarReserva(tenantId: string, mesKey: string) {
   return useMutation({
     mutationFn: ({ id, mesaId }: { id: string; mesaId: string }) => sentarReservaAction(id, mesaId),
     onSuccess: (res) => {
-      if (res.success) toast.success('Reserva sentada');
-      else toast.error(res.message ?? 'No se pudo sentar la reserva');
+      if (res.success) {
+        toast.success('Mesa sentada', {
+          description: 'La mesa quedó abierta en el salón. Podés cargar el pedido desde Mesas.',
+        });
+      } else toast.error(res.message ?? 'No se pudo sentar la reserva');
       queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) });
+      // El plano de mesas también cambia al sentar.
+      queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     },
+    onError: () => toast.error('No se pudo sentar la reserva'),
   });
 }
 

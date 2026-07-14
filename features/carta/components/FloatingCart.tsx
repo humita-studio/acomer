@@ -16,6 +16,7 @@ import {
 } from '@/shared/ui/sheet';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
+import { formatPeso } from '@/shared/lib/format';
 
 type FloatingCartProps = {
   cart: CartApi;
@@ -23,7 +24,10 @@ type FloatingCartProps = {
   /** Texto del botón de confirmación (ej: "Confirmar Pedido" | "Finalizar pedido"). */
   confirmLabel: string;
   /** Acción al confirmar. Devolver { success:false } muestra el error y deja el cart abierto. */
-  onConfirm: () => Promise<{ success: boolean; message?: string } | void>;
+  onConfirm: () => Promise<
+    | { success: boolean; message?: string; notice?: { title: string; description?: string } }
+    | void
+  >;
   confirming: boolean;
   /** Título del drawer (ej: "Resumen de tu Mesa" | "Tu pedido"). */
   titulo?: string;
@@ -78,10 +82,10 @@ export function FloatingCart({
       if (!res || res.success) {
         setIsOpen(false);
       } else {
-        setError(res.message ?? 'Error al enviar');
+        setError(res.message ?? 'No se pudo enviar el pedido. Probá de nuevo.');
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al enviar');
+    } catch {
+      setError('Sin conexión o error de red. Revisá internet e intentá de nuevo.');
     }
   };
 
@@ -89,12 +93,15 @@ export function FloatingCart({
     <>
       {/* Botón flotante siempre visible cuando hay items pero el cart está cerrado */}
       {!isOpen && (items.length > 0 || pedidosConfirmados.length > 0) && (
-        <div className="fixed inset-x-0 bottom-6 z-40 px-4 duration-300 animate-in fade-in slide-in-from-bottom-10">
-          <div className="mx-auto max-w-2xl">
+        <div
+          className="fixed inset-x-0 z-40 px-3 duration-300 animate-in fade-in slide-in-from-bottom-10"
+          style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="mx-auto max-w-lg">
             <Button
               onClick={() => setIsOpen(true)}
               size="lg"
-              className="h-14 w-full justify-between rounded-2xl px-6 text-base shadow-lg"
+              className="h-14 w-full justify-between rounded-2xl px-5 text-base shadow-lg touch-manipulation active:scale-[0.99]"
             >
               <span className="flex items-center gap-3">
                 <span className="flex size-7 items-center justify-center rounded-full bg-primary-foreground/20 text-sm tabular-nums">
@@ -102,7 +109,7 @@ export function FloatingCart({
                 </span>
                 Ver Pedido
               </span>
-              <span className="text-lg tabular-nums">${granTotal.toFixed(2)}</span>
+              <span className="text-lg tabular-nums">{formatPeso(granTotal)}</span>
             </Button>
           </div>
         </div>
@@ -112,7 +119,7 @@ export function FloatingCart({
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent
           side="bottom"
-          className="mx-auto flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-2xl sm:rounded-t-2xl"
+          className="mx-auto flex max-h-[min(90dvh,90vh)] flex-col gap-0 p-0 pb-[env(safe-area-inset-bottom,0px)] sm:max-w-lg sm:rounded-t-2xl"
         >
           <SheetHeader className="flex-row items-center gap-2 space-y-0 border-b p-4">
             <SheetTitle className="text-xl">{titulo}</SheetTitle>
@@ -142,7 +149,7 @@ export function FloatingCart({
                             </p>
                           )}
                         </div>
-                        <span className="font-semibold tabular-nums">${item.subtotal.toFixed(2)}</span>
+                        <span className="font-semibold tabular-nums">{formatPeso(item.subtotal)}</span>
                       </div>
                     </div>
                   ))}
@@ -169,7 +176,11 @@ export function FloatingCart({
                             </p>
                           )}
                           <p className="mt-1 font-medium tabular-nums">
-                            ${((item.precioUnitario + item.modificadores.reduce((s,m)=>s+m.precioExtra,0)) * item.cantidad).toFixed(2)}
+                            {formatPeso(
+                              (item.precioUnitario +
+                                item.modificadores.reduce((s, m) => s + m.precioExtra, 0)) *
+                                item.cantidad,
+                            )}
                           </p>
                         </div>
 
@@ -233,7 +244,7 @@ export function FloatingCart({
                         <span className="truncate text-sm font-medium">{p.nombre}</span>
                       </span>
                       <span className="shrink-0 text-sm font-semibold tabular-nums">
-                        −${p.descuento.toFixed(2)}
+                        −{formatPeso(p.descuento)}
                       </span>
                     </div>
                   ))}
@@ -244,21 +255,21 @@ export function FloatingCart({
                 <div className="mb-4 space-y-1">
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>Subtotal</span>
-                    <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
+                    <span className="tabular-nums">{formatPeso(totalBorrador)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm text-success-foreground">
                     <span>Descuento</span>
-                    <span className="tabular-nums">−${descuento.toFixed(2)}</span>
+                    <span className="tabular-nums">−{formatPeso(descuento)}</span>
                   </div>
                   <div className="flex items-center justify-between border-t pt-1.5 text-lg font-bold">
                     <span>A enviar ahora</span>
-                    <span className="tabular-nums">${totalBorradorNeto.toFixed(2)}</span>
+                    <span className="tabular-nums">{formatPeso(totalBorradorNeto)}</span>
                   </div>
                 </div>
               ) : (
                 <div className="mb-4 flex items-center justify-between text-lg font-bold">
                   <span>A enviar ahora</span>
-                  <span className="tabular-nums">${totalBorrador.toFixed(2)}</span>
+                  <span className="tabular-nums">{formatPeso(totalBorrador)}</span>
                 </div>
               )}
               <Button
@@ -267,14 +278,21 @@ export function FloatingCart({
                 size="lg"
                 className="h-12 w-full text-base"
               >
-                {confirming ? 'Enviando...' : confirmLabel}
+                {confirming ? 'Enviando…' : confirmLabel}
               </Button>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Esto manda a cocina. Para la cuenta, usá <span className="font-medium text-foreground">Pagar</span> arriba.
+              </p>
             </div>
           )}
 
           {items.length === 0 && pedidosConfirmados.length > 0 && (
-            <div className="border-t bg-muted/40 p-4 text-center text-sm text-muted-foreground">
-              Todo tu pedido ya fue enviado a cocina.
+            <div className="space-y-1 border-t bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+              <p>Todo tu pedido ya fue enviado a cocina.</p>
+              <p>
+                Cuando quieras la cuenta, tocá{' '}
+                <span className="font-medium text-foreground">Pagar</span> arriba.
+              </p>
             </div>
           )}
         </SheetContent>

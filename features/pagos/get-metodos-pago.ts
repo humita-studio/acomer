@@ -44,7 +44,7 @@ export async function getMetodosPago(restauranteId: string): Promise<MetodoPago[
   // 2. Medios presenciales (siempre disponibles)
   metodos.push({
     id: 'tarjeta_fisica',
-    nombre: 'Tarjeta (en mesa)',
+    nombre: 'Tarjeta',
     tipo: 'presencial',
     icono: '💳',
   });

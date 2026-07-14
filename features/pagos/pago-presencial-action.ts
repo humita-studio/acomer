@@ -1,11 +1,14 @@
 'use server';
 
 import { db } from '@/shared/db';
-import { transaccionesPago, pedidos, sesionesMesa } from '@/shared/db/schema';
-import { eq, and, ne } from 'drizzle-orm';
+import { transaccionesPago } from '@/shared/db/schema';
+import { eq } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
 import type { PromoCanal } from '@/features/promociones/promociones';
+import { getSesionCajaAbiertaId } from '@/features/caja/sesionCaja';
+import { pedirCuentaPresencialSchema } from './validation';
+import { withPublicTenant } from '@/shared/db/secure-wrapper';
 
 type PagoPresencialResult = {
   success: boolean;
@@ -26,18 +29,32 @@ export async function pedirCuentaPresencialAction(
   omitirPromoIds?: string[]
 ): Promise<PagoPresencialResult> {
   try {
-    // 1 + 2 en paralelo: validar la sesión y leer pedidos no cancelados al mismo
-    // tiempo. Si la sesión es inválida descartamos los pedidos; si está bien,
-    // tenemos los dos resultados de un solo round-trip.
-    const [sesion, pedidosMesa] = await Promise.all([
-      db.query.sesionesMesa.findFirst({
-        where: (t, { eq, and }) => and(eq(t.id, sesionMesaId), eq(t.restauranteId, tenantId)),
-      }),
-      db.query.pedidos.findMany({
-        where: (t, { eq, and, ne }) =>
-          and(eq(t.sesionMesaId, sesionMesaId), ne(t.estado, 'Cancelado')),
-      }),
-    ]);
+    const parsed = pedirCuentaPresencialSchema.safeParse({
+      sesionMesaId,
+      tenantId,
+      metodoPago,
+      omitirPromoIds,
+    });
+    if (!parsed.success) {
+      return { success: false, message: parsed.error.issues[0]?.message ?? 'Datos inválidos' };
+    }
+
+    // 1 + 2 en paralelo bajo RLS público del tenant.
+    const [sesion, pedidosMesa, entrega] = await withPublicTenant(tenantId, (tx) =>
+      Promise.all([
+        tx.query.sesionesMesa.findFirst({
+          where: (t, { eq, and }) => and(eq(t.id, sesionMesaId), eq(t.restauranteId, tenantId)),
+        }),
+        tx.query.pedidos.findMany({
+          where: (t, { eq, and, ne }) =>
+            and(eq(t.sesionMesaId, sesionMesaId), ne(t.estado, 'Cancelado')),
+        }),
+        tx.query.datosEntrega.findFirst({
+          where: (t, { eq }) => eq(t.sesionMesaId, sesionMesaId),
+          columns: { costoEnvio: true },
+        }),
+      ]),
+    );
 
     if (!sesion || sesion.estado !== 'Activa') {
       return { success: false, message: 'La sesión no es válida o ya está cerrada.' };
@@ -47,7 +64,9 @@ export async function pedirCuentaPresencialAction(
       return { success: false, message: 'No hay pedidos para cobrar.' };
     }
 
-    const totalPedidos = pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0);
+    const costoEnvio = Number(entrega?.costoEnvio ?? 0) || 0;
+    const totalPedidos =
+      pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0) + costoEnvio;
 
     // 3: pagos ya aprobados y tx pendiente existente en paralelo.
     const [pagosAprobados, existingTx] = await Promise.all([
@@ -91,6 +110,10 @@ export async function pedirCuentaPresencialAction(
     }
     const totalCalculado = Math.max(0, saldoPendiente - descuento);
 
+    // Si hay caja abierta la dejamos anotada; el cobro real (aprobación staff)
+    // reasigna al turno vigente y exige caja abierta para efectivo.
+    const sesionCajaId = await getSesionCajaAbiertaId(tenantId);
+
     let transactionId;
 
     if (existingTx) {
@@ -103,6 +126,7 @@ export async function pedirCuentaPresencialAction(
           descuento: descuento.toString(),
           promocionId,
           promocionesAplicadas,
+          sesionCajaId: sesionCajaId ?? existingTx.sesionCajaId,
           metadata: { metodo: metodoPago },
         })
         .where(eq(transaccionesPago.id, existingTx.id));
@@ -111,6 +135,7 @@ export async function pedirCuentaPresencialAction(
       const nuevaTx = await db.insert(transaccionesPago).values({
         restauranteId: tenantId,
         sesionMesaId: sesionMesaId,
+        sesionCajaId,
         proveedor: metodoPago,
         monto: totalCalculado.toString(),
         descuento: descuento.toString(),

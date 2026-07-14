@@ -102,17 +102,20 @@ export async function obtenerSeguimientoPedido(
         ? Number(txPendiente.descuento) || 0
         : promoSinMetodo?.descuento ?? 0;
 
+  const costoEnvio = Number(fila.costoEnvio ?? 0);
   const totalConDescuento = Math.max(0, total - descuento);
   // Pagado: cada transacción aprobada guarda su monto NETO + el descuento que
-  // aplicó, así que el bruto cubierto = monto + descuento. Comparar contra el
-  // bruto evita el saldo fantasma cuando el cobro fue con promo.
+  // aplicó, así que el bruto cubierto = monto + descuento. Comparar contra
+  // ítems + envío evita marcar pagado sin cubrir el delivery.
   const totalPagado = pagosAprobados.reduce((acc, tx) => acc + Number(tx.monto), 0);
   const brutoCubierto = pagosAprobados.reduce(
     (acc, tx) => acc + Number(tx.monto) + (Number(tx.descuento) || 0),
     0,
   );
-  const pagado = total > 0 && brutoCubierto >= total;
-  const saldoPendiente = pagado ? 0 : Math.max(0, totalConDescuento - totalPagado);
+  const totalBrutoConEnvio = total + costoEnvio;
+  const aPagar = totalConDescuento + costoEnvio;
+  const pagado = totalBrutoConEnvio > 0 && brutoCubierto + 1e-6 >= totalBrutoConEnvio;
+  const saldoPendiente = pagado ? 0 : Math.max(0, aPagar - totalPagado);
 
   return {
     sesionMesaId: fila.sesionMesaId,
@@ -122,7 +125,7 @@ export async function obtenerSeguimientoPedido(
     telefono: fila.telefono,
     direccion: fila.direccion,
     referencia: fila.referencia,
-    costoEnvio: Number(fila.costoEnvio ?? 0),
+    costoEnvio,
     horaEstimada: fila.horaEstimada ? new Date(fila.horaEstimada).toISOString() : null,
     items,
     total,

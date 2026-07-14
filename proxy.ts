@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { extractTenantSlug } from '@/shared/lib/tenant-host';
 
 export const config = {
   matcher: [
@@ -15,8 +16,12 @@ export async function proxy(req: NextRequest) {
   const path = url.pathname;
 
   // --- 1. Refresh de sesión Supabase (necesario para mantener cookies actualizadas) ---
+  // Clonar headers para poder inyectar pathname (gate de billing en layout admin).
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-pathname', path);
+
   let response = NextResponse.next({
-    request: { headers: req.headers },
+    request: { headers: requestHeaders },
   });
 
   const supabase = createServerClient(
@@ -32,9 +37,11 @@ export async function proxy(req: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             req.cookies.set(name, value)
           );
-          // Re-crear response con headers actualizados
+          // Re-crear response con headers actualizados (mantener x-pathname)
+          const nextHeaders = new Headers(req.headers);
+          nextHeaders.set('x-pathname', path);
           response = NextResponse.next({
-            request: { headers: req.headers },
+            request: { headers: nextHeaders },
           });
           // Setear cookies en el response (para que el browser las reciba)
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -46,24 +53,44 @@ export async function proxy(req: NextRequest) {
   );
 
   // --- 2. Protección de rutas autenticadas ---
+  // /auth/* es el callback de Supabase (code exchange); no redirigir.
+  if (path.startsWith('/auth/')) {
+    return response;
+  }
+
   const protectedPaths = ['/admin'];
   const isProtectedRoute = protectedPaths.some((p) => path.startsWith(p));
-  const isAuthRoute = path === '/login' || path === '/register';
+  const isAuthRoute =
+    path === '/login' || path === '/register' || path === '/forgot-password';
+  const isChangePasswordRoute = path === '/cambiar-password';
 
   // Optimización: Solo hacemos getUser() (que requiere request a BD) en rutas que lo necesitan
   let user = null;
-  if (isProtectedRoute || isAuthRoute) {
+  if (isProtectedRoute || isAuthRoute || isChangePasswordRoute) {
     const { data } = await supabase.auth.getUser();
     user = data.user;
   }
+
+  const mustChangePassword =
+    user?.user_metadata?.must_change_password === true;
 
   if (isProtectedRoute && !user) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // --- 3. Redirigir usuarios autenticados lejos del login ---
+  // Staff con contraseña temporal: no entra al panel hasta cambiarla.
+  if (isProtectedRoute && user && mustChangePassword) {
+    return NextResponse.redirect(new URL('/cambiar-password', req.url));
+  }
+
+  if (isChangePasswordRoute && !user) {
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
+  // --- 3. Redirigir usuarios autenticados lejos del login/registro ---
   if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL('/admin', req.url));
+    const dest = mustChangePassword ? '/cambiar-password' : '/admin';
+    return NextResponse.redirect(new URL(dest, req.url));
   }
 
   // --- 4. Lógica de subdominios (tenants) ---
@@ -74,28 +101,10 @@ export async function proxy(req: NextRequest) {
       ? 'acomer.com.ar' // Dominio principal en producción
       : 'localhost:3000');
 
-  // Los dominios de Vercel (preview/producción de pruebas) no tienen subdominios
-  // de tenant: hay que tratarlos como dominio principal, no como un restaurante.
-  if (hostname.endsWith('.vercel.app')) {
+  // Apex / www / app / vercel → sin tenant. Subdominio válido → rewrite a /[slug]/...
+  const tenantSlug = extractTenantSlug(hostname, mainDomain);
+  if (!tenantSlug) {
     return response;
-  }
-
-  // Excluir el dominio principal, el `www` y el panel de administración genérico
-  if (
-    hostname === mainDomain ||
-    hostname === `www.${mainDomain}` ||
-    hostname === `app.${mainDomain}`
-  ) {
-    return response;
-  }
-
-  // Si llegamos acá, es un subdominio de un restaurante.
-  // Extraemos el slug (ej: "pizzeria" de "pizzeria.acomer.com.ar")
-  const tenantSlug = hostname.replace(`.${mainDomain}`, '');
-
-  // Validar que el slug es válido (alphanumeric, no vacío)
-  if (!tenantSlug || !/^[a-z0-9-]+$/.test(tenantSlug)) {
-    return NextResponse.rewrite(new URL('/404', req.url));
   }
 
   // Reescribimos internamente la ruta.

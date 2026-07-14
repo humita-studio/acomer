@@ -1,13 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Search, ShoppingCart, Trash2, UtensilsCrossed } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatPeso } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { DialogDescription, DialogTitle } from '@/shared/ui/dialog';
 import type { CategoriaMenu, ProductoMenu } from '@/features/carta/types';
+import { filtrarProductosPorBusqueda } from '@/features/carta/buscarProductos';
+import {
+  colorCategoriaMeta,
+  ICONOS_CATEGORIA_MAP,
+  resolveIconoCategoria,
+} from '@/features/menu/categoriaVisual';
 import type { CartLine } from '../types';
 import { QtyStepper } from './QtyStepper';
 import { ProductoConfigDialog } from './ProductoConfigDialog';
@@ -59,9 +66,9 @@ export function PasoArmar({
   // Derivado en render (sin effect) para no disparar renders en cascada.
   const catActiva = catActivaSel || categorias[0]?.id || '';
 
-  const q = busqueda.trim().toLowerCase();
+  const q = busqueda.trim();
   const visibles = q
-    ? productos.filter((p) => p.nombre.toLowerCase().includes(q))
+    ? filtrarProductosPorBusqueda(productos, q)
     : productos.filter((p) => p.categoriaId === catActiva);
 
   return (
@@ -162,29 +169,57 @@ export function PasoArmar({
 
           {!q && categorias.length > 0 && (
             <div className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1">
-              {categorias.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCatActiva(c.id)}
-                  className={cn(
-                    'shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-                    catActiva === c.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {c.nombre}
-                </button>
-              ))}
+              {categorias.map((c) => {
+                const activa = catActiva === c.id;
+                const meta = colorCategoriaMeta(c.color);
+                const Icon = ICONOS_CATEGORIA_MAP[resolveIconoCategoria(c.icono)];
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCatActiva(c.id)}
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
+                      !activa && 'hover:opacity-90',
+                    )}
+                    style={
+                      activa
+                        ? { backgroundColor: meta.hex, color: '#fff' }
+                        : { backgroundColor: meta.soft, color: meta.hex }
+                    }
+                  >
+                    <Icon className="size-3.5" aria-hidden />
+                    {c.nombre}
+                  </button>
+                );
+              })}
             </div>
           )}
 
           <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
             {visibles.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">
-                {productos.length === 0 ? 'No hay productos en el menú.' : 'Sin resultados.'}
-              </p>
+              productos.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-12 text-center">
+                  <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <UtensilsCrossed className="size-6" aria-hidden />
+                  </span>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">El menú está vacío</p>
+                    <p className="text-sm text-muted-foreground">
+                      Cargá productos en Menú o usá un ítem libre para esta venta.
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/admin/menu">
+                      Ir a Menú
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  Sin resultados para “{q}”.
+                </p>
+              )
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {visibles.map((p) => (

@@ -22,6 +22,8 @@ export type PlanoData = {
     capacidad: number;
     rotacion: number;
     ocupada: boolean;
+    /** auth.users id del mozo asignado, o null. */
+    mozoUserId: string | null;
   }[];
   elementos: {
     id: string;
@@ -82,6 +84,7 @@ export async function getPlanoData(restauranteId: string): Promise<PlanoData> {
       capacidad: m.capacidad,
       rotacion: m.rotacion,
       ocupada: ocupadas.has(m.id),
+      mozoUserId: m.mozoUserId ?? null,
     })),
     elementos: elementosData.map((e) => ({
       id: e.id,

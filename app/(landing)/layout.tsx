@@ -1,9 +1,26 @@
 import type { Metadata } from 'next';
 
+const title = 'acomer — El sistema operativo de tu restaurante';
+const description =
+  'Carta digital con QR, pedidos online, reservas, mesas, cobros con Mercado Pago y reportes. Gratis por ahora, sin tarjeta.';
+
 export const metadata: Metadata = {
-  title: 'acomer — El sistema operativo de tu restaurante',
-  description:
-    'Carta digital con QR, pedidos online, reservas, mesas, cobros con Mercado Pago y reportes. Todo tu restaurante en una sola plataforma. Probá gratis 14 días.',
+  title: {
+    absolute: title,
+  },
+  description,
+  openGraph: {
+    type: 'website',
+    locale: 'es_AR',
+    siteName: 'acomer',
+    title,
+    description,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title,
+    description,
+  },
 };
 
 export default function LandingLayout({

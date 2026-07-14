@@ -18,7 +18,7 @@ import {
 } from '@/features/promociones/promociones';
 import { calcularPromosCarrito } from '@/features/promociones/promosCarrito';
 import { CheckoutExterno } from './CheckoutExterno';
-import type { ModoPedido } from '../deliveryConfig';
+import type { DeliveryConfig, ModoPedido } from '../deliveryConfig';
 
 /**
  * Flujo externo "menú primero": la carta se ve sin identificarse, el carrito es
@@ -30,6 +30,7 @@ export function MenuExterno({
   categorias,
   productos,
   modos,
+  deliveryConfig,
   promos = [],
   metodosPago,
 }: {
@@ -39,6 +40,8 @@ export function MenuExterno({
   productos: ProductoMenu[];
   // Modalidades habilitadas por el local (takeaway/delivery).
   modos: ModoPedido[];
+  /** Config completa (zona, costo, mínimo) para el checkout. */
+  deliveryConfig: DeliveryConfig;
   // Promos vigentes del local (para mostrar y previsualizar el descuento).
   promos?: Promocion[];
   // Métodos de pago del local: para abrir el cobro apenas se confirma el pedido,
@@ -73,10 +76,19 @@ export function MenuExterno({
   };
 
   // Descuento por método sobre lo recién pedido, con el motor puro (instantáneo).
+  // Al total de ítems le sumamos el envío si el pedido fue delivery.
   const previewPago = useCallback(
-    (metodo: PromoMetodoPago) =>
-      calcularPromosCarrito(itemsPago, productos, promos, { metodoPago: metodo, canal: canalPago }),
-    [itemsPago, productos, promos, canalPago],
+    (metodo: PromoMetodoPago) => {
+      const base = calcularPromosCarrito(itemsPago, productos, promos, {
+        metodoPago: metodo,
+        canal: canalPago,
+      });
+      const envio =
+        canalPago === 'delivery' ? Math.max(0, Number(deliveryConfig.costoEnvio) || 0) : 0;
+      if (envio <= 0) return base;
+      return { ...base, total: Math.round((base.total + envio) * 100) / 100 };
+    },
+    [itemsPago, productos, promos, canalPago, deliveryConfig.costoEnvio],
   );
 
   // Cerrar el cobro sin pagar → llevar al seguimiento del pedido (ya existe en
@@ -127,6 +139,7 @@ export function MenuExterno({
         tenantSlug={tenantSlug}
         cartItems={cart.items}
         modos={modos}
+        deliveryConfig={deliveryConfig}
         promoResumen={preview}
         onPedidoCreado={handlePedidoCreado}
       />

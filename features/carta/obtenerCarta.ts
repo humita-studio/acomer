@@ -21,7 +21,12 @@ async function fetchCarta(
 ): Promise<{ categorias: CategoriaMenu[]; productos: ProductoMenu[] }> {
   const [cats, prods, modsDisponibles, variantesRows] = await withPublicTenant(tenantId, (db) => Promise.all([
     db
-      .select({ id: categorias.id, nombre: categorias.nombre })
+      .select({
+        id: categorias.id,
+        nombre: categorias.nombre,
+        color: categorias.color,
+        icono: categorias.icono,
+      })
       .from(categorias)
       .where(
         and(

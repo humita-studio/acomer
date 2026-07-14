@@ -12,9 +12,50 @@ import {
   type DeliveryConfig,
   type AgregadosHasta,
 } from './deliveryConfig';
+import { sanearZonaPoligono } from './zonaMapa';
 
 const MODOS = ['ambos', 'takeaway', 'delivery'] as const;
 const AGREGADOS = ['no', 'preparacion', 'listo'] as const;
+
+function numNoNegativo(raw: unknown, max = 999_999): number {
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(max, Math.round(n * 100) / 100);
+}
+
+function parseTiempoEstimado(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(24 * 60, Math.max(5, Math.round(n)));
+}
+
+function rowToConfig(row: {
+  activo: boolean;
+  modo: string;
+  agregadosHasta: string;
+  zonaEntrega?: string | null;
+  zonaPoligono?: unknown;
+  costoEnvio?: string | null;
+  pedidoMinimo?: string | null;
+  tiempoEstimadoMin?: number | null;
+}): DeliveryConfig {
+  return {
+    activo: row.activo,
+    modo: (MODOS as readonly string[]).includes(row.modo)
+      ? (row.modo as DeliveryConfig['modo'])
+      : DELIVERY_CONFIG_DEFAULT.modo,
+    agregadosHasta: (AGREGADOS as readonly string[]).includes(row.agregadosHasta)
+      ? (row.agregadosHasta as AgregadosHasta)
+      : DELIVERY_CONFIG_DEFAULT.agregadosHasta,
+    zonaEntrega: (row.zonaEntrega ?? '').trim().slice(0, 500),
+    zonaPoligono: sanearZonaPoligono(row.zonaPoligono),
+    costoEnvio: numNoNegativo(row.costoEnvio),
+    pedidoMinimo: numNoNegativo(row.pedidoMinimo),
+    tiempoEstimadoMin:
+      row.tiempoEstimadoMin == null ? null : parseTiempoEstimado(row.tiempoEstimadoMin),
+  };
+}
 
 /**
  * Lectura interna (sin auth): la usan los flujos públicos (carta/checkout/
@@ -31,16 +72,7 @@ export async function obtenerDeliveryConfig(tenantId: string): Promise<DeliveryC
       .limit(1);
 
     if (!row) return DELIVERY_CONFIG_DEFAULT;
-
-    return {
-      activo: row.activo,
-      modo: (MODOS as readonly string[]).includes(row.modo)
-        ? (row.modo as DeliveryConfig['modo'])
-        : DELIVERY_CONFIG_DEFAULT.modo,
-      agregadosHasta: (AGREGADOS as readonly string[]).includes(row.agregadosHasta)
-        ? (row.agregadosHasta as AgregadosHasta)
-        : DELIVERY_CONFIG_DEFAULT.agregadosHasta,
-    };
+    return rowToConfig(row);
   } catch (error) {
     console.warn('[obtenerDeliveryConfig] usando defaults', error);
     return DELIVERY_CONFIG_DEFAULT;
@@ -77,11 +109,22 @@ export async function actualizarDeliveryConfigAction(datos: DeliveryConfig) {
       ? datos.agregadosHasta
       : DELIVERY_CONFIG_DEFAULT.agregadosHasta;
 
+    const zonaEntrega = (datos.zonaEntrega ?? '').trim().slice(0, 500);
+    const zonaPoligono = sanearZonaPoligono(datos.zonaPoligono);
+    const costoEnvio = numNoNegativo(datos.costoEnvio);
+    const pedidoMinimo = numNoNegativo(datos.pedidoMinimo);
+    const tiempoEstimadoMin = parseTiempoEstimado(datos.tiempoEstimadoMin);
+
     const valores = {
       restauranteId: session.restauranteId,
       activo: !!datos.activo,
       modo,
       agregadosHasta,
+      zonaEntrega,
+      zonaPoligono,
+      costoEnvio: costoEnvio.toFixed(2),
+      pedidoMinimo: pedidoMinimo.toFixed(2),
+      tiempoEstimadoMin,
       updatedAt: new Date(),
     };
 
@@ -95,12 +138,18 @@ export async function actualizarDeliveryConfigAction(datos: DeliveryConfig) {
             activo: valores.activo,
             modo: valores.modo,
             agregadosHasta: valores.agregadosHasta,
+            zonaEntrega: valores.zonaEntrega,
+            zonaPoligono: valores.zonaPoligono,
+            costoEnvio: valores.costoEnvio,
+            pedidoMinimo: valores.pedidoMinimo,
+            tiempoEstimadoMin: valores.tiempoEstimadoMin,
             updatedAt: valores.updatedAt,
           },
         })
     );
 
     revalidatePath('/admin/pedidos-online');
+    revalidatePath('/admin/configuracion');
     return { success: true, message: 'Configuración guardada' };
   } catch (error) {
     console.error('[actualizarDeliveryConfigAction]', error);

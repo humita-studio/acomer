@@ -30,4 +30,8 @@ export type ProductoMenu = {
 export type CategoriaMenu = {
   id: string;
   nombre: string;
+  /** Clave de paleta (features/menu/categoriaVisual). */
+  color: string;
+  /** Nombre de icono Lucide (features/menu/categoriaVisual). */
+  icono: string;
 };

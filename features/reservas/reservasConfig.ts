@@ -28,7 +28,8 @@ export const INTERVALO_SLOT_MIN = 30;
 
 /** Defaults usados cuando el restaurante no tiene fila de config todavía. */
 export const RESERVAS_CONFIG_DEFAULT: ReservasConfig = {
-  activo: true,
+  // Off hasta que el dueño lo active (evita reservas sin turnos pensados).
+  activo: false,
   turnos: [
     { nombre: 'Almuerzo', desde: '12:00', hasta: '15:30', activo: true },
     { nombre: 'Cena', desde: '20:00', hasta: '00:00', activo: true },

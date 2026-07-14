@@ -61,6 +61,7 @@ export function useCrearProducto() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al crear el producto');
     },
+    onSuccess: () => toast.success('Producto creado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
       // Adicionales y variantes se crean junto con el producto: refrescamos sus cachés.
@@ -113,6 +114,7 @@ export function useEditarProducto() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al actualizar el producto');
     },
+    onSuccess: () => toast.success('Producto actualizado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -142,6 +144,8 @@ export function useCambiarDisponibilidad() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al cambiar la disponibilidad');
     },
+    onSuccess: (_res, vars) =>
+      toast.success(vars.disponible ? 'Producto disponible' : 'Producto agotado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -158,6 +162,9 @@ export function useDuplicarProducto() {
       if (!res.success) throw new Error(res.message);
       return res;
     },
+    onSuccess: () => toast.success('Producto duplicado'),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'No se pudo duplicar'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
       queryClient.invalidateQueries({ queryKey: queryKeys.adicionalesMenu() });
@@ -188,6 +195,7 @@ export function useModificarPrecioProducto() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al actualizar el precio');
     },
+    onSuccess: () => toast.success('Precio actualizado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -217,6 +225,7 @@ export function useEliminarProducto() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al eliminar el producto');
     },
+    onSuccess: () => toast.success('Producto eliminado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },

@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@/shared/query/keys';
 import { obtenerTicketMesaAction } from './ticket-mesa-actions';
-import { agregarItemsStaffAction, type StaffItemInput } from './agregar-items-staff-action';
+import { agregarItemsStaffAction } from './agregar-items-staff-action';
+import type { StaffItemInput } from '@/features/pedidos/crearPedidoCore';
 import type { TicketItem } from '@/features/pedidos/obtenerTicketMesa';
 
 export type TicketData = { items: TicketItem[]; total: number };
@@ -25,6 +26,8 @@ export type AgregarItemsStaffVars = {
   items: StaffItemInput[];
   /** Items ya armados para el update optimista (con snapshot de nombre/precio). */
   optimisticItems: TicketItem[];
+  /** Nota para cocina del pedido (Figma: “Nota para cocina”). */
+  notas?: string | null;
 };
 
 export function useAgregarItemsStaff(sesionMesaId: string) {
@@ -33,7 +36,7 @@ export function useAgregarItemsStaff(sesionMesaId: string) {
 
   return useMutation({
     mutationFn: async (vars: AgregarItemsStaffVars) => {
-      const res = await agregarItemsStaffAction(sesionMesaId, vars.items);
+      const res = await agregarItemsStaffAction(sesionMesaId, vars.items, vars.notas);
       if (!res.success) throw new Error(res.message);
       return res;
     },
@@ -48,6 +51,10 @@ export function useAgregarItemsStaff(sesionMesaId: string) {
     onError: (error, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al agregar productos');
+    },
+    onSuccess: (_res, vars) => {
+      const n = vars.items.length;
+      toast.success(n === 1 ? 'Producto agregado al ticket' : `${n} productos agregados al ticket`);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });

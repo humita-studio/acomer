@@ -76,13 +76,45 @@ tener doble CDN y problemas de SSL (errores `525` / `526`), y el plan free de Cl
 | `DATABASE_URL` | Connection string de Postgres (pooler de Supabase) | `postgresql://...:6543/postgres` |
 | `NEXT_PUBLIC_MP_CLIENT_ID` | Client ID de Mercado Pago Connect (OAuth) | `5430330461934441` |
 | `MP_CLIENT_SECRET` | Client secret de Mercado Pago | `...` |
+| `MP_WEBHOOK_SECRET` | Secret de firma de webhooks MP (panel → Webhooks → `x-signature`) | `...` |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Cloud name de Cloudinary (subida de fotos del local) | `mi-cloud` |
+| `CLOUDINARY_API_KEY` | API Key de Cloudinary (firma de uploads) | `123456789012345` |
+| `CLOUDINARY_API_SECRET` | API Secret de Cloudinary (**solo server**) | `...` |
+| `ALLOW_PAYMENT_MOCK` | (Opcional) `true` para habilitar el simulador de pagos fuera de dev | solo si hace falta demo forzada |
+| `MP_BILLING_ACCESS_TOKEN` | Access token de la cuenta MP de **acomer** (cobra suscripciones SaaS) | `APP_USR-…` o `TEST-…` |
+| `MP_PLATFORM_ACCESS_TOKEN` | Alias opcional de `MP_BILLING_ACCESS_TOKEN` | |
 
 > **No commitees secretos.** El `.env` local no debe subirse al repo; cargá estos valores
 > directamente en el panel de Vercel.
+>
+> En **producción** el proveedor mock de pagos (del local) está deshabilitado salvo
+> `ALLOW_PAYMENT_MOCK=true`.
+>
+> **Billing SaaS:** el local paga a acomer con Checkout Pro usando
+> `MP_BILLING_ACCESS_TOKEN`. Webhook: `https://acomer.com.ar/api/webhooks/billing/mp`
+> (misma firma `MP_WEBHOOK_SECRET` si la app es la misma). Migración:
+> `drizzle/0026_billing.sql`.
+>
+> Pilotos sin cobro: en SQL
+> `UPDATE restaurantes SET billing_status = 'exempt' WHERE slug = '…';`
 
 ---
 
-## 4. Verificación
+## 4. Supabase Auth — redirect URLs
+
+En **Supabase → Authentication → URL Configuration**, agregá a *Redirect URLs*:
+
+| URL | Para qué |
+|---|---|
+| `https://acomer.com.ar/auth/callback` | Recovery de contraseña y magic links |
+| `http://localhost:3000/auth/callback` | Dev local |
+
+El form de “olvidé mi contraseña” redirige a  
+`/auth/callback?next=/cambiar-password`.
+
+---
+
+## 5. Verificación
 
 Una vez propagado el DNS (puede tardar unos minutos):
 

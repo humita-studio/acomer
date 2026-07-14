@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { formatPeso } from '@/shared/lib/format';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import {
@@ -42,16 +43,24 @@ export function useDetalleCierre(sesionCajaId: string | null) {
   });
 }
 
-/** Refresca el efectivo esperado cuando una mesa solicita la cuenta. */
+/**
+ * Refresca el efectivo esperado cuando hay cobros o movimientos en el local
+ * (otra pestaña / otro cajero).
+ */
 export function useCajaRealtime(tenantId: string) {
   const queryClient = useQueryClient();
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-    channel
-      .on('broadcast', { event: 'cuenta_solicitada' }, () =>
-        queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) })
-      )
+    const invalidar = () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cajaHistorial(tenantId) });
+    };
+    const channel = supabase
+      .channel(`admin_restaurant_${tenantId}`)
+      .on('broadcast', { event: 'cuenta_solicitada' }, invalidar)
+      .on('broadcast', { event: 'mesa_pagada' }, invalidar)
+      .on('broadcast', { event: 'pago_parcial' }, invalidar)
+      .on('broadcast', { event: 'caja_actualizada' }, invalidar)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -75,8 +84,14 @@ export function useAbrirCaja(tenantId: string) {
       if (!res.success) throw new Error(res.message);
       return res;
     },
-    onSuccess: () => invalidar(),
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'No se pudo abrir la caja'),
+    onSuccess: () => {
+      invalidar();
+      toast.success('Caja abierta', {
+        description: 'Ya podés cobrar ventas de mostrador y efectivo de mesas.',
+      });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : 'No se pudo abrir la caja'),
   });
 }
 
@@ -93,8 +108,16 @@ export function useRegistrarMovimiento(tenantId: string) {
       if (!res.success) throw new Error(res.message);
       return res;
     },
-    onSuccess: () => invalidar(),
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'No se pudo registrar el movimiento'),
+    onSuccess: (_res, vars) => {
+      invalidar();
+      const tipoLabel =
+        vars.tipo === 'ingreso' ? 'Ingreso' : vars.tipo === 'egreso' ? 'Egreso' : 'Retiro';
+      toast.success(`${tipoLabel} registrado`, {
+        description: formatPeso(vars.monto),
+      });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : 'No se pudo registrar el movimiento'),
   });
 }
 
@@ -106,7 +129,21 @@ export function useCerrarCaja(tenantId: string) {
       if (!res.success) throw new Error(res.message);
       return res;
     },
-    onSuccess: () => invalidar(),
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'No se pudo cerrar la caja'),
+    onSuccess: (res) => {
+      invalidar();
+      const dif = res.diferencia;
+      toast.success('Caja cerrada', {
+        description:
+          dif === undefined || dif === null
+            ? undefined
+            : dif === 0
+              ? 'Sin diferencia de efectivo'
+              : dif > 0
+                ? `Sobrante de ${formatPeso(dif)}`
+                : `Faltante de ${formatPeso(Math.abs(dif))}`,
+      });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : 'No se pudo cerrar la caja'),
   });
 }

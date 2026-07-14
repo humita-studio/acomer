@@ -5,7 +5,16 @@ import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { format, startOfToday } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Loader2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  Copy,
+  CheckCheck,
+  Loader2,
+  Users,
+} from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -41,7 +50,20 @@ function fechaLegible(d: Date) {
   return txt.charAt(0).toUpperCase() + txt.slice(1);
 }
 
-export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turnos?: TurnoSlots[] }) {
+function telefonoOk(raw: string) {
+  const digits = raw.replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
+export function ReservarForm({
+  tenantSlug,
+  turnos,
+  anticipacionMinMin = 0,
+}: {
+  tenantSlug: string;
+  turnos?: TurnoSlots[];
+  anticipacionMinMin?: number;
+}) {
   const grupos = turnos && turnos.length > 0 ? turnos : GRUPOS_FALLBACK;
   const slots = grupos.flatMap((g) => g.slots);
   const [fecha, setFecha] = useState<Date>(() => startOfToday());
@@ -52,11 +74,10 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
   const [telefono, setTelefono] = useState('');
   const [notas, setNotas] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   const inicioISO = new Date(`${toYMD(fecha)}T${hora}:00`).toISOString();
 
-  // Disponibilidad reactiva: la key cambia con fecha/horario/personas, así que se
-  // reconsulta sola al tocar cualquier parámetro (sin botón "ver disponibilidad").
   const disponibilidad = useQuery({
     queryKey: queryKeys.disponibilidad(inicioISO, personas),
     queryFn: () => getDisponibilidadAction(tenantSlug, inicioISO, personas),
@@ -70,47 +91,138 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
 
   const crear = useMutation({
     mutationFn: () =>
-      crearReservaAction(tenantSlug, { nombreContacto: nombre, telefono, inicioISO, personas, notas }),
+      crearReservaAction(tenantSlug, {
+        nombreContacto: nombre,
+        telefono,
+        inicioISO,
+        personas,
+        notas,
+      }),
     onSuccess: (res) => {
       if (!res.success) setError(res.message ?? 'No se pudo crear la reserva');
+    },
+    onError: () => {
+      setError('Sin conexión o error de red. Revisá internet e intentá de nuevo.');
     },
   });
 
   const handleConfirmar = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!nombre.trim() || !telefono.trim()) {
-      setError('Completá tu nombre y teléfono');
+    if (nombre.trim().length < 2) {
+      setError('Ingresá tu nombre.');
+      return;
+    }
+    if (!telefonoOk(telefono)) {
+      setError('Ingresá un teléfono válido (ej. 11 2345 6789).');
+      return;
+    }
+    if (!hayLugar) {
+      setError('Elegí un día y horario con lugar disponible.');
       return;
     }
     crear.mutate();
   };
 
   if (crear.isSuccess && crear.data?.success) {
+    const resumen = [
+      fechaLegible(fecha),
+      `a las ${hora}`,
+      `${personas} ${personas === 1 ? 'persona' : 'personas'}`,
+      nombre.trim(),
+      telefono.trim(),
+    ].join(' · ');
+    const refCorta = crear.data.reservaId
+      ? `#${crear.data.reservaId.slice(0, 6).toUpperCase()}`
+      : null;
+
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-5 text-center">
-        <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-          <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-success-subtle text-success-foreground">
-            <CheckCircle2 className="size-7" />
+      <main className="flex min-h-dvh flex-col items-center justify-center bg-muted/30 p-5 text-center">
+        <div className="w-full max-w-md space-y-5 rounded-2xl border bg-card p-8 shadow-sm">
+          <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-success-subtle text-success-foreground">
+            <CheckCircle2 className="size-7" aria-hidden />
           </span>
-          <h1 className="font-display text-2xl font-semibold text-foreground">¡Reserva enviada!</h1>
-          <p className="mt-2 text-muted-foreground">
-            Te confirmaremos la reserva a la brevedad. ¡Gracias {nombre.trim() || 'por reservar'}!
+          <div className="space-y-2">
+            <h1 className="font-display text-2xl font-semibold tracking-tight">
+              ¡Reserva enviada!
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              El local ya la recibió. Te van a confirmar a la brevedad
+              {nombre.trim() ? `, ${nombre.trim()}` : ''}.
+            </p>
+          </div>
+
+          <dl className="space-y-2 rounded-xl bg-muted/60 p-4 text-left text-sm">
+            {refCorta ? (
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Referencia</dt>
+                <dd className="font-mono font-medium">{refCorta}</dd>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Cuándo</dt>
+              <dd className="text-right font-medium">
+                {fechaLegible(fecha)} · {hora}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Personas</dt>
+              <dd className="font-medium tabular-nums">{personas}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">A nombre de</dt>
+              <dd className="truncate font-medium">{nombre.trim()}</dd>
+            </div>
+          </dl>
+
+          <p className="text-xs text-muted-foreground">
+            Guardá el detalle por si el local te llama para confirmar.
           </p>
-          <Button asChild variant="outline" className="mt-6">
-            <Link href="/">Volver al inicio</Link>
-          </Button>
+
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(
+                    `Reserva${refCorta ? ` ${refCorta}` : ''}: ${resumen}`,
+                  );
+                  setCopiado(true);
+                  setTimeout(() => setCopiado(false), 2000);
+                } catch {
+                  // ignore
+                }
+              }}
+            >
+              {copiado ? (
+                <>
+                  <CheckCheck className="size-4" aria-hidden />
+                  Copiado
+                </>
+              ) : (
+                <>
+                  <Copy className="size-4" aria-hidden />
+                  Copiar detalle
+                </>
+              )}
+            </Button>
+            <Button asChild className="w-full">
+              <Link href="/">Volver al inicio</Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
-  const puedeConfirmar = hayLugar && nombre.trim().length > 0 && telefono.trim().length > 0;
+  const puedeConfirmar =
+    hayLugar && nombre.trim().length >= 2 && telefonoOk(telefono);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-10 flex h-16 items-center border-b bg-card px-4">
+    <div className="min-h-dvh bg-muted/30">
+      <header className="sticky top-0 z-10 flex h-14 items-center border-b bg-background/95 px-4 backdrop-blur">
         <Link
           href="/"
           aria-label="Volver"
@@ -122,17 +234,23 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
         <span className="size-9" aria-hidden />
       </header>
 
-      <div className="mx-auto max-w-md p-5">
+      <div className="mx-auto max-w-md p-4 sm:p-5">
         <form
           onSubmit={handleConfirmar}
-          className="space-y-[18px] rounded-2xl border bg-card p-5 pt-7 shadow-sm"
+          className="space-y-4 rounded-2xl border bg-card p-5 pt-6 shadow-sm"
         >
           <div className="text-center">
-            <h2 className="text-base font-semibold text-foreground">Reservá tu mesa</h2>
-            <p className="text-[13px] text-muted-foreground">Elegí día, horario y personas</p>
+            <h2 className="font-display text-lg font-semibold text-foreground">
+              Reservá tu mesa
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Elegí día, horario y personas
+              {anticipacionMinMin > 0
+                ? ` · mínimo ${anticipacionMinMin} min de anticipación`
+                : ''}
+            </p>
           </div>
 
-          {/* Fecha */}
           <div className="space-y-1.5">
             <Label className="text-xs tracking-[0.2px] text-muted-foreground">Fecha</Label>
             <Popover open={fechaOpen} onOpenChange={setFechaOpen}>
@@ -162,7 +280,6 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
             </Popover>
           </div>
 
-          {/* Horario + Personas */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs tracking-[0.2px] text-muted-foreground">Horario</Label>
@@ -193,7 +310,10 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
                 <SelectContent>
                   {PERSONAS_OPCIONES.map((n) => (
                     <SelectItem key={n} value={String(n)}>
-                      {n}
+                      <span className="inline-flex items-center gap-1.5">
+                        <Users className="size-3.5 opacity-60" aria-hidden />
+                        {n}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -201,27 +321,25 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
             </div>
           </div>
 
-          {/* Disponibilidad */}
           {consultando && (
-            <div className="flex items-center gap-2.5 rounded-lg bg-muted px-3.5 py-3 text-[13px] text-muted-foreground">
-              <Loader2 className="size-[18px] shrink-0 animate-spin" />
+            <div className="flex items-center gap-2.5 rounded-lg bg-muted px-3.5 py-3 text-sm text-muted-foreground">
+              <Loader2 className="size-4 shrink-0 animate-spin" />
               Consultando disponibilidad…
             </div>
           )}
           {consultado && hayLugar && (
-            <div className="flex items-center gap-2.5 rounded-lg bg-success-subtle px-3.5 py-3 text-[13px] text-success-foreground">
-              <CheckCircle2 className="size-[18px] shrink-0" />
-              ¡Hay lugar! Completá tus datos para reservar.
+            <div className="flex items-center gap-2.5 rounded-lg bg-success-subtle px-3.5 py-3 text-sm text-success-foreground">
+              <CheckCircle2 className="size-4 shrink-0" />
+              Hay lugar. Completá tus datos para reservar.
             </div>
           )}
           {consultado && !hayLugar && (
-            <div className="flex items-center gap-2.5 rounded-lg bg-warning-subtle px-3.5 py-3 text-[13px] text-warning-foreground">
-              <AlertCircle className="size-[18px] shrink-0" />
+            <div className="flex items-center gap-2.5 rounded-lg bg-warning-subtle px-3.5 py-3 text-sm text-warning-foreground">
+              <AlertCircle className="size-4 shrink-0" />
               {(motivo && MENSAJE_SIN_LUGAR[motivo]) ?? MENSAJE_SIN_LUGAR.sin_mesa}
             </div>
           )}
 
-          {/* Datos del cliente */}
           <div className="space-y-1.5">
             <Label htmlFor="rv-nombre" className="text-xs tracking-[0.2px] text-muted-foreground">
               Nombre
@@ -230,7 +348,9 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
               id="rv-nombre"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
+              autoComplete="name"
               placeholder="Tu nombre"
+              className="text-base"
             />
           </div>
           <div className="space-y-1.5">
@@ -240,9 +360,12 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
             <Input
               id="rv-tel"
               type="tel"
+              inputMode="tel"
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
+              autoComplete="tel"
               placeholder="Ej: 11 2345 6789"
+              className="text-base"
             />
           </div>
           <div className="space-y-1.5">
@@ -254,23 +377,34 @@ export function ReservarForm({ tenantSlug, turnos }: { tenantSlug: string; turno
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
               placeholder="Ej: festejo de cumpleaños"
+              className="text-base"
             />
           </div>
 
-          {error && (
-            <p className="rounded-lg bg-destructive/10 px-3.5 py-3 text-[13px] font-medium text-destructive">
+          {error ? (
+            <p className="rounded-lg bg-destructive/10 px-3.5 py-3 text-sm font-medium text-destructive">
               {error}
             </p>
-          )}
+          ) : null}
 
           <Button
             type="submit"
             size="lg"
             disabled={!puedeConfirmar || crear.isPending}
-            className="w-full bg-success text-primary-foreground hover:bg-success/90"
+            className="h-12 w-full text-base"
           >
-            {crear.isPending ? 'Reservando…' : 'Confirmar reserva'}
+            {crear.isPending ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Reservando…
+              </>
+            ) : (
+              'Confirmar reserva'
+            )}
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            El local te confirmará la reserva. No es un pago.
+          </p>
         </form>
       </div>
     </div>

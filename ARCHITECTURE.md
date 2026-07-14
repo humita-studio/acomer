@@ -117,7 +117,9 @@ Son 17 dominios. Los **cimientos** son consumidos por otros (única dirección p
 | `carta` | Carta + carrito (kernel de UI: `MenuView`, `cart.ts`, `useLocalCart`) | cimiento |
 | `pedidos` | Kernel de creación de pedidos (`crearPedidoCore`) + lecturas de ticket | cimiento |
 | `comanda` | Servicio en mesa: sesión, borrador compartido, ticket, carga del mozo, realtime | operación |
+| `cocina` | KDS: tablero de pedidos (Pendiente → En prep. → Listo → Entregado) | operación |
 | `mesas` | Plano/ambientes/mesas (editor canvas), sesiones, QR, dividir/unir | operación |
+| `notificaciones` | Campana del admin (Realtime: nuevo pedido, pagos, cuenta) | panel |
 | `venta-mostrador` | Venta rápida sin mesa (mostrador): armar → cobrar | operación |
 | `pedidos-online` | Takeaway/delivery web: menú externo, checkout, seguimiento, config | operación |
 | `reservas` | Reservas online + agenda del admin + configuración | operación |

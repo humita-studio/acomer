@@ -23,6 +23,8 @@ import type {
   Periodo,
   PedidoReciente,
 } from '@/features/dashboard/types';
+import type { OnboardingStatus } from '@/features/dashboard/onboarding';
+import { OnboardingChecklist } from '@/features/dashboard/components/OnboardingChecklist';
 import { Card, CardContent } from '@/shared/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 
@@ -51,6 +53,8 @@ export function DashboardMetrics({
   saludo,
   fecha,
   nombreRestaurante,
+  onboarding = null,
+  dominioPublico,
 }: {
   initialData: DashboardMetrics;
   tenantId: string;
@@ -58,6 +62,8 @@ export function DashboardMetrics({
   saludo: string;
   fecha: string;
   nombreRestaurante: string;
+  onboarding?: OnboardingStatus | null;
+  dominioPublico?: string;
 }) {
   const [periodo, setPeriodo] = useState<Periodo>(initialData.periodo);
 
@@ -68,6 +74,7 @@ export function DashboardMetrics({
   const puedeVerVentas = hasPermission(role, 'canViewReports');
   const { ocupacion, ventas, pedidos, salon, serie, pedidosRecientes } = data;
   const comparativa = COMPARATIVA[periodo];
+  const setupIncompleto = onboarding && !onboarding.listo;
 
   return (
     <div className="space-y-6">
@@ -76,7 +83,10 @@ export function DashboardMetrics({
         <div className="space-y-1">
           <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{saludo}</h1>
           <p className="text-sm text-muted-foreground first-letter:uppercase">
-            {fecha} · esto es lo que está pasando en {nombreRestaurante}
+            {fecha} ·{' '}
+            {setupIncompleto
+              ? `configuremos ${nombreRestaurante} para el primer servicio`
+              : `esto es lo que está pasando en ${nombreRestaurante}`}
           </p>
         </div>
         <Tabs value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
@@ -89,6 +99,16 @@ export function DashboardMetrics({
           </TabsList>
         </Tabs>
       </div>
+
+      {/* Checklist de primer día (owner/admin, mientras falte setup) */}
+      {onboarding ? (
+        <OnboardingChecklist
+          status={onboarding}
+          tenantId={tenantId}
+          nombreRestaurante={nombreRestaurante}
+          dominioPublico={dominioPublico}
+        />
+      ) : null}
 
       {/* Métricas principales */}
       <div className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2', puedeVerVentas && 'lg:grid-cols-4')}>

@@ -52,6 +52,7 @@ export function useAgregarAdicional() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al agregar el adicional');
     },
+    onSuccess: () => toast.success('Adicional agregado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -81,6 +82,7 @@ export function useEditarPrecioAdicional() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al actualizar el precio');
     },
+    onSuccess: () => toast.success('Precio del adicional actualizado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -110,6 +112,7 @@ export function useEliminarAdicional() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al eliminar el adicional');
     },
+    onSuccess: () => toast.success('Adicional eliminado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },

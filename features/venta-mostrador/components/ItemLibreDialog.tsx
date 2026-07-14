@@ -5,6 +5,8 @@ import { Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
+import { parseMontoInput } from '@/shared/lib/format';
 import { QtyStepper } from './QtyStepper';
 
 /** Sub-modal: cargar un ítem que no está en la carta (nombre + precio a mano). */
@@ -20,7 +22,7 @@ export function ItemLibreDialog({
   const [cantidad, setCantidad] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
-  const precioNum = parseFloat(precio.replace(',', '.')) || 0;
+  const precioNum = parseMontoInput(precio) ?? 0;
 
   const confirmar = () => {
     const n = nombre.trim();
@@ -57,18 +59,11 @@ export function ItemLibreDialog({
               <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 Precio
               </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground">
-                  $
-                </span>
-                <Input
-                  value={precio}
-                  onChange={(e) => setPrecio(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="0"
-                  className="pl-7"
-                />
-              </div>
+              <MoneyInput
+                value={precio}
+                onValueChange={setPrecio}
+                placeholder="0"
+              />
             </div>
 
             <div className="space-y-1.5">

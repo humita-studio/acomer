@@ -5,8 +5,6 @@ import { eq, and, ne } from 'drizzle-orm';
 import {
     transaccionesPago,
     pedidos,
-    comandaItems,
-    sesionesMesa
 } from '@/shared/db/schema';
 
 export type TicketItem = {

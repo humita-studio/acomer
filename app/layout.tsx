@@ -20,9 +20,32 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://acomer.com.ar';
+
+const defaultTitle = 'acomer — El sistema operativo de tu restaurante';
+const defaultDescription =
+  'Carta digital con QR, pedidos online, reservas, mesas, cobros con Mercado Pago y reportes. Todo tu restaurante en una sola plataforma.';
+
 export const metadata: Metadata = {
-  title: "acomer — Panel",
-  description: "Gestión de restaurante: mesas, menú, pedidos y caja.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: defaultTitle,
+    template: '%s · acomer',
+  },
+  description: defaultDescription,
+  applicationName: 'acomer',
+  openGraph: {
+    type: 'website',
+    locale: 'es_AR',
+    siteName: 'acomer',
+    title: defaultTitle,
+    description: defaultDescription,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: defaultTitle,
+    description: defaultDescription,
+  },
 };
 
 export default function RootLayout({

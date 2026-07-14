@@ -111,8 +111,8 @@ export function PaymentMethodModal({
         }
         setError(res.message ?? 'No se pudo solicitar la cuenta.');
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error inesperado.');
+    } catch {
+      setError('Sin conexión o error de red. Revisá internet e intentá de nuevo.');
     } finally {
       setProcessing(false);
     }
@@ -139,6 +139,12 @@ export function PaymentMethodModal({
         </SheetHeader>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-5">
+          {metodosPago.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Este local todavía no tiene medios de pago activos. Pedile al mozo que te cobre en
+              la mesa.
+            </div>
+          ) : null}
           {metodosPago.map((metodo) => {
             const isSelected = selected?.id === metodo.id;
             return (

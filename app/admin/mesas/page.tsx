@@ -6,22 +6,26 @@ import { getCurrentSession } from '@/features/auth/session';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { ensureAmbientePorDefecto, getPlanoData } from '@/features/mesas/plano-data';
-import { PlanoManager } from './plano-manager';
+import { PlanoManager } from '@/features/mesas/components/plano-manager';
 import { Skeleton } from '@/shared/ui/skeleton';
 
 function PlanoSkeleton() {
   return (
     <div className="space-y-6">
-      <Skeleton className="h-8 w-48" />
-      {/* Toolbar */}
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-9 w-32" />
-        <Skeleton className="h-9 w-32" />
-        <Skeleton className="h-9 w-9" />
-        <Skeleton className="h-9 w-9" />
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-36" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-10 w-32" />
+        </div>
       </div>
-      {/* Canvas area */}
-      <Skeleton className="h-[500px] w-full rounded-xl" />
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <Skeleton className="h-[560px] flex-1 rounded-xl" />
+        <Skeleton className="h-[320px] w-full rounded-xl lg:w-[300px]" />
+      </div>
     </div>
   );
 }
@@ -30,13 +34,10 @@ async function PlanoContent() {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
 
-  // Garantiza un ambiente por defecto y reubica mesas sin asignar
   await ensureAmbientePorDefecto(session.restauranteId);
 
-  // Datos iniciales del plano (mismo loader que usa el refetch en cliente)
   const planoData = await getPlanoData(session.restauranteId);
 
-  // Origin público (subdominio del tenant) para los QR de las mesas
   const headersList = await headers();
   const host = headersList.get('host') || 'localhost:3000';
   const [tenant] = await db
@@ -50,17 +51,15 @@ async function PlanoContent() {
     : `https://${tenantSlug}.${host.replace('app.', '')}`;
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-foreground mb-6">Plano del local</h1>
-      <PlanoManager
-        ambientes={planoData.ambientes}
-        mesas={planoData.mesas}
-        elementos={planoData.elementos}
-        origin={origin}
-        userRole={session.role}
-        tenantId={session.restauranteId}
-      />
-    </div>
+    <PlanoManager
+      ambientes={planoData.ambientes}
+      mesas={planoData.mesas}
+      elementos={planoData.elementos}
+      origin={origin}
+      userRole={session.role}
+      tenantId={session.restauranteId}
+      currentUserId={session.user.id}
+    />
   );
 }
 

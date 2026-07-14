@@ -2,6 +2,15 @@
 
 SaaS multi-tenant para restaurantes: **carta digital por QR**, **comandas compartidas en tiempo real**, **reservas**, **pedidos online** (takeaway/delivery) y **cobros con Mercado Pago**. Cada local vive en su propio subdominio (p. ej. `pizzeria.acomer...`).
 
+## Configuración (qué tenés que setear)
+
+👉 **[docs/CONFIGURAR.md](./docs/CONFIGURAR.md)** — checklist de Supabase, variables, DNS, Mercado Pago (local + billing SaaS), migraciones y pilotos `exempt`.
+
+También:
+
+- [DEPLOY.md](./DEPLOY.md) — Vercel + Cloudflare wildcard  
+- [docs/VENTA-PILOTO.md](./docs/VENTA-PILOTO.md) — guión de demo / venta  
+
 ## Stack
 
 - **Framework:** Next.js 16 (App Router) + TypeScript
@@ -30,6 +39,10 @@ bun run lint       # eslint
 
 ### Variables de entorno (`.env`)
 
+Lista completa y paneles externos: **[docs/CONFIGURAR.md](./docs/CONFIGURAR.md)**.
+
+Mínimo para dev:
+
 | Variable | Para qué |
 | --- | --- |
 | `DATABASE_URL` | Conexión Postgres (Supabase) para Drizzle |
@@ -37,8 +50,25 @@ bun run lint       # eslint
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Clave pública de Supabase (cliente) |
 | `SUPABASE_SECRET_KEY` | Clave de servicio de Supabase (servidor) |
 | `NEXT_PUBLIC_APP_URL` | URL base de la app (links y webhooks) |
-| `NEXT_PUBLIC_MP_CLIENT_ID` | Client ID de Mercado Pago (OAuth) |
+| `NEXT_PUBLIC_ROOT_DOMAIN` | Dominio raíz multi-tenant (`localhost:3000` en dev) |
+| `NEXT_PUBLIC_MP_CLIENT_ID` | Client ID de Mercado Pago (OAuth del local) |
 | `MP_CLIENT_SECRET` | Client secret de Mercado Pago (OAuth) |
+| `MP_WEBHOOK_SECRET` | (Opcional en local) Firma de webhooks MP |
+| `MP_BILLING_ACCESS_TOKEN` | (Opcional en dev) Cobro de suscripción SaaS |
+
+```bash
+bun run test       # unit tests (vitest)
+bun run test:e2e   # smoke e2e (Playwright; levanta `next dev` si hace falta)
+bun run typecheck  # tsc --noEmit
+```
+
+Los e2e públicos usan el tenant `demo` por defecto (`http://demo.localhost:3000`). Override:
+
+```bash
+PLAYWRIGHT_TENANT_URL=http://mi-local.localhost:3000 bun run test:e2e
+```
+
+Cubre landing, legal, auth (redirects) y superficies del tenant (`/carta`, `/pedir`, `/reservar`, mesa inválida). **No** ejecuta cobros reales de Mercado Pago: eso se valida a mano con el [kit de venta](./docs/VENTA-PILOTO.md).
 
 ## Estructura
 

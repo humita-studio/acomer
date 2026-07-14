@@ -17,8 +17,8 @@ export function MarketingCta() {
           Sumá tecnología a tu salón hoy
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-lg text-white/85">
-          Probá acomer gratis 14 días. Configurás tu local en una tarde, sin
-          tarjeta.
+          Gratis por ahora: configurás menú, mesas, reservas, online y cobros sin
+          tarjeta ni límites de plan.
         </p>
 
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
@@ -28,7 +28,7 @@ export function MarketingCta() {
             className="bg-white text-primary hover:bg-white/90"
           >
             <Link href="/register">
-              Probar gratis
+              Crear mi local gratis
               <ArrowRight />
             </Link>
           </Button>

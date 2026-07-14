@@ -91,6 +91,8 @@ export function useAprobarCobro(tenantId: string) {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cobros(tenantId) });
+      // El efectivo esperado de la caja cambia al aprobar un cobro.
+      queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
     },
   });
 }

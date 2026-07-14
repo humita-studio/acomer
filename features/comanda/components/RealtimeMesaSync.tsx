@@ -62,6 +62,8 @@ export function RealtimeMesaSync({ sesionMesaId }: RealtimeMesaSyncProps) {
               payload: { t: Date.now() },
             });
           });
+          // Tras reconectar (pestaña en background / red), sincronizar borrador.
+          queryClient.invalidateQueries({ queryKey: queryKeys.borrador(sesionMesaId) });
         }
       });
 

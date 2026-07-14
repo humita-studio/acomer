@@ -70,6 +70,7 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
   const [descripcion, setDescripcion] = useState('');
   const [direccion, setDireccion] = useState('');
   const [colorMarca, setColorMarca] = useState<ColorMarca>('terracota');
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const subdominio = normalizarSubdominio(subdominioRaw);
@@ -78,9 +79,13 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
 
   const okPaso1 = emailValido(email) && password.length >= 8 && password === password2;
   const okPaso2 = nombreLocal.trim().length >= 2 && !errorSub && subdominio.length >= SUBDOMINIO_MIN;
+  const okPaso3 = aceptaTerminos;
 
   const crear = useMutation({
     mutationFn: async () => {
+      if (!aceptaTerminos) {
+        throw new Error('Tenés que aceptar los términos y la política de privacidad.');
+      }
       const res = await registrarLocalAction({
         email,
         password,
@@ -125,7 +130,7 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
         <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-success-subtle text-success-foreground">
           <Check className="size-7" />
         </span>
-        <h1 className="font-display text-2xl font-semibold">¡Tu local está listo!</h1>
+        <h1 className="font-display text-2xl font-semibold">¡Tu local está creado!</h1>
         <p className="mt-2 text-muted-foreground">
           Tu página pública quedó en{' '}
           <a
@@ -138,8 +143,24 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         </p>
+        <ol className="mt-5 space-y-2 rounded-xl border bg-muted/40 p-4 text-left text-sm">
+          <li className="flex gap-2">
+            <span className="font-semibold text-primary">1.</span>
+            <span>Cargá el menú (productos y precios)</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-semibold text-primary">2.</span>
+            <span>Armá el salón y generá los QR de mesa</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-semibold text-primary">3.</span>
+            <span>Vinculá Mercado Pago para cobrar</span>
+          </li>
+        </ol>
         <div className="mt-6 flex flex-col gap-2">
-          <Button onClick={() => router.push('/admin')}>Ir a mi panel</Button>
+          <Button onClick={() => router.push('/admin')}>
+            Configurar mi local
+          </Button>
           <Button variant="outline" asChild>
             <a href={`${proto}://${url}`} target="_blank" rel="noopener noreferrer">
               Ver mi página
@@ -316,6 +337,26 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
               </Select>
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={aceptaTerminos}
+              onChange={(e) => setAceptaTerminos(e.target.checked)}
+              className="mt-1 size-4 accent-primary"
+            />
+            <span className="text-muted-foreground">
+              Acepto los{' '}
+              <Link href="/terminos" target="_blank" className="font-medium text-primary hover:underline">
+                términos y condiciones
+              </Link>{' '}
+              y la{' '}
+              <Link href="/privacidad" target="_blank" className="font-medium text-primary hover:underline">
+                política de privacidad
+              </Link>
+              .
+            </span>
+          </label>
         </div>
       )}
 
@@ -340,7 +381,7 @@ export function RegistroWizard({ dominioBase }: { dominioBase: string }) {
           </Button>
         )}
         {paso === 2 && (
-          <Button onClick={() => crear.mutate()} disabled={crear.isPending}>
+          <Button onClick={() => crear.mutate()} disabled={crear.isPending || !okPaso3}>
             {crear.isPending ? (
               <>
                 <Loader2 className="size-4 animate-spin" /> Creando…

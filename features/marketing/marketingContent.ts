@@ -19,6 +19,17 @@ export const NAV_LINKS = [
   { href: '#como-funciona', label: 'Cómo funciona' },
 ] as const;
 
+/**
+ * Contacto comercial / soporte (editable acá hasta tener CRM).
+ * WhatsApp sin + ni espacios; email de ventas.
+ */
+export const CONTACTO = {
+  email: 'hola@acomer.com.ar',
+  /** Solo dígitos con código país, ej. 54911… — vacío = no mostrar WhatsApp */
+  whatsapp: '',
+  label: 'Escribinos',
+} as const;
+
 export type Feature = {
   icon: LucideIcon;
   titulo: string;
@@ -104,51 +115,41 @@ export type Plan = {
   destacado?: boolean;
 };
 
-/** Planes de precios. */
+/**
+ * Oferta de la landing. Hoy el producto es free hasta que habilitemos cobro
+ * (`BILLING_COBRO_HABILITADO` en features/billing/plans.ts). Copy alineado a
+ * lo que el código realmente da: todo el producto, sin límites de plan.
+ */
 export const PLANES: Plan[] = [
   {
-    nombre: 'Básico',
-    precio: '$ 14.900',
-    periodo: '/mes',
-    descripcion: 'Para arrancar con lo esencial.',
+    nombre: 'Gratis',
+    precio: '$ 0',
+    periodo: 'por ahora',
+    descripcion:
+      'Todo el producto sin tarjeta ni límites de plan. Cuando habilitemos cobro, te avisamos.',
     features: [
       'Carta digital con QR',
-      'Hasta 15 mesas',
-      'Reportes básicos',
-      'Soporte por email',
-    ],
-    cta: 'Probar gratis',
-    ctaHref: '/register',
-  },
-  {
-    nombre: 'Pro',
-    precio: '$ 29.900',
-    periodo: '/mes',
-    descripcion: 'El más elegido por restaurantes en marcha.',
-    features: [
-      'Todo lo de Básico',
       'Mesas ilimitadas',
-      'Reservas + Delivery',
-      'Cobros con Mercado Pago',
-      'Reportes avanzados',
-      'Soporte prioritario',
+      'Cocina y cobros (efectivo / MP)',
+      'Reservas y pedidos online',
+      'Promociones y reportes',
+      'Roles de staff',
     ],
-    cta: 'Probar gratis',
+    cta: 'Crear mi local gratis',
     ctaHref: '/register',
     destacado: true,
   },
   {
     nombre: 'A medida',
-    precio: 'A medida',
-    descripcion: 'Para cadenas y multilocal.',
+    precio: 'Consultar',
+    descripcion: 'Setup asistido y acompañamiento para tu local.',
     features: [
-      'Todo lo de Pro',
-      'Multi-sucursal',
-      'Roles y permisos',
-      'Integraciones / API',
+      'Todo lo de Gratis',
       'Onboarding dedicado',
+      'Soporte prioritario',
+      'Prioridad en el roadmap',
     ],
-    cta: 'Hablar con ventas',
+    cta: 'Hablar con nosotros',
     ctaHref: '/register',
   },
 ];

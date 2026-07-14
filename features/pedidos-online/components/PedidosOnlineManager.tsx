@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -14,7 +15,20 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { ArrowRight, Ban, Check, Clock, MoreHorizontal, Settings, Store, Truck } from 'lucide-react';
+import {
+  ArrowRight,
+  Ban,
+  Check,
+  Clock,
+  Copy,
+  CheckCheck,
+  ExternalLink,
+  Link2,
+  MoreHorizontal,
+  Settings,
+  Store,
+  Truck,
+} from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { Button } from '@/shared/ui/button';
@@ -285,19 +299,29 @@ function EntregadoCardBody({ orden }: { orden: Orden }) {
 // Envoltorio arrastrable. El cuerpo original se atenúa mientras se arrastra; el
 // clon que sigue al cursor lo dibuja el <DragOverlay> (sin recortarse al cruzar
 // columnas).
-function DraggableCard({ orden, children }: { orden: Orden; children: ReactNode }) {
+function DraggableCard({
+  orden,
+  highlighted,
+  children,
+}: {
+  orden: Orden;
+  highlighted?: boolean;
+  children: ReactNode;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: orden.sesionMesaId,
     data: { orden },
   });
   return (
     <div
+      id={`orden-${orden.sesionMesaId}`}
       ref={setNodeRef}
       {...listeners}
       {...attributes}
       className={cn(
         'touch-none cursor-grab rounded-lg outline-none ring-primary focus-visible:ring-2 active:cursor-grabbing',
         isDragging && 'opacity-30',
+        highlighted && 'ring-2 ring-primary shadow-md',
       )}
     >
       {children}
@@ -311,6 +335,7 @@ function Columna({
   items,
   now,
   activeOrden,
+  highlightSesionId,
   onAdvance,
   onCancel,
 }: {
@@ -319,6 +344,7 @@ function Columna({
   items: Orden[];
   now: number;
   activeOrden: Orden | null;
+  highlightSesionId?: string | null;
   onAdvance: (sesionMesaId: string, nuevoEstado: string) => void;
   onCancel: (orden: Orden) => void;
 }) {
@@ -349,7 +375,11 @@ function Columna({
           <p className="px-1 py-6 text-center text-xs text-muted-foreground">Sin pedidos</p>
         ) : (
           items.map((o) => (
-            <DraggableCard key={o.sesionMesaId} orden={o}>
+            <DraggableCard
+              key={o.sesionMesaId}
+              orden={o}
+              highlighted={highlightSesionId === o.sesionMesaId}
+            >
               {esEntregado ? (
                 <EntregadoCardBody orden={o} />
               ) : (
@@ -363,21 +393,52 @@ function Columna({
   );
 }
 
+/** Beep corto para avisar un pedido nuevo (sin asset externo). */
+function beepNuevoPedido() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    osc.stop(ctx.currentTime + 0.25);
+  } catch {
+    // autoplay / permisos
+  }
+}
+
 export function PedidosOnlineManager({
   tenantId,
   initialOrdenes,
   initialConfig,
+  publicPedirUrl,
+  direccionLocal,
 }: {
   tenantId: string;
   initialOrdenes: Orden[];
   initialConfig: DeliveryConfig;
+  /** URL pública del menú online del local (para copiar / abrir). */
+  publicPedirUrl?: string;
+  /** Dirección del local (landing) para centrar el mapa de zona. */
+  direccionLocal?: string;
 }) {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const highlightSesionId = searchParams.get('sesion');
   const ordenesKey = queryKeys.ordenesExternas(tenantId);
   const [configOpen, setConfigOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Orden | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [activeOrden, setActiveOrden] = useState<Orden | null>(null);
+  const [linkCopiado, setLinkCopiado] = useState(false);
+  const [flashNuevo, setFlashNuevo] = useState(false);
 
   // Tick para refrescar los "hace X min" sin esperar a un evento realtime.
   const [now, setNow] = useState(() => Date.now());
@@ -395,15 +456,37 @@ export function PedidosOnlineManager({
     initialData: initialOrdenes,
   });
 
+  // Llegada desde el buscador del admin (?sesion=): scrollea hasta la tarjeta resaltada.
+  useEffect(() => {
+    if (!highlightSesionId) return;
+    if (!ordenes.some((o) => o.sesionMesaId === highlightSesionId)) return;
+    const t = window.setTimeout(() => {
+      document
+        .getElementById(`orden-${highlightSesionId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [highlightSesionId, ordenes]);
+
   // Realtime: invalidar cuando entra/cambia un pedido externo o cuando se
   // confirma un pago (mesa_pagada / pago_parcial los emite el webhook de MP),
   // para refrescar el estado Pagado/No pagado del tablero al instante.
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const invalidar = () => queryClient.invalidateQueries({ queryKey: ordenesKey });
+    const onNueva = () => {
+      invalidar();
+      beepNuevoPedido();
+      setFlashNuevo(true);
+      window.setTimeout(() => setFlashNuevo(false), 4000);
+      toast.message('Nuevo pedido online', {
+        description: 'Revisá la columna Recibido',
+        duration: 8000,
+      });
+    };
     const channel = supabase
       .channel(`admin_restaurant_${tenantId}`)
-      .on('broadcast', { event: 'orden_externa_nueva' }, invalidar)
+      .on('broadcast', { event: 'orden_externa_nueva' }, onNueva)
       .on('broadcast', { event: 'orden_externa_actualizada' }, invalidar)
       .on('broadcast', { event: 'mesa_pagada' }, invalidar)
       .on('broadcast', { event: 'pago_parcial' }, invalidar)
@@ -412,6 +495,18 @@ export function PedidosOnlineManager({
       supabase.removeChannel(channel);
     };
   }, [tenantId, queryClient, ordenesKey]);
+
+  const copiarLinkPublico = async () => {
+    if (!publicPedirUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicPedirUrl);
+      setLinkCopiado(true);
+      toast.success('Link copiado');
+      setTimeout(() => setLinkCopiado(false), 2000);
+    } catch {
+      toast.error('No se pudo copiar el link');
+    }
+  };
 
   // Cambia el estado de entrega con update optimista (el arrastre y el menú se
   // ven al instante; realtime/refetch reconcilian al confirmar el server).
@@ -432,7 +527,11 @@ export function PedidosOnlineManager({
       toast.error('No se pudo actualizar el pedido.');
     },
     onSuccess: (res) => {
-      if (!res.success) toast.error(res.message);
+      if (!res.success) {
+        toast.error(res.message || 'No se pudo actualizar el pedido.');
+        return;
+      }
+      toast.success('Pedido actualizado');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ordenesKey });
@@ -470,6 +569,8 @@ export function PedidosOnlineManager({
     cerradas.length === 1 ? '' : 's'
   } hoy · ${MODO_LABEL[initialConfig.modo]}`;
 
+  const sinPedidosHoy = ordenes.length === 0;
+
   return (
     // Alto acotado al viewport para que scrolleen las columnas y no la página.
     // El shell admin usa min-h-svh (no fija altura), así que h-full no resuelve;
@@ -481,14 +582,85 @@ export function PedidosOnlineManager({
           <h1 className="font-display text-3xl font-semibold tracking-tight">Pedidos online</h1>
           <p className="text-sm text-muted-foreground">{subtitulo}</p>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full bg-success-subtle px-3 py-1.5 text-sm font-medium text-success-foreground">
+        <span
+          className={cn(
+            'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+            flashNuevo
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-success-subtle text-success-foreground',
+          )}
+        >
           <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-success-foreground" />
+            <span
+              className={cn(
+                'absolute inline-flex h-full w-full animate-ping rounded-full opacity-60',
+                flashNuevo ? 'bg-primary-foreground' : 'bg-success',
+              )}
+            />
+            <span
+              className={cn(
+                'relative inline-flex size-2 rounded-full',
+                flashNuevo ? 'bg-primary-foreground' : 'bg-success-foreground',
+              )}
+            />
           </span>
-          En tiempo real
+          {flashNuevo ? '¡Pedido nuevo!' : 'En tiempo real'}
         </span>
       </div>
+
+      {!initialConfig.activo ? (
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-4 py-3 text-sm text-warning-foreground">
+          <p>
+            Los pedidos online están <strong>apagados</strong>. La página pública no toma pedidos.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => setConfigOpen(true)}>
+            Activar
+          </Button>
+        </div>
+      ) : null}
+
+      {sinPedidosHoy && initialConfig.activo ? (
+        <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-dashed bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="font-medium">Todavía no hay pedidos online hoy</p>
+            <p className="text-sm text-muted-foreground">
+              Compartí el link del menú con tus clientes. Los pedidos aparecen acá y en cocina.
+            </p>
+            {publicPedirUrl ? (
+              <p className="truncate font-mono text-xs text-muted-foreground">{publicPedirUrl}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {publicPedirUrl ? (
+              <>
+                <Button type="button" variant="outline" size="sm" onClick={() => void copiarLinkPublico()}>
+                  {linkCopiado ? (
+                    <>
+                      <CheckCheck className="size-4" />
+                      Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-4" />
+                      Copiar link
+                    </>
+                  )}
+                </Button>
+                <Button type="button" size="sm" asChild>
+                  <a href={publicPedirUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="size-4" />
+                    Abrir menú
+                  </a>
+                </Button>
+              </>
+            ) : null}
+            <Button type="button" variant="secondary" size="sm" onClick={() => setConfigOpen(true)}>
+              <Settings className="size-4" />
+              Configurar
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Toolbar: filtro por modalidad + cancelados + configuración */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
@@ -511,6 +683,12 @@ export function PedidosOnlineManager({
         </div>
 
         <div className="flex items-center gap-2">
+          {publicPedirUrl ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => void copiarLinkPublico()}>
+              {linkCopiado ? <CheckCheck className="size-4" /> : <Link2 className="size-4" />}
+              {linkCopiado ? 'Link copiado' : 'Link del menú'}
+            </Button>
+          ) : null}
           {cancelados.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
@@ -571,6 +749,7 @@ export function PedidosOnlineManager({
               items={porEstado(c.estado)}
               now={now}
               activeOrden={activeOrden}
+              highlightSesionId={highlightSesionId}
               onAdvance={advance}
               onCancel={setCancelTarget}
             />
@@ -594,6 +773,8 @@ export function PedidosOnlineManager({
         open={configOpen}
         onOpenChange={setConfigOpen}
         initialConfig={initialConfig}
+        publicPedirUrl={publicPedirUrl}
+        direccionLocal={direccionLocal}
       />
 
       {/* Confirmar cancelación */}

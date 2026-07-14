@@ -4,10 +4,11 @@ import { Check, ShoppingCart, X } from 'lucide-react';
 import { formatPeso, formatHora } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/button';
 import { DialogDescription, DialogTitle } from '@/shared/ui/dialog';
+import { TicketPrintButton } from '@/features/pagos/components/TicketPrintButton';
 import type { VentaMostradorTicket } from '../ventaMostradorActions';
 import { type Metodo, METODO_LABEL } from '../types';
 
-/** Paso 3 — venta cobrada: confirmación + ticket. */
+/** Paso 3 — venta cobrada: confirmación + ticket imprimible. */
 export function PasoCobrada({
   ticket,
   onNuevaVenta,
@@ -18,6 +19,12 @@ export function PasoCobrada({
   onCerrar: () => void;
 }) {
   const metodoLabel = METODO_LABEL[ticket.metodo as Metodo] ?? ticket.metodo;
+  const subtitulo = [
+    `Pedido ${ticket.pedidoRef}`,
+    ticket.nombreReferencia?.trim() || null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div className="space-y-5 p-6 text-center">
@@ -36,6 +43,7 @@ export function PasoCobrada({
           {formatPeso(ticket.total)} · {metodoLabel}
           {ticket.vuelto > 0 && ` · vuelto ${formatPeso(ticket.vuelto)}`}
         </p>
+        <p className="text-xs text-muted-foreground">Cobrado · pedido en cocina</p>
       </div>
 
       <dl className="space-y-2 rounded-2xl bg-muted p-4 text-sm">
@@ -43,6 +51,12 @@ export function PasoCobrada({
           <dt className="text-muted-foreground">Mostrador</dt>
           <dd className="font-medium tabular-nums">Pedido {ticket.pedidoRef}</dd>
         </div>
+        {ticket.nombreReferencia?.trim() && (
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Referencia</dt>
+            <dd className="truncate font-medium">{ticket.nombreReferencia.trim()}</dd>
+          </div>
+        )}
         <div className="flex justify-between">
           <dt className="text-muted-foreground">Ítems</dt>
           <dd className="font-medium tabular-nums">{ticket.cantidadItems}</dd>
@@ -61,7 +75,26 @@ export function PasoCobrada({
         </div>
       </dl>
 
-      <div className="flex justify-center gap-2">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-center">
+        {ticket.lineas.length > 0 && (
+          <TicketPrintButton
+            ticket={{
+              titulo: 'Venta de mostrador',
+              subtitulo,
+              lineas: ticket.lineas,
+              total: ticket.total,
+              descuento: ticket.descuento > 0 ? ticket.descuento : undefined,
+              metodo: metodoLabel,
+              fecha: ticket.horaISO,
+              footer:
+                ticket.vuelto > 0
+                  ? `Vuelto: ${formatPeso(ticket.vuelto)} · Gracias por tu visita`
+                  : 'Gracias por tu visita',
+            }}
+            variant="outline"
+            size="default"
+          />
+        )}
         <Button variant="outline" onClick={onCerrar}>
           <X />
           Cerrar

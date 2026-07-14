@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
@@ -55,12 +56,19 @@ async function ReservasContent({
   const mesFin = new Date(anio, mesNum, 1);
   const mesKey = `${anio}-${String(mesNum).padStart(2, '0')}`;
 
-  const [reservasRes, configRes] = await Promise.all([
+  const [reservasRes, configRes, headersList] = await Promise.all([
     getReservasDelDiaAction(mesIni.toISOString(), mesFin.toISOString()),
     getReservasConfigAction(),
+    headers(),
   ]);
 
   const reservas = reservasRes.success ? reservasRes.reservas : [];
+
+  const host = headersList.get('host') || '';
+  const dominioBase = host.replace(/^(app|www)\./, '') || 'acomer.com.ar';
+  const proto = dominioBase.includes('localhost') ? 'http' : 'https';
+  const slug = session.slugRestaurante;
+  const publicReservarUrl = slug ? `${proto}://${slug}.${dominioBase}/reservar` : undefined;
 
   return (
     <ReservasManager
@@ -71,6 +79,7 @@ async function ReservasContent({
       hastaISO={mesFin.toISOString()}
       initialReservas={reservas as never}
       config={configRes.config}
+      publicReservarUrl={publicReservarUrl}
     />
   );
 }

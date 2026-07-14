@@ -66,7 +66,7 @@ export async function agregarAdicionalAPlato(
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageMenu')) {
-      return { success: false, message: 'No tienes permiso para gestionar el menú' };
+      return { success: false, message: 'No tenés permiso para gestionar el menú' };
     }
 
     const nombre = data.nombre?.trim();
@@ -128,7 +128,7 @@ export async function editarPrecioAdicional(modificadorId: string, nuevoPrecio: 
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManagePrices')) {
-      return { success: false, message: 'No tienes permiso para modificar precios' };
+      return { success: false, message: 'No tenés permiso para modificar precios' };
     }
 
     const res = await withTenant(claimsFromSession(session), async (db) => {
@@ -183,7 +183,7 @@ export async function eliminarAdicionalDePlato(productoId: string, modificadorId
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageMenu')) {
-      return { success: false, message: 'No tienes permiso para gestionar el menú' };
+      return { success: false, message: 'No tenés permiso para gestionar el menú' };
     }
 
     const res = await withTenant(claimsFromSession(session), async (db) => {

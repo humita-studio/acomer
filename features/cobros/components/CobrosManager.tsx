@@ -139,8 +139,8 @@ export function CobrosManager({
         </span>
       </div>
 
-      {/* Toolbar: filtro por método + selector de día */}
-      <div className="flex shrink-0 items-center justify-between">
+      {/* Toolbar: filtro por método (solo cobros del día) */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {FILTROS.map((f) => (
             <button
@@ -157,13 +157,9 @@ export function CobrosManager({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-foreground"
-        >
+        <span className="rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground">
           Hoy
-          <span className="text-[11px] text-muted-foreground">▾</span>
-        </button>
+        </span>
       </div>
 
       {/* Kanban Board */}

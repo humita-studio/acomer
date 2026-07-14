@@ -1,6 +1,12 @@
+import type { Metadata } from 'next';
 import { getTenantDetails } from '@/features/tenant/get-tenant';
 import { obtenerCarta } from '@/features/carta/obtenerCarta';
 import { CartaPublica } from '@/features/carta/components/CartaPublica';
+
+export const metadata: Metadata = {
+  title: 'Carta',
+  description: 'Menú digital actualizado. Miralo y pedí cuando quieras.',
+};
 
 function NoEncontrado() {
   return (

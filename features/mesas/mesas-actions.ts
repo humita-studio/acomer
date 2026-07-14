@@ -1,10 +1,11 @@
 'use server';
 
-import { mesas } from '@/shared/db/schema';
+import { mesas, perfilesEmpleados } from '@/shared/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
+import { createSupabaseAdminClient } from '@/shared/supabase/admin';
 import { abrirOReusarSesion, broadcastOcupacion } from '@/features/comanda/sesion-mesa-core';
 import { revalidatePath } from 'next/cache';
 
@@ -16,7 +17,7 @@ export async function crearMesa(identificador: string) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageTables')) {
-      return { success: false, message: 'No tienes permiso para gestionar mesas' };
+      return { success: false, message: 'No tenés permiso para gestionar mesas' };
     }
 
     await withTenant(claimsFromSession(session), (db) =>
@@ -27,7 +28,7 @@ export async function crearMesa(identificador: string) {
     );
 
     revalidatePath('/admin/mesas');
-    return { success: true, message: 'Mesa creada exitosamente' };
+    return { success: true, message: 'Mesa creada' };
   } catch (error) {
     console.error('[crearMesa]', error);
     return { success: false, message: 'Error al crear la mesa' };
@@ -38,7 +39,7 @@ export async function eliminarMesa(id: string) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageTables')) {
-      return { success: false, message: 'No tienes permiso para gestionar mesas' };
+      return { success: false, message: 'No tenés permiso para gestionar mesas' };
     }
 
     // Soft delete
@@ -67,7 +68,7 @@ export async function liberarMesaAction(mesaId: string) {
     const session = await getCurrentSession();
     // La libera quien gestiona mesas (owner/admin) o quien toma pedidos (mozo)
     if (!session || (!hasPermission(session.role, 'canManageTables') && !hasPermission(session.role, 'canTakeOrders'))) {
-      return { success: false, message: 'No tienes permiso para liberar la mesa' };
+      return { success: false, message: 'No tenés permiso para liberar la mesa' };
     }
 
     const { sesionesMesa } = await import('@/shared/db/schema');
@@ -136,5 +137,143 @@ export async function abrirMesaAction(mesaId: string) {
   } catch (error) {
     console.error('[abrirMesaAction]', error);
     return { success: false, message: 'Error al abrir la mesa' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Asignación de mozos a mesas
+// ---------------------------------------------------------------------------
+
+export type MozoOption = {
+  userId: string;
+  /** Parte local del email, para mostrar en UI. */
+  label: string;
+  email: string;
+};
+
+/** Etiqueta corta legible a partir del email (antes del @). No exportar: en 'use server' solo van async actions. */
+function labelDesdeEmail(email: string): string {
+  const local = email.split('@')[0]?.trim() || email;
+  return local || 'Mozo';
+}
+
+/**
+ * Mozos activos del local (para el selector de asignación).
+ * Visible a quien gestiona mesas o toma pedidos.
+ */
+export async function listMozosAction(): Promise<MozoOption[]> {
+  try {
+    const session = await getCurrentSession();
+    if (
+      !session ||
+      (!hasPermission(session.role, 'canManageTables') &&
+        !hasPermission(session.role, 'canTakeOrders'))
+    ) {
+      return [];
+    }
+
+    const perfiles = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .select({
+          userId: perfilesEmpleados.userId,
+        })
+        .from(perfilesEmpleados)
+        .where(
+          and(
+            eq(perfilesEmpleados.restauranteId, session.restauranteId),
+            eq(perfilesEmpleados.rol, 'mozo'),
+            eq(perfilesEmpleados.activo, true),
+          ),
+        ),
+    );
+
+    if (perfiles.length === 0) return [];
+
+    const emailPorUserId = new Map<string, string>();
+    try {
+      const supabase = createSupabaseAdminClient();
+      const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      for (const u of data?.users ?? []) {
+        if (u.email) emailPorUserId.set(u.id, u.email);
+      }
+    } catch (e) {
+      console.error('[listMozosAction] emails:', e);
+    }
+
+    return perfiles
+      .map((p) => {
+        const email = emailPorUserId.get(p.userId) ?? '';
+        return {
+          userId: p.userId,
+          email: email || '(sin email)',
+          label: email ? labelDesdeEmail(email) : 'Mozo',
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+  } catch (error) {
+    console.error('[listMozosAction]', error);
+    return [];
+  }
+}
+
+/**
+ * Asigna o desasigna un mozo a una mesa.
+ * `mozoUserId` null quita la asignación. Sólo quien gestiona mesas.
+ */
+export async function asignarMozoMesaAction(
+  mesaId: string,
+  mozoUserId: string | null,
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageTables')) {
+      return { success: false, message: 'No tenés permiso para asignar mesas' };
+    }
+
+    const res = await withTenant(claimsFromSession(session), async (db) => {
+      const [mesa] = await db
+        .select({ id: mesas.id })
+        .from(mesas)
+        .where(
+          and(
+            eq(mesas.id, mesaId),
+            eq(mesas.restauranteId, session.restauranteId),
+            isNull(mesas.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!mesa) return { success: false, message: 'Mesa no encontrada' };
+
+      if (mozoUserId) {
+        const [mozo] = await db
+          .select({ userId: perfilesEmpleados.userId })
+          .from(perfilesEmpleados)
+          .where(
+            and(
+              eq(perfilesEmpleados.userId, mozoUserId),
+              eq(perfilesEmpleados.restauranteId, session.restauranteId),
+              eq(perfilesEmpleados.rol, 'mozo'),
+              eq(perfilesEmpleados.activo, true),
+            ),
+          )
+          .limit(1);
+        if (!mozo) {
+          return { success: false, message: 'El mozo no es válido o no está activo' };
+        }
+      }
+
+      await db
+        .update(mesas)
+        .set({ mozoUserId })
+        .where(and(eq(mesas.id, mesaId), eq(mesas.restauranteId, session.restauranteId)));
+
+      return { success: true, message: mozoUserId ? 'Mozo asignado' : 'Asignación quitada' };
+    });
+
+    if (res.success) revalidatePath('/admin/mesas');
+    return res;
+  } catch (error) {
+    console.error('[asignarMozoMesaAction]', error);
+    return { success: false, message: 'No se pudo asignar el mozo' };
   }
 }

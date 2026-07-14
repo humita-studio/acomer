@@ -1,7 +1,15 @@
+import type { Metadata } from 'next';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { obtenerReservasConfig } from '@/features/reservas/reservasConfigActions';
 import { turnosConSlots } from '@/features/reservas/reservasConfig';
 import { ReservarForm } from '@/features/reservas/components/ReservarForm';
+import { ReservaEstadoBox } from '@/features/reservas/components/ReservaEstadoBox';
+import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
+
+export const metadata: Metadata = {
+  title: 'Reservar',
+  description: 'Reservá tu mesa online de forma simple.',
+};
 
 export default async function ReservarPage({
   params,
@@ -12,30 +20,24 @@ export default async function ReservarPage({
   const tenantId = await getTenantBySlug(tenant);
 
   if (!tenantId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 text-center">
-        <div className="bg-card p-8 rounded-2xl border shadow-sm">
-          <h1 className="text-2xl font-bold text-destructive mb-2">Error</h1>
-          <p className="text-muted-foreground">Restaurante no encontrado</p>
-        </div>
-      </div>
-    );
+    return <ReservaEstadoBox variante="not_found" />;
   }
 
-  const config = await obtenerReservasConfig(tenantId);
+  const [config, landing] = await Promise.all([
+    obtenerReservasConfig(tenantId),
+    obtenerLandingConfig(tenantId),
+  ]);
+  const whatsapp = landing.redes.whatsapp || undefined;
 
   if (!config.activo) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 text-center">
-        <div className="bg-card p-8 rounded-2xl border shadow-sm max-w-md">
-          <h1 className="text-2xl font-bold mb-2">Reservas no disponibles</h1>
-          <p className="text-muted-foreground">
-            Por el momento no estamos tomando reservas online. Comunicate con el local para reservar.
-          </p>
-        </div>
-      </div>
-    );
+    return <ReservaEstadoBox variante="offline" whatsapp={whatsapp} />;
   }
 
-  return <ReservarForm tenantSlug={tenant} turnos={turnosConSlots(config.turnos)} />;
+  return (
+    <ReservarForm
+      tenantSlug={tenant}
+      turnos={turnosConSlots(config.turnos)}
+      anticipacionMinMin={config.anticipacionMinMin}
+    />
+  );
 }

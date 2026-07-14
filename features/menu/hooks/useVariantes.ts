@@ -53,6 +53,7 @@ export function useAgregarVariante() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al agregar la variante');
     },
+    onSuccess: () => toast.success('Variante agregada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -82,6 +83,7 @@ export function useEditarPrecioVariante() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al actualizar el precio');
     },
+    onSuccess: () => toast.success('Precio de variante actualizado'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -111,6 +113,7 @@ export function useEliminarVariante() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al eliminar la variante');
     },
+    onSuccess: () => toast.success('Variante eliminada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },
@@ -142,6 +145,7 @@ export function useMarcarVarianteDefault() {
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error(error instanceof Error ? error.message : 'Error al actualizar la variante por defecto');
     },
+    onSuccess: () => toast.success('Variante predeterminada actualizada'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
     },

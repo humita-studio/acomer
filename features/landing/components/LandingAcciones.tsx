@@ -3,6 +3,8 @@ import Link from 'next/link';
 import {
   CalendarDays,
   ChevronRight,
+  Clock,
+  MapPinned,
   MessageCircle,
   Phone,
   QrCode,
@@ -10,6 +12,15 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
+import {
+  SOLIDO_MARCA,
+  type AccionesLanding,
+  type ColorMarca,
+  type RedesLanding,
+} from '../landingConfig';
+import { formatPeso } from '@/shared/lib/format';
+import type { ZonaPoligono } from '@/features/pedidos-online/zonaMapa';
+import { ZonaEntregaMapaLazy } from '@/features/pedidos-online/components/ZonaEntregaMapaLazy';
 
 // lucide-react ya no exporta íconos de marca (Instagram); lo dibujamos inline.
 function InstagramGlyph({ className }: { className?: string }) {
@@ -30,7 +41,6 @@ function InstagramGlyph({ className }: { className?: string }) {
     </svg>
   );
 }
-import { SOLIDO_MARCA, type AccionesLanding, type ColorMarca, type RedesLanding } from '../landingConfig';
 
 type Accion = {
   key: keyof AccionesLanding;
@@ -131,28 +141,91 @@ function RedLink({
   );
 }
 
+export type InfoDeliveryLanding = {
+  zonaEntrega: string;
+  zonaPoligono: ZonaPoligono | null;
+  costoEnvio: number;
+  pedidoMinimo: number;
+  tiempoEstimadoMin: number | null;
+};
+
 /**
  * Tarjetas de acción de la landing. La primera acción habilitada se muestra
  * "destacada" (rellena con el color de marca); el resto como tarjetas claras.
- * El bloque de QR es informativo (no enlaza). Abajo, las redes del local.
+ * Opcional: texto "sobre", zona de delivery y redes.
  */
 export function LandingAcciones({
   acciones,
   colorMarca,
   redes,
+  sobre,
+  deliveryInfo,
 }: {
   acciones: AccionesLanding;
   colorMarca: ColorMarca;
   redes: RedesLanding;
+  /** Párrafo "sobre el local". */
+  sobre?: string;
+  /** Info de zona/envío si el local tiene delivery activo. */
+  deliveryInfo?: InfoDeliveryLanding | null;
 }) {
   const visibles = ACCIONES.filter((a) => acciones[a.key]);
   const tieneRedes = redes.whatsapp || redes.instagram || redes.telefono;
+  const muestraDelivery =
+    deliveryInfo &&
+    (deliveryInfo.zonaEntrega ||
+      deliveryInfo.zonaPoligono ||
+      deliveryInfo.costoEnvio > 0 ||
+      deliveryInfo.pedidoMinimo > 0 ||
+      deliveryInfo.tiempoEstimadoMin);
 
   return (
     <div className="mx-auto w-full max-w-md space-y-3 px-4 py-5">
+      {sobre?.trim() ? (
+        <div className="rounded-2xl border bg-card p-4 shadow-sm">
+          <p className="text-sm font-semibold">Sobre nosotros</p>
+          <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+            {sobre.trim()}
+          </p>
+        </div>
+      ) : null}
+
       {visibles.map((accion, i) => (
         <TarjetaAccion key={accion.key} accion={accion} destacada={i === 0} colorMarca={colorMarca} />
       ))}
+
+      {muestraDelivery ? (
+        <div className="space-y-3 rounded-2xl border bg-card p-4 shadow-sm">
+          <p className="text-sm font-semibold">Delivery</p>
+          {deliveryInfo.zonaPoligono ? (
+            <ZonaEntregaMapaLazy
+              mode="view"
+              value={deliveryInfo.zonaPoligono}
+              height={260}
+            />
+          ) : null}
+          {deliveryInfo.zonaEntrega ? (
+            <p className="flex items-start gap-2 text-sm text-muted-foreground">
+              <MapPinned className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>{deliveryInfo.zonaEntrega}</span>
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {deliveryInfo.tiempoEstimadoMin ? (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="size-3.5" aria-hidden />~{deliveryInfo.tiempoEstimadoMin} min
+              </span>
+            ) : null}
+            <span>
+              Envío:{' '}
+              {deliveryInfo.costoEnvio > 0 ? formatPeso(deliveryInfo.costoEnvio) : 'Gratis'}
+            </span>
+            {deliveryInfo.pedidoMinimo > 0 ? (
+              <span>Mínimo: {formatPeso(deliveryInfo.pedidoMinimo)}</span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {acciones.qr ? (
         <div className="flex items-center gap-4 rounded-2xl border border-dashed bg-muted/40 p-4">

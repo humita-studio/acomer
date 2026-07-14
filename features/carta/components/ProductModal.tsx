@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
+import { formatPeso } from '@/shared/lib/format';
 
 type ProductModalProps = {
   product: ProductoMenu;
@@ -99,14 +100,14 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
                       />
                       <span className="font-medium">{v.nombre}</span>
                     </div>
-                    <span className="tabular-nums text-muted-foreground">${v.precio.toFixed(2)}</span>
+                    <span className="tabular-nums text-muted-foreground">{formatPeso(v.precio)}</span>
                   </label>
                 );
               })}
             </div>
           ) : (
             <div className="text-lg font-medium">
-              Precio: ${product.precio.toFixed(2)}
+              Precio: {formatPeso(product.precio)}
             </div>
           )}
 
@@ -131,7 +132,7 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
                       <span className="font-medium">{mod.nombre}</span>
                     </div>
                     {mod.precioExtra > 0 && (
-                      <span className="text-muted-foreground">+${mod.precioExtra.toFixed(2)}</span>
+                      <span className="text-muted-foreground">+{formatPeso(mod.precioExtra)}</span>
                     )}
                   </label>
                 );
@@ -171,7 +172,7 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
             className="h-12 w-full justify-between text-base"
           >
             <span>Agregar al Pedido</span>
-            <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+            <span className="tabular-nums">{formatPeso(subtotal)}</span>
           </Button>
         </div>
       </DialogContent>

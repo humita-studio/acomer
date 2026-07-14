@@ -3,8 +3,23 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Clock, CookingPot, Bike, PackageCheck, Receipt, XCircle, Plus } from 'lucide-react';
+import {
+  Check,
+  Clock,
+  CookingPot,
+  Bike,
+  PackageCheck,
+  Receipt,
+  XCircle,
+  Plus,
+  Share2,
+  Copy,
+  CheckCheck,
+} from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
+import { formatPeso } from '@/shared/lib/format';
+import { cn } from '@/shared/lib/utils';
+import { Button } from '@/shared/ui/button';
 import { PaymentMethodModal } from '@/features/pagos/components/PaymentMethodModal';
 import type { MetodoPago } from '@/features/pagos/get-metodos-pago';
 import type { SeguimientoPedido as SeguimientoData } from '../obtenerSeguimiento';
@@ -13,12 +28,8 @@ type Props = {
   pedido: SeguimientoData;
   tenantId: string;
   metodosPago: MetodoPago[];
-  // pagado puede venir forzado desde el retorno de pago (el webhook puede tardar
-  // unos segundos en aprobar; igual mostramos "pago realizado").
   pagado: boolean;
-  // El local permite sumar productos a este pedido (según estado + config).
   permiteAgregar: boolean;
-  // Abrir el modal de pago al montar (viene del checkout con pagar=1).
   autoAbrirPago?: boolean;
 };
 
@@ -53,7 +64,7 @@ function tituloPaso(estado: string, tipo: 'takeaway' | 'delivery'): string {
 function detallePaso(estado: string, tipo: 'takeaway' | 'delivery'): string {
   switch (estado) {
     case 'Recibido':
-      return 'Tomamos tu pedido';
+      return 'El local ya tomó tu pedido';
     case 'EnPreparacion':
       return 'Lo estamos cocinando';
     case 'Listo':
@@ -78,8 +89,8 @@ export function SeguimientoPedido({
   const router = useRouter();
   const { sesionMesaId, tipo, estadoEntrega } = pedido;
   const [showPay, setShowPay] = useState(autoAbrirPago && pedido.saldoPendiente > 0);
+  const [copiado, setCopiado] = useState(false);
 
-  // Realtime: el staff avanza el estado (o se aprueba el pago) → refrescar.
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
@@ -97,83 +108,154 @@ export function SeguimientoPedido({
   const actual = pasos.indexOf(estadoEntrega);
 
   const hora = pedido.horaEstimada
-    ? new Date(pedido.horaEstimada).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+    ? new Date(pedido.horaEstimada).toLocaleTimeString('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : null;
 
+  const shareUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/pedir?sesion=${sesionMesaId}`
+      : `/pedir?sesion=${sesionMesaId}`;
+
+  const compartir = async () => {
+    const text = `Seguí mi pedido: ${shareUrl}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Mi pedido', text, url: shareUrl });
+        return;
+      }
+    } catch {
+      // canceló o no soportado → copiar
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
-    <main className="min-h-screen bg-muted/30 flex flex-col items-center px-4 py-8 pb-24">
+    <main className="flex min-h-dvh flex-col items-center bg-muted/30 px-4 py-8 pb-24">
       <div className="w-full max-w-md space-y-4">
-        {/* Encabezado */}
-        <div className="bg-card border rounded-2xl shadow-sm p-6 text-center space-y-1">
-          <span className="inline-block bg-muted rounded-full px-3 py-1 text-xs font-medium text-muted-foreground">
-            {tipo === 'delivery' ? '🛵 Envío a domicilio' : '🏬 Retiro en local'}
+        <div className="space-y-1 rounded-2xl border bg-card p-6 text-center shadow-sm">
+          <span className="inline-block rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+            {tipo === 'delivery' ? 'Envío a domicilio' : 'Retiro en local'}
           </span>
-          <h1 className="text-2xl font-bold pt-2">Seguí tu pedido</h1>
+          <h1 className="font-display pt-2 text-2xl font-semibold tracking-tight">
+            Seguí tu pedido
+          </h1>
           <p className="text-sm text-muted-foreground">
-            ¡Gracias, {pedido.nombreContacto}! Te avisamos acá cada paso.
+            ¡Gracias, {pedido.nombreContacto}! Guardá este link: se actualiza solo.
           </p>
-          {hora && !cancelado && (
-            <p className="text-sm font-medium pt-1 flex items-center justify-center gap-1.5">
-              <Clock className="size-4" />
+          {hora && !cancelado ? (
+            <p className="flex items-center justify-center gap-1.5 pt-1 text-sm font-medium">
+              <Clock className="size-4" aria-hidden />
               {tipo === 'delivery' ? 'Llega aprox.' : 'Listo aprox.'} {hora}
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* Estado de pago */}
         <div
-          className={`rounded-2xl border p-4 flex items-center gap-3 ${
+          className={cn(
+            'flex items-center gap-3 rounded-2xl border p-4',
             pagado
-              ? 'bg-success-subtle border-success/40 text-success-foreground'
-              : 'bg-warning-subtle border-warning/40 text-warning-foreground'
-          }`}
+              ? 'border-success/30 bg-success-subtle text-success-foreground'
+              : 'border-warning/30 bg-warning-subtle text-warning-foreground',
+          )}
         >
-          {pagado ? <Check className="size-5 shrink-0" /> : <Clock className="size-5 shrink-0" />}
-          <div className="text-sm">
+          {pagado ? (
+            <Check className="size-5 shrink-0" aria-hidden />
+          ) : (
+            <Clock className="size-5 shrink-0" aria-hidden />
+          )}
+          <div className="min-w-0 text-sm">
             <p className="font-semibold">
-              {pagado ? 'Pago confirmado' : pedido.totalPagado > 0 ? 'Pago parcial' : 'Pago pendiente'}
-            </p>
-            <p className="opacity-80">
               {pagado
-                ? '¡Listo! Ya recibimos tu pago.'
+                ? 'Pago confirmado'
                 : pedido.totalPagado > 0
-                  ? `Te queda un saldo de $${pedido.saldoPendiente.toFixed(2)}.`
+                  ? 'Pago parcial'
+                  : 'Pedido tomado · pago pendiente'}
+            </p>
+            <p className="opacity-90">
+              {pagado
+                ? 'El local ya registró tu cobro.'
+                : pedido.totalPagado > 0
+                  ? `Te queda un saldo de ${formatPeso(pedido.saldoPendiente)}.`
                   : tipo === 'delivery'
-                    ? 'Pagás al recibir tu pedido (o ahora online).'
-                    : 'Pagás al retirarlo en el local (o ahora online).'}
+                    ? 'Podés pagar ahora online o al recibir.'
+                    : 'Podés pagar ahora online o al retirar en el local.'}
             </p>
           </div>
         </div>
 
-        {/* Acciones: pagar saldo / agregar más productos */}
-        {!cancelado && (pedido.saldoPendiente > 0 || permiteAgregar) && (
+        {!cancelado && (pedido.saldoPendiente > 0 || permiteAgregar) ? (
           <div className="grid grid-cols-1 gap-2">
-            {pedido.saldoPendiente > 0 && metodosPago.length > 0 && (
-              <button
+            {pedido.saldoPendiente > 0 && metodosPago.length > 0 ? (
+              <Button
+                type="button"
+                size="lg"
+                className="h-12 w-full justify-between text-base"
                 onClick={() => setShowPay(true)}
-                className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-xl shadow-sm flex justify-between px-5 items-center"
               >
                 <span>Pagar ahora</span>
-                <span className="tabular-nums">${pedido.saldoPendiente.toFixed(2)}</span>
-              </button>
-            )}
-            {permiteAgregar && (
-              <Link
-                href={`/pedir?sesion=${sesionMesaId}&agregar=1`}
-                className="w-full bg-card border font-semibold py-3 rounded-xl shadow-sm flex justify-center items-center gap-2 hover:bg-muted/50"
-              >
-                <Plus className="size-4" />
-                Agregar más productos
-              </Link>
-            )}
+                <span className="tabular-nums">{formatPeso(pedido.saldoPendiente)}</span>
+              </Button>
+            ) : null}
+            {permiteAgregar ? (
+              <Button asChild variant="outline" size="lg" className="h-12 w-full">
+                <Link href={`/pedir?sesion=${sesionMesaId}&agregar=1`}>
+                  <Plus className="size-4" aria-hidden />
+                  Agregar más productos
+                </Link>
+              </Button>
+            ) : null}
           </div>
-        )}
+        ) : null}
 
-        {/* Stepper de estado */}
-        <div className="bg-card border rounded-2xl shadow-sm p-6">
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" className="flex-1" onClick={() => void compartir()}>
+            {copiado ? (
+              <>
+                <CheckCheck className="size-4" aria-hidden />
+                Link copiado
+              </>
+            ) : (
+              <>
+                <Share2 className="size-4" aria-hidden />
+                Compartir seguimiento
+              </>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-label="Copiar link"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(shareUrl);
+                setCopiado(true);
+                setTimeout(() => setCopiado(false), 2000);
+              } catch {
+                // ignore
+              }
+            }}
+          >
+            <Copy className="size-4" />
+          </Button>
+        </div>
+
+        {/* Stepper */}
+        <div className="rounded-2xl border bg-card p-6 shadow-sm">
           {cancelado ? (
             <div className="flex items-center gap-3 text-destructive">
-              <XCircle className="size-6 shrink-0" />
+              <XCircle className="size-6 shrink-0" aria-hidden />
               <div>
                 <p className="font-semibold">Pedido cancelado</p>
                 <p className="text-sm text-muted-foreground">
@@ -190,36 +272,47 @@ export function SeguimientoPedido({
                 const esUltimo = i === pasos.length - 1;
                 return (
                   <li key={paso} className="flex gap-4">
-                    {/* Columna del ícono + línea */}
                     <div className="flex flex-col items-center">
                       <div
-                        className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                          completado
-                            ? 'bg-success border-success text-white'
-                            : activo
-                              ? 'bg-primary border-primary text-primary-foreground animate-pulse'
-                              : 'bg-muted border-border text-muted-foreground'
-                        }`}
+                        className={cn(
+                          'flex size-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                          completado && 'border-success bg-success text-success-foreground',
+                          activo &&
+                            !completado &&
+                            'animate-pulse border-primary bg-primary text-primary-foreground',
+                          !completado &&
+                            !activo &&
+                            'border-border bg-muted text-muted-foreground',
+                        )}
                       >
-                        {completado ? <Check className="size-5" /> : <Icono className="size-5" />}
+                        {completado ? (
+                          <Check className="size-5" aria-hidden />
+                        ) : (
+                          <Icono className="size-5" aria-hidden />
+                        )}
                       </div>
-                      {!esUltimo && (
+                      {!esUltimo ? (
                         <div
-                          className={`w-0.5 flex-1 min-h-8 ${completado ? 'bg-success' : 'bg-border'}`}
+                          className={cn(
+                            'min-h-8 w-0.5 flex-1',
+                            completado ? 'bg-success' : 'bg-border',
+                          )}
                         />
-                      )}
+                      ) : null}
                     </div>
-                    {/* Texto */}
                     <div className={esUltimo ? '' : 'pb-6'}>
                       <p
-                        className={`font-semibold ${
-                          activo ? 'text-foreground' : completado ? 'text-foreground' : 'text-muted-foreground'
-                        }`}
+                        className={cn(
+                          'font-semibold',
+                          activo || completado ? 'text-foreground' : 'text-muted-foreground',
+                        )}
                       >
                         {tituloPaso(paso, tipo)}
                       </p>
                       {(activo || completado) && (
-                        <p className="text-sm text-muted-foreground">{detallePaso(paso, tipo)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {detallePaso(paso, tipo)}
+                        </p>
                       )}
                     </div>
                   </li>
@@ -229,63 +322,66 @@ export function SeguimientoPedido({
           )}
         </div>
 
-        {/* Resumen del pedido */}
-        <div className="bg-card border rounded-2xl shadow-sm p-6 space-y-3">
+        {/* Resumen */}
+        <div className="space-y-3 rounded-2xl border bg-card p-6 shadow-sm">
           <h2 className="font-semibold">Tu pedido</h2>
           <div className="space-y-2">
             {pedido.items.map((it) => (
-              <div key={it.id} className="flex justify-between text-sm">
-                <span>
+              <div key={it.id} className="flex justify-between gap-3 text-sm">
+                <span className="min-w-0">
                   <span className="font-semibold tabular-nums">{it.cantidad}×</span> {it.nombre}
-                  {it.modificadores.length > 0 && (
-                    <span className="block text-xs text-muted-foreground ml-5">
+                  {it.modificadores.length > 0 ? (
+                    <span className="ml-5 block text-xs text-muted-foreground">
                       {it.modificadores.map((m) => `+ ${m.nombre}`).join(', ')}
                     </span>
-                  )}
+                  ) : null}
                 </span>
-                <span className="font-medium tabular-nums">${it.subtotal.toFixed(2)}</span>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {formatPeso(it.subtotal)}
+                </span>
               </div>
             ))}
           </div>
-          {pedido.descuento > 0 && (
+          {pedido.descuento > 0 ? (
             <>
-              <div className="flex justify-between text-sm text-muted-foreground border-t pt-2">
+              <div className="flex justify-between border-t pt-2 text-sm text-muted-foreground">
                 <span>Subtotal</span>
-                <span className="tabular-nums">${pedido.total.toFixed(2)}</span>
+                <span className="tabular-nums">{formatPeso(pedido.total)}</span>
               </div>
               <div className="flex justify-between text-sm text-success-foreground">
                 <span>Descuento</span>
-                <span className="tabular-nums">−${pedido.descuento.toFixed(2)}</span>
+                <span className="tabular-nums">−{formatPeso(pedido.descuento)}</span>
               </div>
             </>
-          )}
-          {pedido.costoEnvio > 0 && (
+          ) : null}
+          {pedido.costoEnvio > 0 ? (
             <div
-              className={`flex justify-between text-sm text-muted-foreground ${
-                pedido.descuento > 0 ? '' : 'border-t pt-2'
-              }`}
+              className={cn(
+                'flex justify-between text-sm text-muted-foreground',
+                pedido.descuento > 0 ? '' : 'border-t pt-2',
+              )}
             >
               <span>Envío</span>
-              <span className="tabular-nums">${pedido.costoEnvio.toFixed(2)}</span>
+              <span className="tabular-nums">{formatPeso(pedido.costoEnvio)}</span>
             </div>
-          )}
-          <div className="flex justify-between font-bold border-t pt-3">
+          ) : null}
+          <div className="flex justify-between border-t pt-3 font-bold">
             <span>Total</span>
             <span className="tabular-nums">
-              ${(pedido.totalConDescuento + pedido.costoEnvio).toFixed(2)}
+              {formatPeso(pedido.totalConDescuento + pedido.costoEnvio)}
             </span>
           </div>
-          {tipo === 'delivery' && pedido.direccion && (
-            <p className="text-xs text-muted-foreground border-t pt-3">
+          {tipo === 'delivery' && pedido.direccion ? (
+            <p className="border-t pt-3 text-xs text-muted-foreground">
               Enviamos a: {pedido.direccion}
               {pedido.referencia ? ` (${pedido.referencia})` : ''}
             </p>
-          )}
+          ) : null}
         </div>
 
         <Link
           href="/pedir"
-          className="block text-center text-sm font-medium text-muted-foreground hover:text-foreground py-2"
+          className="block py-2 text-center text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           Hacer otro pedido
         </Link>

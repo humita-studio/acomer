@@ -10,9 +10,9 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
-import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { cn } from '@/shared/lib/utils';
-import { formatPeso, formatHora } from '@/shared/lib/format';
+import { formatPeso, formatHora, parseMontoInput } from '@/shared/lib/format';
 import { metodoInfo, esEfectivo } from '@/features/cobros/metodos';
 import type { TransaccionCobro } from '@/features/cobros/types';
 
@@ -61,7 +61,7 @@ function AprobarCobroForm({
   const metodo = metodoInfo(tx.proveedor);
   const conVuelto = esEfectivo(tx.proveedor);
   const total = Number(tx.monto);
-  const recibido = Number(montoRecibido);
+  const recibido = parseMontoInput(montoRecibido) ?? NaN;
   const recibidoValido = montoRecibido !== '' && Number.isFinite(recibido) && recibido >= total;
   const vuelto = recibidoValido ? recibido - total : 0;
 
@@ -114,19 +114,12 @@ function AprobarCobroForm({
               >
                 Monto recibido
               </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
-                  $
-                </span>
-                <Input
-                  id="monto-recibido"
-                  inputMode="numeric"
-                  placeholder="0"
-                  value={montoRecibido}
-                  onChange={(e) => setMontoRecibido(e.target.value.replace(/[^\d]/g, ''))}
-                  className="pl-7"
-                />
-              </div>
+              <MoneyInput
+                id="monto-recibido"
+                placeholder="0"
+                value={montoRecibido}
+                onValueChange={setMontoRecibido}
+              />
             </div>
             <div className="space-y-1.5">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

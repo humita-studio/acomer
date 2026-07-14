@@ -21,7 +21,8 @@ import {
   useMarcarVarianteDefault,
 } from '@/features/menu/hooks/useVariantes';
 import type { CategoriaMenu, ProductoMenu, Adicional, Variante } from '@/features/menu/types';
-import { formatPeso } from '@/shared/lib/format';
+import { usePrompt } from '@/shared/hooks/use-prompt';
+import { formatPeso, parseMontoInput } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import {
   Dialog,
@@ -31,9 +32,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
-import { usePrompt } from '@/shared/ui/confirm-dialog';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { Label } from '@/shared/ui/label';
 import { Switch } from '@/shared/ui/switch';
 import {
@@ -87,8 +88,8 @@ export function ProductoDialog({
   const [tieneVariantes, setTieneVariantes] = useState(false);
   const [stagedAdicionales, setStagedAdicionales] = useState<StagedAdicional[]>([]);
   const [stagedVariantes, setStagedVariantes] = useState<StagedVariante[]>([]);
-
-  const { prompt: pedirPrecio, dialog: precioDialog } = usePrompt();
+  const [precioVarianteDraft, setPrecioVarianteDraft] = useState('');
+  const [precioAdicionalDraft, setPrecioAdicionalDraft] = useState('0');
 
   const crearProducto = useCrearProducto();
   const editarProducto = useEditarProducto();
@@ -101,6 +102,7 @@ export function ProductoDialog({
   const editarPrecioVariante = useEditarPrecioVariante();
   const eliminarVariante = useEliminarVariante();
   const marcarVarianteDefault = useMarcarVarianteDefault();
+  const { prompt, promptDialog } = usePrompt();
 
   const adicionalesDelProducto = esEditar
     ? adicionales.filter((a) => a.productoId === producto!.id)
@@ -124,7 +126,11 @@ export function ProductoDialog({
     const data = new FormData(form);
     const nombreAd = (data.get('nombre') as string)?.trim();
     if (!nombreAd) return;
-    const precioExtra = Number(data.get('precioExtra')) || 0;
+    const precioExtra = parseMontoInput(precioAdicionalDraft) ?? 0;
+    if (precioExtra < 0) {
+      toast.error('Ingresá un precio extra válido (0 o más).');
+      return;
+    }
 
     if (esEditar) {
       agregarAdicional.mutate({ productoId: producto!.id, nombre: nombreAd, precioExtra });
@@ -132,20 +138,33 @@ export function ProductoDialog({
       setStagedAdicionales((prev) => [...prev, { tempId: crypto.randomUUID(), nombre: nombreAd, precioExtra }]);
     }
     form.reset();
+    setPrecioAdicionalDraft('0');
   };
 
-  const handleEditarPrecioAdicional = async (id: string, nombreAd: string, precioActual: number) => {
-    const nuevo = await pedirPrecio({
-      titulo: 'Nuevo precio extra',
-      descripcion: `${nombreAd} — actual $${precioActual}`,
-      label: 'Precio extra',
-      tipo: 'number',
+  const handleEditarPrecioAdicional = async (
+    id: string,
+    nombreAd: string,
+    precioActual: number,
+  ) => {
+    const nuevo = await prompt({
+      title: `Precio extra · ${nombreAd}`,
+      description: `Actual: ${formatPeso(precioActual)}`,
+      label: 'Precio extra ($)',
       defaultValue: String(precioActual),
+      inputType: 'money',
+      min: 0,
       confirmLabel: 'Guardar',
+      validate: (v) => {
+        const n = parseMontoInput(v);
+        if (n == null || n < 0) return 'Ingresá un precio válido (0 o más).';
+        return null;
+      },
     });
     if (nuevo === null) return;
-    if (isNaN(Number(nuevo)) || Number(nuevo) < 0) return;
-    editarPrecioAdicional.mutate({ modificadorId: id, nuevoPrecio: Number(nuevo) });
+    editarPrecioAdicional.mutate({
+      modificadorId: id,
+      nuevoPrecio: parseMontoInput(nuevo) ?? 0,
+    });
   };
 
   // --- Variantes ---
@@ -155,8 +174,8 @@ export function ProductoDialog({
     const data = new FormData(form);
     const nombreVar = (data.get('nombre') as string)?.trim();
     if (!nombreVar) return;
-    const precioVar = Number(data.get('precio'));
-    if (isNaN(precioVar) || precioVar <= 0) {
+    const precioVar = parseMontoInput(precioVarianteDraft);
+    if (precioVar == null || precioVar <= 0) {
       toast.error('Ingresá un precio válido para la variante.');
       return;
     }
@@ -167,32 +186,48 @@ export function ProductoDialog({
       setStagedVariantes((prev) => [...prev, { tempId: crypto.randomUUID(), nombre: nombreVar, precio: precioVar }]);
     }
     form.reset();
+    setPrecioVarianteDraft('');
   };
 
-  const handleEditarPrecioVariante = async (id: string, nombreVar: string, precioActual: number) => {
-    const nuevo = await pedirPrecio({
-      titulo: 'Nuevo precio',
-      descripcion: `${nombreVar} — actual $${precioActual}`,
-      label: 'Precio',
-      tipo: 'number',
+  const handleEditarPrecioVariante = async (
+    id: string,
+    nombreVar: string,
+    precioActual: number,
+  ) => {
+    const nuevo = await prompt({
+      title: `Precio · ${nombreVar}`,
+      description: `Actual: ${formatPeso(precioActual)}`,
+      label: 'Precio ($)',
       defaultValue: String(precioActual),
+      inputType: 'money',
+      min: 0,
       confirmLabel: 'Guardar',
+      validate: (v) => {
+        const n = parseMontoInput(v);
+        if (n == null || n <= 0) return 'Ingresá un precio mayor a 0.';
+        return null;
+      },
     });
     if (nuevo === null) return;
-    if (isNaN(Number(nuevo)) || Number(nuevo) <= 0) return;
-    editarPrecioVariante.mutate({ varianteId: id, nuevoPrecio: Number(nuevo) });
+    editarPrecioVariante.mutate({
+      varianteId: id,
+      nuevoPrecio: parseMontoInput(nuevo) ?? 0,
+    });
   };
 
   const handleGuardar = () => {
     const nombreLimpio = nombre.trim();
-    if (!nombreLimpio) return;
+    if (!nombreLimpio) {
+      toast.error('Ingresá el nombre del producto.');
+      return;
+    }
     if (!categoriaId) {
       toast.error('Elegí una categoría para el producto.');
       return;
     }
 
-    const precioNum = Number(precio);
-    if (!usarVariantes && (isNaN(precioNum) || precioNum <= 0)) {
+    const precioNum = parseMontoInput(precio) ?? NaN;
+    if (!usarVariantes && (!Number.isFinite(precioNum) || precioNum <= 0)) {
       toast.error('Ingresá un precio válido.');
       return;
     }
@@ -202,6 +237,7 @@ export function ProductoDialog({
       .map((v) => ({ nombre: v.nombre, precio: v.precio }));
     if (!esEditar && usarVariantes && variantesAEnviar.length === 0) {
       toast.error('Agregá al menos una variante con precio.');
+      setTab('variantes');
       return;
     }
 
@@ -248,7 +284,7 @@ export function ProductoDialog({
 
   return (
     <>
-      {precioDialog}
+      {promptDialog}
       <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -322,23 +358,13 @@ export function ProductoDialog({
                     Por variante
                   </p>
                 ) : (
-                  <div className="relative">
-                    <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground">
-                      $
-                    </span>
-                    <Input
-                      id="producto-precio"
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="0.01"
-                      value={precio}
-                      onChange={(e) => setPrecio(e.target.value)}
-                      placeholder="0"
-                      className="pl-7"
-                      disabled={esEditar && !canManagePrices}
-                    />
-                  </div>
+                  <MoneyInput
+                    id="producto-precio"
+                    value={precio}
+                    onValueChange={setPrecio}
+                    placeholder="0"
+                    disabled={esEditar && !canManagePrices}
+                  />
                 )}
               </div>
             </div>
@@ -473,13 +499,11 @@ export function ProductoDialog({
 
                 <form onSubmit={handleAgregarVariante} className="flex flex-col gap-2 sm:flex-row">
                   <Input name="nombre" placeholder="Nueva variante (ej. Napolitana)" className="flex-1" required />
-                  <Input
-                    name="precio"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Precio ($)"
-                    className="sm:w-32"
+                  <MoneyInput
+                    value={precioVarianteDraft}
+                    onValueChange={setPrecioVarianteDraft}
+                    placeholder="Precio"
+                    className="sm:w-36"
                     required
                   />
                   <Button type="submit" variant="secondary" className="sm:w-auto">
@@ -554,14 +578,11 @@ export function ProductoDialog({
 
             <form onSubmit={handleAgregarAdicional} className="flex flex-col gap-2 sm:flex-row">
               <Input name="nombre" placeholder="Nuevo adicional (ej. Doble carne)" className="flex-1" required />
-              <Input
-                name="precioExtra"
-                type="number"
-                min="0"
-                step="0.01"
-                defaultValue="0"
-                placeholder="Extra ($)"
-                className="sm:w-32"
+              <MoneyInput
+                value={precioAdicionalDraft}
+                onValueChange={setPrecioAdicionalDraft}
+                placeholder="Extra"
+                className="sm:w-36"
               />
               <Button type="submit" variant="secondary" className="sm:w-auto">
                 <Plus className="size-4" />

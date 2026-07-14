@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Lock, Printer } from 'lucide-react';
+import { Check, Lock, Printer, Wallet } from 'lucide-react';
 import {
   formatPeso,
   formatHora,
-  formatFechaCorta,
   formatFechaLarga,
 } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
@@ -14,6 +13,7 @@ import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
+import { MoneyInput } from '@/shared/ui/money-input';
 import { Badge } from '@/shared/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import {
@@ -35,6 +35,8 @@ import {
   useDetalleCierre,
 } from '@/features/caja/hooks/useCaja';
 import type { CajaActual, CajaCerrada, TipoMovimiento } from '@/features/caja/types';
+import { CajaHistorial } from '@/features/caja/components/CajaHistorial';
+import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
 
 const TIPO_LABEL: Record<TipoMovimiento, string> = {
   ingreso: 'Ingreso',
@@ -80,17 +82,20 @@ export function CajaManager({
             />
             <span className="text-muted-foreground">
               {caja
-                ? `Caja abierta desde las ${formatHora(caja.abiertaAt)} hs`
-                : 'No hay ninguna caja abierta'}
+                ? `Caja abierta desde las ${formatHora(caja.abiertaAt)} hs · turno del día`
+                : 'No hay ninguna caja abierta · abrila para cobrar efectivo'}
             </span>
           </div>
         </div>
-        {caja && (
-          <Button onClick={() => setCerrarOpen(true)}>
-            <Lock className="size-4" />
-            Cerrar caja
-          </Button>
-        )}
+        {caja ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <NuevaVentaButton tenantId={tenantId} />
+            <Button onClick={() => setCerrarOpen(true)}>
+              <Lock className="size-4" />
+              Cerrar caja
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {caja ? (
@@ -99,7 +104,7 @@ export function CajaManager({
         <AbrirCajaCard tenantId={tenantId} />
       )}
 
-      <HistorialCierres historial={historial} onSelect={setDetalleId} />
+      <CajaHistorial historial={historial} onSelect={setDetalleId} />
 
       {caja && (
         <CerrarCajaDialog
@@ -187,10 +192,10 @@ function CajaAbierta({ caja, tenantId }: { caja: CajaActual; tenantId: string })
 
               <div className="space-y-1.5">
                 <Label htmlFor="monto-mov">Monto</Label>
-                <MontoInput
+                <MoneyInput
                   id="monto-mov"
                   value={montoMov}
-                  onChange={setMontoMov}
+                  onValueChange={setMontoMov}
                   placeholder="0,00"
                   required
                 />
@@ -258,100 +263,50 @@ function AbrirCajaCard({ tenantId }: { tenantId: string }) {
   const [montoInicial, setMontoInicial] = useState('');
 
   return (
-    <Card className="max-w-md">
+    <Card className="max-w-lg">
       <CardHeader>
-        <CardTitle>Abrir caja</CardTitle>
+        <div className="mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Wallet className="size-6" aria-hidden />
+        </div>
+        <CardTitle>Abrir caja del día</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Ingresá el monto inicial en efectivo con el que arranca el turno.
+          Ingresá el efectivo inicial del turno. Sin caja abierta no se pueden registrar
+          ventas de mostrador ni cobros en efectivo de mesa.
         </p>
       </CardHeader>
       <CardContent>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            abrirMutation.mutate(Number(montoInicial), {
+            const n = Number(montoInicial);
+            if (!Number.isFinite(n) || n < 0) {
+              toast.error('Ingresá un monto inicial válido (0 o más).');
+              return;
+            }
+            abrirMutation.mutate(n, {
               onSuccess: () => setMontoInicial(''),
             });
           }}
           className="space-y-4"
         >
           <div className="space-y-1.5">
-            <Label htmlFor="monto-inicial">Monto inicial</Label>
-            <MontoInput
+            <Label htmlFor="monto-inicial">Monto inicial en efectivo</Label>
+            <MoneyInput
               id="monto-inicial"
               value={montoInicial}
-              onChange={setMontoInicial}
+              onValueChange={setMontoInicial}
               placeholder="0,00"
               required
               autoFocus
             />
+            <p className="text-xs text-muted-foreground">
+              Puede ser 0 si arrancás sin fondo de caja.
+            </p>
           </div>
-          <Button type="submit" className="w-full" disabled={abrirMutation.isPending}>
+          <Button type="submit" className="w-full" size="lg" disabled={abrirMutation.isPending}>
             {abrirMutation.isPending ? 'Abriendo…' : 'Abrir caja'}
           </Button>
         </form>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* ------------------------------ Historial ------------------------------ */
-
-function HistorialCierres({
-  historial,
-  onSelect,
-}: {
-  historial: CajaCerrada[];
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Historial de cierres</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {historial.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay cierres registrados.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <Th>Cierre</Th>
-                <Th align="right">Inicial</Th>
-                <Th align="right">Esperado</Th>
-                <Th align="right">Contado</Th>
-                <Th align="right">Diferencia</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {historial.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => onSelect(c.id)}
-                  className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/50"
-                >
-                  <td className="py-3 font-medium">
-                    {c.cerradaAt
-                      ? `${formatFechaCorta(c.cerradaAt)} · ${formatHora(c.cerradaAt)}`
-                      : '—'}
-                  </td>
-                  <td className="py-3 text-right text-muted-foreground">
-                    {formatPeso(c.montoInicial)}
-                  </td>
-                  <td className="py-3 text-right text-muted-foreground">
-                    {formatPeso(c.montoEsperado)}
-                  </td>
-                  <td className="py-3 text-right text-muted-foreground">
-                    {formatPeso(c.montoFinalContado)}
-                  </td>
-                  <td className="py-3 text-right">
-                    <DiferenciaText valor={c.diferencia} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </CardContent>
     </Card>
   );
@@ -419,10 +374,10 @@ function CerrarCajaDialog({
             >
               Efectivo contado
             </Label>
-            <MontoInput
+            <MoneyInput
               id="monto-contado"
               value={montoContado}
-              onChange={setMontoContado}
+              onValueChange={setMontoContado}
               placeholder="0,00"
               className="text-base font-semibold"
               autoFocus
@@ -578,47 +533,6 @@ function ResumenCard({
       </span>
       <span className="text-lg font-semibold tracking-tight">{valor}</span>
     </div>
-  );
-}
-
-function MontoInput({
-  value,
-  onChange,
-  className,
-  ...props
-}: {
-  value: string;
-  onChange: (value: string) => void;
-} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>) {
-  return (
-    <div className="relative">
-      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground">
-        $
-      </span>
-      <Input
-        type="number"
-        min="0"
-        step="0.01"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn('pl-7', className)}
-        {...props}
-      />
-    </div>
-  );
-}
-
-function Th({ children, align }: { children: React.ReactNode; align?: 'right' }) {
-  return (
-    <th
-      className={cn(
-        'pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-        align === 'right' ? 'text-right' : 'text-left'
-      )}
-    >
-      {children}
-    </th>
   );
 }
 

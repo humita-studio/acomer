@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { createSupabaseAdminClient } from '@/shared/supabase/admin';
 import { normalizarSubdominio, validarSubdominio } from '@/features/tenant/subdominio';
 import type { ColorMarca } from '@/features/landing/landingConfig';
+import { trialEndsAtFromNow } from '@/features/billing/plans';
 
 const PASSWORD_MIN = 8;
 const COLORES_VALIDOS: ColorMarca[] = ['terracota', 'ambar', 'verde'];
@@ -106,7 +107,13 @@ export async function registrarLocalAction(input: RegistroLocalInput): Promise<R
   try {
     const [rest] = await db
       .insert(restaurantes)
-      .values({ nombre, slug })
+      .values({
+        nombre,
+        slug,
+        plan: 'pro',
+        billingStatus: 'trial',
+        trialEndsAt: trialEndsAtFromNow(),
+      })
       .returning({ id: restaurantes.id });
 
     await db.insert(perfilesEmpleados).values({

@@ -25,6 +25,7 @@ function clampNum(value: unknown, min: number, fallback: number) {
   return Math.round(Math.max(n, min) * 100) / 100;
 }
 
+/** Acepta cualquier ángulo entero 0–359 (rotación libre en el editor). */
 function normalizarRotacion(value: unknown) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return 0;
@@ -168,7 +169,16 @@ export async function eliminarAmbiente(id: string) {
 
 export async function crearMesaEnPlano(
   ambienteId: string,
-  identificador: string
+  identificador: string,
+  layout?: {
+    posX?: number;
+    posY?: number;
+    ancho?: number;
+    alto?: number;
+    forma?: string;
+    capacidad?: number;
+    rotacion?: number;
+  },
 ): Promise<{ success: boolean; message?: string; mesa?: typeof mesas.$inferSelect }> {
   try {
     const session = await getCurrentSession();
@@ -178,6 +188,20 @@ export async function crearMesaEnPlano(
 
     const limpio = (identificador || '').trim();
     if (!limpio) return { success: false, message: 'El identificador no puede estar vacío' };
+
+    // Límite de mesas del plan (Básico = 15).
+    const { getBillingSnapshotAction } = await import('@/features/billing/billingActions');
+    const billing = await getBillingSnapshotAction();
+    if (billing?.maxMesas != null) {
+      const { countMesasActivas } = await import('@/features/billing/limits');
+      const n = await countMesasActivas(session.restauranteId);
+      if (n >= billing.maxMesas) {
+        return {
+          success: false,
+          message: `Tu plan permite hasta ${billing.maxMesas} mesas. Pasate a Pro o eliminá alguna mesa.`,
+        };
+      }
+    }
 
     const res = await withTenant(claimsFromSession(session), async (db) => {
       // Validar que el ambiente pertenece al restaurante
@@ -194,13 +218,13 @@ export async function crearMesaEnPlano(
           restauranteId: session.restauranteId,
           identificador: limpio,
           ambienteId,
-          posX: 1,
-          posY: 1,
-          ancho: 2,
-          alto: 2,
-          forma: 'cuadrada',
-          capacidad: 4,
-          rotacion: 0,
+          posX: clampNum(layout?.posX, 0, 1),
+          posY: clampNum(layout?.posY, 0, 1),
+          ancho: clampNum(layout?.ancho, 0.5, 2),
+          alto: clampNum(layout?.alto, 0.5, 2),
+          forma: layout?.forma === 'redonda' ? 'redonda' : 'cuadrada',
+          capacidad: clampInt(layout?.capacidad, 1, 4),
+          rotacion: normalizarRotacion(layout?.rotacion ?? 0),
         })
         .returning();
       return { success: true, mesa: creada };
@@ -233,6 +257,33 @@ export async function eliminarMesaPlano(mesaId: string) {
   } catch (error) {
     console.error('[eliminarMesaPlano]', error);
     return { success: false, message: 'Error al eliminar la mesa' };
+  }
+}
+
+/** Renombra el identificador visible de una mesa (no va en el autosave de geometría). */
+export async function renombrarMesaPlano(mesaId: string, identificador: string) {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageTables')) {
+      return { success: false, message: 'No tenés permiso para gestionar el plano' };
+    }
+
+    const limpio = (identificador || '').trim();
+    if (!limpio) return { success: false, message: 'El nombre no puede estar vacío' };
+    if (limpio.length > 40) return { success: false, message: 'Máximo 40 caracteres' };
+
+    await withTenant(claimsFromSession(session), (db) =>
+      db
+        .update(mesas)
+        .set({ identificador: limpio })
+        .where(and(eq(mesas.id, mesaId), eq(mesas.restauranteId, session.restauranteId))),
+    );
+
+    revalidatePath('/admin/mesas');
+    return { success: true };
+  } catch (error) {
+    console.error('[renombrarMesaPlano]', error);
+    return { success: false, message: 'Error al renombrar la mesa' };
   }
 }
 
@@ -339,10 +390,16 @@ export interface ElementoLayout {
   etiqueta?: string | null;
 }
 
-export async function guardarLayoutAction(payload: {
-  mesas: MesaLayout[];
-  elementos: ElementoLayout[];
-}) {
+export async function guardarLayoutAction(
+  payload: {
+    mesas: MesaLayout[];
+    elementos: ElementoLayout[];
+  },
+  options?: {
+    /** Por defecto true. En autosave del editor lo desactivamos para no invalidar RSC a cada drag. */
+    revalidate?: boolean;
+  },
+) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageTables')) {
@@ -386,7 +443,9 @@ export async function guardarLayoutAction(payload: {
       })
     );
 
-    revalidatePath('/admin/mesas');
+    if (options?.revalidate !== false) {
+      revalidatePath('/admin/mesas');
+    }
     return { success: true };
   } catch (error) {
     console.error('[guardarLayoutAction]', error);
@@ -461,6 +520,8 @@ export async function dividirMesaAction(
             identificador: `${mesa.identificador}-${letra}`,
             ambienteId: mesa.ambienteId,
             parentMesaId: mesaId,
+            // La sub-mesa hereda el mozo del sector de la madre.
+            mozoUserId: mesa.mozoUserId,
             posX: clampNum(mesa.posX + mesa.ancho + 0.3, 0, 0),
             posY: mesa.posY,
             ancho: 2,
