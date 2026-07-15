@@ -7,6 +7,7 @@ import { Bell, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
+import { formatFecha, formatFechaLarga } from '@/shared/lib/format';
 import { getCajaActualAction } from '@/features/caja/cajaActions';
 import {
   getAlertasStaffRecientesAction,
@@ -35,6 +36,7 @@ type Notif = {
 
 const MAX = 20;
 const CAJA_CERRADA_ID = 'caja-cerrada';
+const CAJA_ABIERTA_OTRO_DIA_ID = 'caja-abierta-otro-dia';
 /** Cuánto tiempo recordamos “ya la vi” (ms). */
 const DISMISSED_TTL_MS = 48 * 60 * 60 * 1000;
 
@@ -105,6 +107,7 @@ export function StaffNotifications({
   const [unread, setUnread] = useState(0);
   const [cajaUnread, setCajaUnread] = useState(false);
   const toastedCaja = useRef(false);
+  const toastedCajaVieja = useRef(false);
   /** IDs ya mostrados en esta sesión (dedupe realtime + poll). */
   const seenIds = useRef(new Set<string>());
   /** IDs que el usuario ya abrió/cerró (persisten entre reloads). */
@@ -129,6 +132,12 @@ export function StaffNotifications({
   });
 
   const cajaCerrada = alertarCajaCerrada && !cajaPending && caja == null;
+  /** Quedó abierta de una jornada anterior (se abrió otro día y nadie la cerró). */
+  const cajaAbiertaOtroDia =
+    alertarCajaCerrada &&
+    !cajaPending &&
+    caja != null &&
+    formatFecha(caja.abiertaAt) !== formatFecha(new Date());
 
   const { data: alertasDb } = useQuery({
     queryKey: queryKeys.staffAlerts(tenantId),
@@ -180,6 +189,8 @@ export function StaffNotifications({
 
     if (caja == null) {
       setCajaUnread(true);
+      toastedCajaVieja.current = false;
+      toast.dismiss(CAJA_ABIERTA_OTRO_DIA_ID);
       if (!toastedCaja.current) {
         toastedCaja.current = true;
         toast.message('Caja cerrada', {
@@ -187,10 +198,23 @@ export function StaffNotifications({
           description: 'Abrí la caja para registrar ventas y cobros en efectivo',
         });
       }
+    } else if (formatFecha(caja.abiertaAt) !== formatFecha(new Date())) {
+      setCajaUnread(true);
+      toastedCaja.current = false;
+      toast.dismiss(CAJA_CERRADA_ID);
+      if (!toastedCajaVieja.current) {
+        toastedCajaVieja.current = true;
+        toast.message('La caja sigue abierta', {
+          id: CAJA_ABIERTA_OTRO_DIA_ID,
+          description: `Se abrió el ${formatFechaLarga(caja.abiertaAt)} y todavía no se cerró.`,
+        });
+      }
     } else {
       setCajaUnread(false);
       toastedCaja.current = false;
+      toastedCajaVieja.current = false;
       toast.dismiss(CAJA_CERRADA_ID);
+      toast.dismiss(CAJA_ABIERTA_OTRO_DIA_ID);
     }
   }, [alertarCajaCerrada, caja, cajaPending]);
 
@@ -327,7 +351,11 @@ export function StaffNotifications({
     // No vaciamos la lista acá: si no, el dropdown se abre vacío y parece un bug.
     setUnread(0);
     setCajaUnread(false);
-    const ids = new Set(items.map((n) => n.id).filter((id) => id !== CAJA_CERRADA_ID));
+    const ids = new Set(
+      items
+        .map((n) => n.id)
+        .filter((id) => id !== CAJA_CERRADA_ID && id !== CAJA_ABIERTA_OTRO_DIA_ID),
+    );
     if (ids.size > 0) {
       for (const id of ids) dismissedIds.current.add(id);
       saveDismissed(tenantId, ids);
@@ -343,11 +371,20 @@ export function StaffNotifications({
         at: 0,
         sticky: true,
       }
-    : null;
+    : cajaAbiertaOtroDia && caja
+      ? {
+          id: CAJA_ABIERTA_OTRO_DIA_ID,
+          title: 'La caja sigue abierta',
+          body: `Se abrió el ${formatFechaLarga(caja.abiertaAt)} y todavía no se cerró.`,
+          href: '/admin/caja',
+          at: 0,
+          sticky: true,
+        }
+      : null;
 
   // Si hay sticky de caja y el usuario abre, no la borramos (es estado, no evento).
   const visible = stickyCaja ? [stickyCaja, ...items] : items;
-  const badgeCount = unread + (cajaUnread && cajaCerrada ? 1 : 0);
+  const badgeCount = unread + (cajaUnread && (cajaCerrada || cajaAbiertaOtroDia) ? 1 : 0);
 
   return (
     <DropdownMenu onOpenChange={openChange}>
