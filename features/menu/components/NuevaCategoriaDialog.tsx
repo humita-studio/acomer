@@ -33,11 +33,14 @@ export function NuevaCategoriaDialog({
   open,
   onOpenChange,
   categoria,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Si se pasa, el diálogo edita esa categoría; si no, crea una nueva. */
   categoria?: CategoriaMenu | null;
+  /** Se llama con el id de la categoría recién creada (no aplica al editar). */
+  onCreated?: (id: string) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,6 +51,7 @@ export function NuevaCategoriaDialog({
             key={categoria?.id ?? 'nueva'}
             categoria={categoria}
             onClose={() => onOpenChange(false)}
+            onCreated={onCreated}
           />
         ) : null}
       </DialogContent>
@@ -58,9 +62,11 @@ export function NuevaCategoriaDialog({
 function CategoriaForm({
   categoria,
   onClose,
+  onCreated,
 }: {
   categoria?: CategoriaMenu | null;
   onClose: () => void;
+  onCreated?: (id: string) => void;
 }) {
   const editando = !!categoria;
   const [nombre, setNombre] = useState(categoria?.nombre ?? '');
@@ -87,7 +93,10 @@ function CategoriaForm({
     if (editando && categoria) {
       editarCategoria.mutate({ id: categoria.id, nombre: value, color, icono });
     } else {
-      crearCategoria.mutate({ nombre: value, color, icono });
+      crearCategoria.mutate(
+        { nombre: value, color, icono },
+        { onSuccess: (res) => onCreated?.(res.id) }
+      );
     }
     onClose();
   };

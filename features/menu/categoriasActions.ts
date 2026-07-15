@@ -17,6 +17,10 @@ export type CategoriaInput = {
   icono?: string;
 };
 
+type CrearCategoriaResultado =
+  | { success: true; message: string; id: string }
+  | { success: false; message: string };
+
 /**
  * Lista las categorías del menú del restaurante. Estado de servidor que consume
  * TanStack Query en el admin (siembra `initialData`).
@@ -38,7 +42,7 @@ export async function obtenerCategoriasMenu() {
   );
 }
 
-export async function crearCategoria(input: CategoriaInput) {
+export async function crearCategoria(input: CategoriaInput): Promise<CrearCategoriaResultado> {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageMenu')) {
@@ -52,18 +56,21 @@ export async function crearCategoria(input: CategoriaInput) {
 
     const { color, icono } = normalizarVisualCategoria(input);
 
-    await withTenant(claimsFromSession(session), (db) =>
-      db.insert(categorias).values({
-        restauranteId: session.restauranteId,
-        nombre,
-        color,
-        icono,
-      })
+    const [fila] = await withTenant(claimsFromSession(session), (db) =>
+      db
+        .insert(categorias)
+        .values({
+          restauranteId: session.restauranteId,
+          nombre,
+          color,
+          icono,
+        })
+        .returning({ id: categorias.id })
     );
 
     revalidatePath('/admin/menu');
     revalidateTag(`carta-${session.restauranteId}`, 'default');
-    return { success: true, message: 'Categoría creada' };
+    return { success: true, message: 'Categoría creada', id: fila.id };
   } catch (error) {
     console.error('[crearCategoria]', error);
     return { success: false, message: 'Error al crear la categoría' };

@@ -41,10 +41,14 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
+import { NuevaCategoriaDialog } from './NuevaCategoriaDialog';
+
+const NUEVA_CATEGORIA_VALUE = '__nueva__';
 
 type StagedAdicional = { tempId: string; nombre: string; precioExtra: number };
 type StagedVariante = { tempId: string; nombre: string; precio: number };
@@ -90,6 +94,7 @@ export function ProductoDialog({
   const [stagedVariantes, setStagedVariantes] = useState<StagedVariante[]>([]);
   const [precioVarianteDraft, setPrecioVarianteDraft] = useState('');
   const [precioAdicionalDraft, setPrecioAdicionalDraft] = useState('0');
+  const [nuevaCategoriaOpen, setNuevaCategoriaOpen] = useState(false);
 
   const crearProducto = useCrearProducto();
   const editarProducto = useEditarProducto();
@@ -285,6 +290,11 @@ export function ProductoDialog({
   return (
     <>
       {promptDialog}
+      <NuevaCategoriaDialog
+        open={nuevaCategoriaOpen}
+        onOpenChange={setNuevaCategoriaOpen}
+        onCreated={(id) => setCategoriaId(id)}
+      />
       <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -335,7 +345,16 @@ export function ProductoDialog({
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label className={labelCls}>Categoría</Label>
-                <Select value={categoriaId} onValueChange={setCategoriaId}>
+                <Select
+                  value={categoriaId}
+                  onValueChange={(v) => {
+                    if (v === NUEVA_CATEGORIA_VALUE) {
+                      setNuevaCategoriaOpen(true);
+                      return;
+                    }
+                    setCategoriaId(v);
+                  }}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Elegí una categoría" />
                   </SelectTrigger>
@@ -345,8 +364,18 @@ export function ProductoDialog({
                         {c.nombre}
                       </SelectItem>
                     ))}
+                    {categorias.length > 0 && <SelectSeparator />}
+                    <SelectItem value={NUEVA_CATEGORIA_VALUE} className="text-primary">
+                      <Plus className="size-3.5" />
+                      Nueva categoría
+                    </SelectItem>
                   </SelectContent>
                 </Select>
+                {categorias.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Todavía no tenés categorías. Creá una para poder guardar el producto.
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-2">
