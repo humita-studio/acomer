@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Pencil, Printer, QrCode, X } from 'lucide-react';
+import { Bell, Pencil, Plus, Printer, QrCode, Table2, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { useConfirm } from '@/shared/hooks/use-confirm';
+import { cn } from '@/shared/lib/utils';
 import type { PlanoData } from '@/features/mesas/plano-data';
 import { getPlanoDataAction } from '@/features/mesas/plano-actions';
 import {
@@ -381,9 +382,15 @@ export function PlanoManager({
             {editando ? 'Plano de salón' : 'Mesas'}
           </h1>
           <p className="text-sm text-text-secondary">
-            {editando
-              ? 'Autosave activo. Usá la herramienta Mesa y clickeá donde quieras colocarla.'
-              : `Plano de salón en vivo · ${stats.ocupadas} ocupadas · ${stats.libres} libres`}
+            {editando ? (
+              'Autosave activo. Usá la herramienta Mesa y clickeá donde quieras colocarla.'
+            ) : (
+              <>
+                Plano de salón en vivo ·{' '}
+                <span className="font-medium text-foreground">{stats.ocupadas} ocupadas</span> ·{' '}
+                <span className="font-medium text-foreground">{stats.libres} libres</span>
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -450,26 +457,63 @@ export function PlanoManager({
           />
           <CardContent className="p-3 sm:p-4">
             {activeId ? (
-              <PlanoCanvas
-                mesas={mesasAmbiente}
-                elementos={elementosAmbiente}
-                modo={modo}
-                herramienta={herramienta}
-                seleccion={seleccion}
-                snapEnabled={snapEnabled}
-                mozoLabel={mozoLabel}
-                onChangeMesa={acciones.updateMesa}
-                onChangeElemento={acciones.updateElemento}
-                onSelect={setSeleccion}
-                onCreateElemento={acciones.handleCreateElemento}
-                onPlaceMesa={(pos) => void acciones.handleAddMesa({ ...pos, silent: true })}
-              />
+              <div className="relative">
+                <PlanoCanvas
+                  mesas={mesasAmbiente}
+                  elementos={elementosAmbiente}
+                  modo={modo}
+                  herramienta={herramienta}
+                  seleccion={seleccion}
+                  snapEnabled={snapEnabled}
+                  mozoLabel={mozoLabel}
+                  onChangeMesa={acciones.updateMesa}
+                  onChangeElemento={acciones.updateElemento}
+                  onSelect={setSeleccion}
+                  onCreateElemento={acciones.handleCreateElemento}
+                  onPlaceMesa={(pos) => void acciones.handleAddMesa({ ...pos, silent: true })}
+                />
+                {!editando && mesasAmbiente.length === 0 && (
+                  <div
+                    aria-live="polite"
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center p-4"
+                  >
+                    <div className="pointer-events-auto flex max-w-xs flex-col items-center gap-3 rounded-xl border border-dashed border-border-strong bg-card/95 px-6 py-8 text-center shadow-sm">
+                      <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <Table2 className="size-5" aria-hidden />
+                      </span>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          {ambienteActivo?.nombre ?? 'Este ambiente'} todavía no tiene mesas
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {canManage
+                            ? 'Agregá la primera para poder tomar pedidos acá.'
+                            : 'Pedile a un administrador que arme el salón.'}
+                        </p>
+                      </div>
+                      {canManage && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            void setModoSeguro('editar');
+                            setHerramienta('mesa');
+                          }}
+                        >
+                          <Plus className="size-4" aria-hidden />
+                          Agregar mesa
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="rounded-xl border border-dashed border-border-strong py-16 text-center text-sm text-muted-foreground">
                 No hay ambientes. {canManage && 'Creá uno para empezar.'}
               </div>
             )}
-            {!editando && (
+            {!editando && mesasAmbiente.length > 0 && (
               <p className="mt-3 text-xs text-muted-foreground">
                 Tocá una mesa para ver el pedido, el QR o liberarla.
               </p>
@@ -479,11 +523,22 @@ export function PlanoManager({
 
         {/* Side column: avisos (siempre) + panel de edición (solo modo editar) */}
         <div className="flex w-full shrink-0 flex-col gap-4 lg:w-[300px]">
-          <Card className="shadow-sm">
+          <Card className={cn(avisos.length > 0 ? 'border-primary/30 shadow-sm' : 'shadow-none')}>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <span className="size-2 rounded-full bg-primary" />
+                <span
+                  aria-hidden
+                  className={cn(
+                    'size-2 rounded-full',
+                    avisos.length > 0 ? 'animate-pulse bg-primary' : 'bg-muted-foreground/40',
+                  )}
+                />
                 Avisos en vivo
+                {avisos.length > 0 && (
+                  <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold tabular-nums text-primary-foreground">
+                    {avisos.length}
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-0">

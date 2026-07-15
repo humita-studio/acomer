@@ -70,12 +70,14 @@ export function PlanoToolbar({
       {/* Toggle Operar / Editar + legend + lista */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2.5 sm:px-4">
         {canManage ? (
-          <div className="flex items-center rounded-lg bg-muted p-0.5">
+          <div role="tablist" aria-label="Modo del plano" className="flex items-center rounded-lg bg-muted p-0.5">
             <button
               type="button"
+              role="tab"
+              aria-selected={!editando}
               onClick={() => onSetModo('ver')}
               className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition',
+                'rounded-md px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
                 !editando
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
@@ -85,9 +87,11 @@ export function PlanoToolbar({
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={editando}
               onClick={() => onSetModo('editar')}
               className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition',
+                'rounded-md px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
                 editando
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
@@ -103,10 +107,14 @@ export function PlanoToolbar({
         <div className="hidden h-4 w-px bg-border sm:block" />
 
         {!editando && (
-          <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
-            <LegendDot className="bg-primary" label="Ocupada" count={stats.ocupadas} />
-            <LegendDot className="bg-success" label="Libre" count={stats.libres} />
-            <span className="text-muted-foreground">{stats.total} mesas</span>
+          <div className="flex flex-wrap items-center gap-1.5" aria-label="Resumen de mesas">
+            <StatPill className="bg-accent text-primary" label="Ocupada" count={stats.ocupadas} />
+            <StatPill
+              className="bg-success-subtle text-success-foreground"
+              label="Libre"
+              count={stats.libres}
+            />
+            <span className="text-xs text-muted-foreground">{stats.total} mesas</span>
           </div>
         )}
 
@@ -133,33 +141,44 @@ export function PlanoToolbar({
       </div>
 
       {/* Ambientes */}
-      <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4">
-        {ambientes.map((amb) => {
-          const activo = amb.id === activeId;
-          return (
-            <button
-              key={amb.id}
-              type="button"
-              onClick={() => onCambiarAmbiente(amb.id)}
-              onDoubleClick={() => editando && onRenameAmbiente(amb)}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition',
-                activo
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-secondary-foreground hover:bg-muted/80',
-              )}
-              title={editando ? 'Doble clic para renombrar' : undefined}
-            >
-              {amb.nombre}
-            </button>
-          );
-        })}
-        {editando && (
-          <Button type="button" variant="outline" size="sm" onClick={onAddAmbiente}>
-            <Plus />
-            Ambiente
-          </Button>
-        )}
+      <div className="px-3 sm:px-4">
+        <span className="mb-1.5 block text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          Ambientes
+        </span>
+        <div
+          role="tablist"
+          aria-label="Ambientes del salón"
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          {ambientes.map((amb) => {
+            const activo = amb.id === activeId;
+            return (
+              <button
+                key={amb.id}
+                type="button"
+                role="tab"
+                aria-selected={activo}
+                onClick={() => onCambiarAmbiente(amb.id)}
+                onDoubleClick={() => editando && onRenameAmbiente(amb)}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                  activo
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-secondary-foreground hover:bg-muted/80',
+                )}
+                title={editando ? 'Doble clic para renombrar' : undefined}
+              >
+                {amb.nombre}
+              </button>
+            );
+          })}
+          {editando && (
+            <Button type="button" variant="outline" size="sm" onClick={onAddAmbiente}>
+              <Plus />
+              Ambiente
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Herramientas de edición */}
@@ -273,14 +292,17 @@ function SaveIndicator({
   );
 }
 
-function LegendDot({ className, label, count }: { className: string; label: string; count: number }) {
+function StatPill({ className, label, count }: { className: string; label: string; count: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={cn('size-2 rounded-full', className)} />
-      <span>
-        {label}
-        <span className="ml-1 tabular-nums text-muted-foreground">({count})</span>
-      </span>
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+        className,
+      )}
+    >
+      <span aria-hidden className="size-1.5 rounded-full bg-current opacity-70" />
+      {label}
+      <span className="tabular-nums">{count}</span>
     </span>
   );
 }
@@ -299,10 +321,11 @@ function ToolButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       title={title}
       className={cn(
-        'inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition',
+        'inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
         active
           ? 'bg-primary text-primary-foreground'
           : 'border border-border bg-card text-secondary-foreground hover:bg-muted',
