@@ -3,11 +3,9 @@
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
-import { cn } from '@/shared/lib/utils';
 import { Stepper } from './plano-stepper';
-import { COLS, FINE_STEP, ROWS, normalizeDeg, type ElementoPlanoUI } from './plano-types';
-
-const ANGLE_PRESETS = [0, 45, 90, 135, 180] as const;
+import { RotationControl } from './plano-rotation-control';
+import { COLS, FINE_STEP, ROWS, normalizeDeg, round2, type ElementoPlanoUI } from './plano-types';
 
 /** Panel lateral de edición de un elemento del plano (pared/barra). */
 export function ElementoPanel({
@@ -64,8 +62,10 @@ export function ElementoPanel({
           value={elemento.ancho}
           step={FINE_STEP}
           min={0.2}
+          max={COLS}
           onDec={() => stepSize('ancho', -1)}
           onInc={() => stepSize('ancho', 1)}
+          onChange={(v) => onUpdate({ ancho: round2(v) })}
         />
         {!esParedFina && (
           <Stepper
@@ -73,47 +73,19 @@ export function ElementoPanel({
             value={elemento.alto}
             step={FINE_STEP}
             min={0.2}
+            max={ROWS}
             onDec={() => stepSize('alto', -1)}
             onInc={() => stepSize('alto', 1)}
+            onChange={(v) => onUpdate({ alto: round2(v) })}
           />
         )}
       </div>
 
-      <div>
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Rotación
-          </label>
-          <span className="text-xs font-semibold tabular-nums text-foreground">{rot}°</span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={359}
-          step={1}
-          value={rot}
-          onChange={(e) => onUpdate({ rotacion: Number(e.target.value) })}
-          className="mt-2 w-full accent-primary"
-          aria-label="Ángulo de rotación"
-        />
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {ANGLE_PRESETS.map((deg) => (
-            <button
-              key={deg}
-              type="button"
-              onClick={() => onUpdate({ rotacion: deg })}
-              className={cn(
-                'rounded-md border px-2 py-0.5 text-[11px] font-medium tabular-nums transition',
-                rot === deg
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {deg}°
-            </button>
-          ))}
-        </div>
-      </div>
+      <RotationControl
+        value={rot}
+        onChange={(deg) => onUpdate({ rotacion: deg })}
+        hint="Arrastrá el handle ↻ sobre el elemento · Shift alinea a 15°."
+      />
 
       <Button type="button" variant="destructive" className="w-full" onClick={onDelete}>
         <Trash2 />

@@ -4,18 +4,25 @@ import { useEffect, useState } from 'react';
 import { Circle, Copy, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select';
 import { cn } from '@/shared/lib/utils';
 import { Stepper } from './plano-stepper';
+import { RotationControl } from './plano-rotation-control';
 import {
   COLS,
   FINE_STEP,
   ROWS,
   normalizeDeg,
+  round2,
   type AmbienteUI,
   type MesaPlano,
 } from './plano-types';
-
-const ANGLE_PRESETS = [0, 45, 90, 135, 180] as const;
 
 /** Panel lateral de edición de una mesa (nombre, forma, capacidad, tamaño, ambiente). */
 export function MesaPanel({
@@ -79,16 +86,17 @@ export function MesaPanel({
         />
       </div>
 
-      <div>
-        <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div role="group" aria-label="Forma de la mesa">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           Forma
-        </label>
+        </span>
         <div className="mt-1.5 flex gap-2">
           <button
             type="button"
+            aria-pressed={mesa.forma !== 'redonda'}
             onClick={() => onUpdate({ forma: 'cuadrada' })}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-sm font-medium transition',
+              'flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
               mesa.forma !== 'redonda'
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-border bg-card text-secondary-foreground hover:bg-muted',
@@ -98,9 +106,10 @@ export function MesaPanel({
           </button>
           <button
             type="button"
+            aria-pressed={mesa.forma === 'redonda'}
             onClick={() => onUpdate({ forma: 'redonda' })}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-sm font-medium transition',
+              'flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
               mesa.forma === 'redonda'
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-border bg-card text-secondary-foreground hover:bg-muted',
@@ -118,6 +127,7 @@ export function MesaPanel({
         max={20}
         onDec={() => onUpdate({ capacidad: Math.max(1, mesa.capacidad - 1) })}
         onInc={() => onUpdate({ capacidad: Math.min(20, mesa.capacidad + 1) })}
+        onChange={(v) => onUpdate({ capacidad: Math.round(v) })}
       />
 
       <div className="grid grid-cols-2 gap-2">
@@ -126,58 +136,28 @@ export function MesaPanel({
           value={mesa.ancho}
           step={FINE_STEP}
           min={FINE_STEP}
+          max={COLS}
           onDec={() => stepSize('ancho', -1)}
           onInc={() => stepSize('ancho', 1)}
+          onChange={(v) => onUpdate({ ancho: round2(v) })}
         />
         <Stepper
           label="Alto"
           value={mesa.alto}
           step={FINE_STEP}
           min={FINE_STEP}
+          max={ROWS}
           onDec={() => stepSize('alto', -1)}
           onInc={() => stepSize('alto', 1)}
+          onChange={(v) => onUpdate({ alto: round2(v) })}
         />
       </div>
 
-      {/* Rotación: slider libre + presets. El handle del canvas es el camino principal. */}
-      <div>
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Rotación
-          </label>
-          <span className="text-xs font-semibold tabular-nums text-foreground">{rot}°</span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={359}
-          step={1}
-          value={rot}
-          onChange={(e) => onUpdate({ rotacion: Number(e.target.value) })}
-          className="mt-2 w-full accent-primary"
-          aria-label="Ángulo de rotación"
-        />
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {ANGLE_PRESETS.map((deg) => (
-            <button
-              key={deg}
-              type="button"
-              onClick={() => onUpdate({ rotacion: deg })}
-              className={cn(
-                'rounded-md border px-2 py-0.5 text-[11px] font-medium tabular-nums transition',
-                rot === deg
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {deg}°
-            </button>
-          ))}
-        </div>
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          O arrastrá el handle ↻ sobre la mesa · Shift alinea a 15°.
-        </p>
-      </div>
+      <RotationControl
+        value={rot}
+        onChange={(deg) => onUpdate({ rotacion: deg })}
+        hint="Arrastrá el handle ↻ sobre la mesa · Shift alinea a 15°."
+      />
 
       <Button type="button" variant="outline" className="w-full" onClick={onDuplicate}>
         <Copy />
@@ -188,17 +168,21 @@ export function MesaPanel({
         <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           Ambiente
         </label>
-        <select
+        <Select
           value={mesa.ambienteId ?? ''}
-          onChange={(e) => onUpdate({ ambienteId: e.target.value })}
-          className="mt-1.5 w-full rounded-md border border-border bg-card px-2.5 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+          onValueChange={(v) => onUpdate({ ambienteId: v })}
         >
-          {ambientes.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.nombre}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="mt-1.5 w-full" aria-label="Ambiente de la mesa">
+            <SelectValue placeholder="Elegí un ambiente" />
+          </SelectTrigger>
+          <SelectContent>
+            {ambientes.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.nombre}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Button type="button" variant="destructive" className="w-full" onClick={onDelete}>
