@@ -2,7 +2,7 @@
 
 import { Button } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
-import { AsignarMesaPopover } from './AsignarMesaPopover';
+import { AsignarMesaTrigger } from './AsignarMesaPopover';
 import { estadoMeta } from '../estados';
 import { horaDe } from '../fechas';
 import type { Reserva } from '../types';
@@ -12,24 +12,26 @@ export type AccionConfirmable = 'NoShow' | 'Cancelada';
 /** Tarjeta de una reserva en la agenda del día, con acciones según su estado. */
 export function ReservaCard({
   reserva,
-  chosenMesa,
   busy,
   onConfirmar,
   onSentar,
   onMarcarCumplida,
   onPedirConfirmacion,
-  onElegirMesa,
+  onAbrirAsignarMesa,
 }: {
   reserva: Reserva;
-  chosenMesa: { id: string; label: string } | null;
   busy: boolean;
   onConfirmar: (r: Reserva) => void;
   onSentar: (r: Reserva) => void;
   onMarcarCumplida: (r: Reserva) => void;
   onPedirConfirmacion: (r: Reserva, accion: AccionConfirmable) => void;
-  onElegirMesa: (reservaId: string, mesaId: string, label: string) => void;
+  onAbrirAsignarMesa: (r: Reserva) => void;
 }) {
   const meta = estadoMeta(reserva.estado);
+  const puedeAsignar =
+    reserva.estado === 'Pendiente' || reserva.estado === 'Confirmada';
+  const puedeSentar =
+    (reserva.estado === 'Confirmada' || reserva.estado === 'Pendiente') && !!reserva.mesaId;
 
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-4 shadow-sm sm:px-[18px]">
@@ -41,7 +43,7 @@ export function ReservaCard({
 
       <div className="h-10 w-px shrink-0 bg-border" />
 
-      {/* Contacto */}
+      {/* Contacto + mesa */}
       <div className="min-w-[140px] flex-1">
         <p className="font-semibold text-foreground">{reserva.nombreContacto}</p>
         {reserva.telefono ? (
@@ -56,6 +58,19 @@ export function ReservaCard({
           </a>
         ) : (
           <p className="text-[13px] text-muted-foreground">Sin teléfono</p>
+        )}
+        {reserva.mesaIdentificador ? (
+          <p className="mt-0.5 text-xs font-medium text-foreground/80">
+            Mesa {reserva.mesaIdentificador}
+            {reserva.mesaCapacidad != null ? (
+              <span className="font-normal text-muted-foreground">
+                {' '}
+                · {reserva.mesaCapacidad} lug.
+              </span>
+            ) : null}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-xs text-muted-foreground">Sin mesa asignada</p>
         )}
         {reserva.notas && <p className="mt-0.5 text-xs text-muted-foreground">{reserva.notas}</p>}
       </div>
@@ -77,6 +92,13 @@ export function ReservaCard({
             <Button size="sm" disabled={busy} onClick={() => onConfirmar(reserva)}>
               Confirmar
             </Button>
+            {puedeAsignar && (
+              <AsignarMesaTrigger
+                reserva={reserva}
+                disabled={busy}
+                onOpen={() => onAbrirAsignarMesa(reserva)}
+              />
+            )}
             <Button
               size="sm"
               variant="secondary"
@@ -98,16 +120,17 @@ export function ReservaCard({
 
         {reserva.estado === 'Confirmada' && (
           <>
-            <AsignarMesaPopover
+            <AsignarMesaTrigger
               reserva={reserva}
-              chosen={chosenMesa}
-              onElegir={(mesaId, label) => onElegirMesa(reserva.id, mesaId, label)}
+              disabled={busy}
+              onOpen={() => onAbrirAsignarMesa(reserva)}
             />
             <Button
               size="sm"
               className="bg-success text-primary-foreground hover:bg-success/90"
-              disabled={busy || !chosenMesa}
+              disabled={busy || !puedeSentar}
               onClick={() => onSentar(reserva)}
+              title={!puedeSentar ? 'Asigná una mesa primero' : undefined}
             >
               Sentar
             </Button>

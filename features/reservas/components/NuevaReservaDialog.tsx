@@ -47,7 +47,8 @@ export function NuevaReservaDialog({
   config: ReservasConfig;
   fechaDefault: string;
   creando: boolean;
-  onCrear: (datos: NuevaReservaDatos) => Promise<boolean>;
+  /** Devuelve true si se creó; o un string con el error del servidor. */
+  onCrear: (datos: NuevaReservaDatos) => Promise<true | string>;
 }) {
   const turnosActivos = useMemo(() => config.turnos.filter((t) => t.activo), [config.turnos]);
   const slotsDe = (nombre: string) => {
@@ -96,7 +97,7 @@ export function NuevaReservaDialog({
     const inicio = new Date(`${fecha}T${hora}:00`);
     if (Number.isNaN(inicio.getTime())) return setError('Fecha u horario inválidos');
 
-    const ok = await onCrear({
+    const result = await onCrear({
       nombreContacto: nombre.trim(),
       telefono: telefono.trim(),
       inicioISO: inicio.toISOString(),
@@ -104,7 +105,8 @@ export function NuevaReservaDialog({
       duracionMin: config.duracionMinDefault,
       notas: notas.trim() || undefined,
     });
-    if (ok) onOpenChange(false);
+    if (result === true) onOpenChange(false);
+    else setError(result || 'No se pudo crear la reserva');
   };
 
   return (

@@ -40,6 +40,10 @@ export const queryKeys = {
     ['reservas', 'anterior', tenantId, hastaISO] as const,
   disponibilidad: (inicioISO: string, personas: number) =>
     ['disponibilidad', inicioISO, personas] as const,
-  mesasDisponibles: (inicioISO: string, personas: number, duracionMin: number) =>
-    ['mesas-disponibles', inicioISO, personas, duracionMin] as const,
+  mesasDisponibles: (
+    inicioISO: string,
+    personas: number,
+    duracionMin: number,
+    excluirReservaId?: string | null,
+  ) => ['mesas-disponibles', inicioISO, personas, duracionMin, excluirReservaId ?? null] as const,
 };

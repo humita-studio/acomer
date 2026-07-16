@@ -19,6 +19,7 @@ import {
   useProximaReserva,
   useCambiarEstadoReserva,
   useSentarReserva,
+  useAsignarMesaReserva,
   useCrearReservaAdmin,
 } from '../hooks/useReservas';
 import type { Reserva } from '../types';
@@ -29,6 +30,7 @@ import { ReservaCard, type AccionConfirmable } from './ReservaCard';
 import { NuevaReservaDialog, type NuevaReservaDatos } from './NuevaReservaDialog';
 import { CancelarReservaDialog } from './CancelarReservaDialog';
 import { ReservasConfigDrawer } from './ReservasConfigDrawer';
+import { AsignarMesaDialog } from './AsignarMesaDialog';
 
 type Conteo = { reservas: number; cubiertos: number };
 type Grupo = { key: string; titulo: string; rango: string | null; reservas: Reserva[]; cubiertos: number };
@@ -61,11 +63,11 @@ export function ReservasManager({
 }) {
   const router = useRouter();
   const [diaSel, setDiaSel] = useState(fecha);
-  const [mesaElegida, setMesaElegida] = useState<Record<string, { id: string; label: string }>>({});
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{ reserva: Reserva; accion: AccionConfirmable } | null>(null);
+  const [asignarTarget, setAsignarTarget] = useState<Reserva | null>(null);
 
   // Al navegar de mes (cambia `fecha` por URL) saltamos al día correspondiente.
   const [fechaPrev, setFechaPrev] = useState(fecha);
@@ -85,6 +87,7 @@ export function ReservasManager({
 
   const cambiarEstado = useCambiarEstadoReserva(tenantId, mesKey);
   const sentar = useSentarReserva(tenantId, mesKey);
+  const asignarMesa = useAsignarMesaReserva(tenantId, mesKey);
   const crear = useCrearReservaAdmin(tenantId, mesKey);
 
   // Conteo de reservas (no canceladas) por día para los badges del calendario.
@@ -164,6 +167,7 @@ export function ReservasManager({
   const busyId =
     (cambiarEstado.isPending && cambiarEstado.variables?.id) ||
     (sentar.isPending && sentar.variables?.id) ||
+    (asignarMesa.isPending && asignarMesa.variables?.id) ||
     null;
 
   const subtituloHeader =
@@ -186,9 +190,9 @@ export function ReservasManager({
   const crearReserva = async (datos: NuevaReservaDatos) => {
     try {
       await crear.mutateAsync(datos);
-      return true;
-    } catch {
-      return false;
+      return true as const;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'No se pudo crear la reserva';
     }
   };
 
@@ -196,18 +200,12 @@ export function ReservasManager({
     <ReservaCard
       key={r.id}
       reserva={r}
-      chosenMesa={mesaElegida[r.id] ?? null}
       busy={busyId === r.id}
       onConfirmar={(res) => cambiarEstado.mutate({ id: res.id, estado: 'Confirmada' })}
-      onSentar={(res) => {
-        const m = mesaElegida[res.id];
-        if (m) sentar.mutate({ id: res.id, mesaId: m.id });
-      }}
+      onSentar={(res) => sentar.mutate({ id: res.id, mesaId: res.mesaId })}
       onMarcarCumplida={(res) => cambiarEstado.mutate({ id: res.id, estado: 'Cumplida' })}
       onPedirConfirmacion={(res, accion) => setConfirmTarget({ reserva: res, accion })}
-      onElegirMesa={(reservaId, mesaId, label) =>
-        setMesaElegida((prev) => ({ ...prev, [reservaId]: { id: mesaId, label } }))
-      }
+      onAbrirAsignarMesa={setAsignarTarget}
     />
   );
 
@@ -370,6 +368,24 @@ export function ReservasManager({
           if (!confirmTarget) return;
           cambiarEstado.mutate({ id: confirmTarget.reserva.id, estado: confirmTarget.accion });
           setConfirmTarget(null);
+        }}
+      />
+
+      <AsignarMesaDialog
+        open={!!asignarTarget}
+        onOpenChange={(o) => !o && setAsignarTarget(null)}
+        reserva={
+          // Preferir la versión fresca del query (mesaId actualizado).
+          asignarTarget
+            ? (reservas.find((x) => x.id === asignarTarget.id) ?? asignarTarget)
+            : null
+        }
+        tenantId={tenantId}
+        pending={asignarMesa.isPending}
+        onAsignar={async (mesaId) => {
+          if (!asignarTarget) return;
+          const res = await asignarMesa.mutateAsync({ id: asignarTarget.id, mesaId });
+          if (res.success && mesaId) setAsignarTarget(null);
         }}
       />
     </div>

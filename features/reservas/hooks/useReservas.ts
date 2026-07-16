@@ -8,6 +8,7 @@ import { queryKeys } from '@/shared/query/keys';
 import {
   cambiarEstadoReservaAction,
   sentarReservaAction,
+  asignarMesaReservaAction,
   getReservasDelDiaAction,
   getProximaReservaAction,
   getReservaAnteriorAction,
@@ -111,7 +112,8 @@ export function useCambiarEstadoReserva(tenantId: string, mesKey: string) {
 export function useSentarReserva(tenantId: string, mesKey: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, mesaId }: { id: string; mesaId: string }) => sentarReservaAction(id, mesaId),
+    mutationFn: ({ id, mesaId }: { id: string; mesaId?: string | null }) =>
+      sentarReservaAction(id, mesaId),
     onSuccess: (res) => {
       if (res.success) {
         toast.success('Mesa sentada', {
@@ -126,12 +128,31 @@ export function useSentarReserva(tenantId: string, mesKey: string) {
   });
 }
 
+export function useAsignarMesaReserva(tenantId: string, mesKey: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, mesaId }: { id: string; mesaId: string | null }) =>
+      asignarMesaReservaAction(id, mesaId),
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success(res.message ?? 'Mesa actualizada');
+      } else {
+        toast.error(res.message ?? 'No se pudo asignar la mesa');
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) });
+      queryClient.invalidateQueries({ queryKey: ['mesas-disponibles'] });
+    },
+    onError: () => toast.error('No se pudo asignar la mesa'),
+  });
+}
+
 type NuevaReservaInput = {
   nombreContacto: string;
   telefono: string;
   inicioISO: string;
   personas: number;
   duracionMin?: number;
+  mesaId?: string | null;
   notas?: string;
 };
 
@@ -150,20 +171,31 @@ export function useCrearReservaAdmin(tenantId: string, mesKey: string) {
   });
 }
 
-/** Mesas libres para un horario/cantidad (popover "Asignar mesa"). On-demand. */
+/** Mesas libres para un horario/cantidad (diálogo "Asignar mesa"). On-demand. */
 export function useMesasDisponibles(params: {
   inicioISO: string;
   personas: number;
   duracionMin: number;
+  excluirReservaId?: string | null;
   enabled: boolean;
 }) {
   return useQuery({
-    queryKey: queryKeys.mesasDisponibles(params.inicioISO, params.personas, params.duracionMin),
+    queryKey: queryKeys.mesasDisponibles(
+      params.inicioISO,
+      params.personas,
+      params.duracionMin,
+      params.excluirReservaId ?? null,
+    ),
     queryFn: async () => {
-      const res = await getMesasDisponiblesAction(params.inicioISO, params.personas, params.duracionMin);
+      const res = await getMesasDisponiblesAction(
+        params.inicioISO,
+        params.personas,
+        params.duracionMin,
+        params.excluirReservaId,
+      );
       return res.success ? res.mesas : [];
     },
     enabled: params.enabled,
-    staleTime: 30_000,
+    staleTime: 15_000,
   });
 }

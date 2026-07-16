@@ -11,6 +11,12 @@ import { abrirOReusarSesion, broadcastOcupacion } from '@/features/comanda/sesio
 import { obtenerReservasConfig } from '@/features/reservas/reservasConfigActions';
 import { turnoDeHora, type ReservasConfig } from '@/features/reservas/reservasConfig';
 import type { Mesa } from '@/features/reservas/types';
+import {
+  mejorMesaPara,
+  mesasLibresParaVentana,
+  type MesaCandidata,
+  type ReservaOcupacion,
+} from '@/features/reservas/disponibilidadMesas';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -21,10 +27,6 @@ type EstadoReserva = 'Pendiente' | 'Confirmada' | 'Sentada' | 'NoShow' | 'Cancel
 
 // Motivo por el que un horario no tiene disponibilidad (para mensajes claros).
 type MotivoSinLugar = 'inactivo' | 'anticipacion' | 'cupo_dia' | 'cupo_turno' | 'sin_mesa';
-
-function rangosSeSolapan(aInicio: Date, aFin: Date, bInicio: Date, bFin: Date) {
-  return aInicio < bFin && bInicio < aFin;
-}
 
 /** 'HH:MM' (hora local) de una fecha, para ubicarla en un turno. */
 function hhmmDe(d: Date): string {
@@ -90,15 +92,19 @@ async function evaluarCupo(
 
 /**
  * Mesas con capacidad suficiente que no se solapan con otra reserva vigente en
- * la ventana [inicio, fin). Lógica compartida por el flujo público y el admin.
+ * la ventana [inicio, fin). Incluye packing de reservas sin mesa (aforo real).
+ * Lógica compartida por el flujo público y el admin.
  */
 async function calcularMesasLibres(
   tenantId: string,
   inicio: Date,
   fin: Date,
   personas: number,
+  excluirReservaId?: string | null,
 ): Promise<Mesa[]> {
-  const candidatas = await db
+  // Todas las mesas raíz: el packing también necesita las chicas aunque la
+  // reserva pedida sea grande (para "consumirlas" con reservas chicas previas).
+  const candidatas: MesaCandidata[] = await db
     .select({ id: mesas.id, identificador: mesas.identificador, capacidad: mesas.capacidad })
     .from(mesas)
     .where(
@@ -106,7 +112,6 @@ async function calcularMesasLibres(
         eq(mesas.restauranteId, tenantId),
         isNull(mesas.deletedAt),
         isNull(mesas.parentMesaId),
-        gte(mesas.capacidad, personas),
       ),
     );
   if (candidatas.length === 0) return [];
@@ -115,7 +120,13 @@ async function calcularMesasLibres(
   const ventanaIni = new Date(inicio.getTime() - 6 * 60 * 60_000);
   const ventanaFin = new Date(fin.getTime() + 6 * 60 * 60_000);
   const reservasVentana = await db
-    .select({ mesaId: reservas.mesaId, inicio: reservas.inicio, duracionMin: reservas.duracionMin })
+    .select({
+      id: reservas.id,
+      mesaId: reservas.mesaId,
+      personas: reservas.cantidadPersonas,
+      inicio: reservas.inicio,
+      duracionMin: reservas.duracionMin,
+    })
     .from(reservas)
     .where(
       and(
@@ -126,15 +137,22 @@ async function calcularMesasLibres(
       ),
     );
 
-  const ocupadas = new Set<string>();
-  for (const r of reservasVentana) {
-    if (!r.mesaId) continue;
-    const rIni = new Date(r.inicio);
-    const rFin = new Date(rIni.getTime() + (r.duracionMin ?? 90) * 60_000);
-    if (rangosSeSolapan(inicio, fin, rIni, rFin)) ocupadas.add(r.mesaId);
-  }
+  const ocupacion: ReservaOcupacion[] = reservasVentana.map((r) => ({
+    id: r.id,
+    mesaId: r.mesaId,
+    personas: r.personas,
+    inicio: new Date(r.inicio),
+    duracionMin: r.duracionMin ?? 90,
+  }));
 
-  return candidatas.filter((m) => !ocupadas.has(m.id));
+  return mesasLibresParaVentana(
+    candidatas,
+    ocupacion,
+    inicio,
+    fin,
+    personas,
+    excluirReservaId,
+  );
 }
 
 /**
@@ -247,6 +265,27 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
       };
     }
 
+    // Aforo físico: tiene que haber al menos una mesa libre del tamaño pedido.
+    // Auto-asignamos la más chica que entre para no sobrevender el salón.
+    const duracion = datos.duracionMin ?? config.duracionMinDefault;
+    const fin = new Date(inicio.getTime() + duracion * 60_000);
+    const libres = await calcularMesasLibres(tenantId, inicio, fin, datos.personas);
+    if (libres.length === 0) {
+      return {
+        success: false,
+        message: 'No hay mesas disponibles para ese horario y cantidad de personas',
+      };
+    }
+
+    let mesaAsignada: string | null = datos.mesaId || null;
+    if (mesaAsignada) {
+      if (!libres.some((m) => m.id === mesaAsignada)) {
+        return { success: false, message: 'La mesa elegida ya no está disponible' };
+      }
+    } else {
+      mesaAsignada = mejorMesaPara(libres, datos.personas)?.id ?? null;
+    }
+
     const estadoInicial = config.autoConfirmarOnline ? 'Confirmada' : 'Pendiente';
 
     const [reserva] = await withPublicTenant(tenantId, (db) =>
@@ -257,9 +296,9 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
           nombreContacto: datos.nombreContacto.trim(),
           telefono: datos.telefono.trim(),
           inicio,
-          duracionMin: datos.duracionMin ?? config.duracionMinDefault,
+          duracionMin: duracion,
           cantidadPersonas: datos.personas,
-          mesaId: datos.mesaId || null,
+          mesaId: mesaAsignada,
           notas: datos.notas?.trim() || null,
           estado: estadoInicial,
           origen: 'online',
@@ -291,14 +330,18 @@ type DatosReservaAdmin = {
   inicioISO: string;
   personas: number;
   duracionMin?: number;
+  mesaId?: string | null;
   notas?: string;
+  /** Si true, permite crear aunque no haya mesa libre (solo cupo config). Default false. */
+  forzarSinMesa?: boolean;
 };
 
 /**
  * Admin: crea una reserva manual (teléfono / mostrador). A diferencia del flujo
  * público no exige que las reservas web estén activas ni respeta la anticipación
  * mínima (el staff puede cargar una reserva para hoy mismo), pero mantiene el
- * chequeo de cupo para no sobrevender. Queda en estado Confirmada.
+ * chequeo de cupo y aforo de mesas para no sobrevender. Queda en estado Confirmada.
+ * Auto-asigna la mesa más chica libre salvo que se pase `mesaId`.
  */
 export async function crearReservaAdminAction(datos: DatosReservaAdmin) {
   try {
@@ -328,6 +371,25 @@ export async function crearReservaAdminAction(datos: DatosReservaAdmin) {
       };
     }
 
+    const duracion = datos.duracionMin ?? config.duracionMinDefault;
+    const fin = new Date(inicio.getTime() + duracion * 60_000);
+    const libres = await calcularMesasLibres(tenantId, inicio, fin, datos.personas);
+
+    let mesaAsignada: string | null = datos.mesaId || null;
+    if (mesaAsignada) {
+      if (!libres.some((m) => m.id === mesaAsignada)) {
+        return { success: false, message: 'La mesa elegida no está libre en ese horario' };
+      }
+    } else if (libres.length > 0) {
+      mesaAsignada = mejorMesaPara(libres, datos.personas)?.id ?? null;
+    } else if (!datos.forzarSinMesa) {
+      return {
+        success: false,
+        message:
+          'No hay mesas con capacidad suficiente libres en ese horario. Revisá el aforo o elegí otro turno.',
+      };
+    }
+
     const [reserva] = await withTenant(claimsFromSession(session), (db) =>
       db
         .insert(reservas)
@@ -336,8 +398,9 @@ export async function crearReservaAdminAction(datos: DatosReservaAdmin) {
           nombreContacto: datos.nombreContacto.trim(),
           telefono: datos.telefono.trim(),
           inicio,
-          duracionMin: datos.duracionMin ?? config.duracionMinDefault,
+          duracionMin: duracion,
           cantidadPersonas: datos.personas,
+          mesaId: mesaAsignada,
           notas: datos.notas?.trim() || null,
           estado: 'Confirmada',
           origen: 'telefono',
@@ -365,13 +428,14 @@ export async function crearReservaAdminAction(datos: DatosReservaAdmin) {
 }
 
 /**
- * Admin: mesas libres para un horario/cantidad (para el popover "Asignar mesa").
- * Usa la sesión, no exige reservas web activas.
+ * Admin: mesas libres para un horario/cantidad (para el diálogo "Asignar mesa").
+ * `excluirReservaId` evita que la propia reserva se bloquee al reasignar.
  */
 export async function getMesasDisponiblesAction(
   inicioISO: string,
   personas: number,
   duracionMin?: number,
+  excluirReservaId?: string | null,
 ) {
   try {
     const session = await getCurrentSession();
@@ -390,6 +454,7 @@ export async function getMesasDisponiblesAction(
       inicio,
       fin,
       Math.max(1, personas),
+      excluirReservaId,
     );
     return { success: true, mesas: mesasLibres };
   } catch (error) {
@@ -413,8 +478,21 @@ export async function getReservasDelDiaAction(desdeISO: string, hastaISO: string
 
     const filas = await withTenant(claimsFromSession(session), (db) =>
       db
-        .select()
+        .select({
+          id: reservas.id,
+          nombreContacto: reservas.nombreContacto,
+          telefono: reservas.telefono,
+          mesaId: reservas.mesaId,
+          inicio: reservas.inicio,
+          duracionMin: reservas.duracionMin,
+          cantidadPersonas: reservas.cantidadPersonas,
+          estado: reservas.estado,
+          notas: reservas.notas,
+          mesaIdentificador: mesas.identificador,
+          mesaCapacidad: mesas.capacidad,
+        })
         .from(reservas)
+        .leftJoin(mesas, eq(reservas.mesaId, mesas.id))
         .where(
           and(
             eq(reservas.restauranteId, session.restauranteId),
@@ -532,23 +610,136 @@ export async function cambiarEstadoReservaAction(reservaId: string, nuevoEstado:
 }
 
 /**
- * Admin: "sienta" una reserva. Abre/reusa la sesión de la mesa asignada,
- * vincula la sesión a la reserva y marca la mesa como ocupada en el plano.
+ * Admin: asigna (o reasigna) una mesa a una reserva sin sentarla. Valida
+ * capacidad y que la mesa esté libre en el horario de la reserva.
+ * `mesaId` null quita la asignación.
  */
-export async function sentarReservaAction(reservaId: string, mesaId: string) {
+export async function asignarMesaReservaAction(reservaId: string, mesaId: string | null) {
   try {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageReservas')) {
       return { success: false, message: 'No autorizado' };
     }
 
-    const mesa = await withTenant(claimsFromSession(session), async (db) => {
-      const [m] = await db
-        .select({ id: mesas.id, identificador: mesas.identificador })
+    const reserva = await withTenant(claimsFromSession(session), async (tx) => {
+      const [row] = await tx
+        .select({
+          id: reservas.id,
+          estado: reservas.estado,
+          inicio: reservas.inicio,
+          duracionMin: reservas.duracionMin,
+          personas: reservas.cantidadPersonas,
+          mesaId: reservas.mesaId,
+        })
+        .from(reservas)
+        .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)))
+        .limit(1);
+      return row;
+    });
+    if (!reserva) return { success: false, message: 'Reserva no encontrada' };
+    if (reserva.estado === 'Cancelada' || reserva.estado === 'Cumplida' || reserva.estado === 'NoShow') {
+      return { success: false, message: 'No se puede asignar mesa a una reserva cerrada' };
+    }
+    if (reserva.estado === 'Sentada') {
+      return { success: false, message: 'La reserva ya está sentada. Cambiá la mesa desde el plano.' };
+    }
+
+    if (mesaId) {
+      const mesa = await withTenant(claimsFromSession(session), async (tx) => {
+        const [m] = await tx
+          .select({ id: mesas.id, identificador: mesas.identificador, capacidad: mesas.capacidad })
+          .from(mesas)
+          .where(
+            and(
+              eq(mesas.id, mesaId),
+              eq(mesas.restauranteId, session.restauranteId),
+              isNull(mesas.deletedAt),
+            ),
+          )
+          .limit(1);
+        return m;
+      });
+      if (!mesa) return { success: false, message: 'Mesa no encontrada' };
+      if (mesa.capacidad < reserva.personas) {
+        return {
+          success: false,
+          message: `La mesa ${mesa.identificador} es para ${mesa.capacidad}; la reserva es de ${reserva.personas}`,
+        };
+      }
+
+      const inicio = new Date(reserva.inicio);
+      const fin = new Date(inicio.getTime() + (reserva.duracionMin ?? 90) * 60_000);
+      const libres = await calcularMesasLibres(
+        session.restauranteId,
+        inicio,
+        fin,
+        reserva.personas,
+        reservaId,
+      );
+      if (!libres.some((m) => m.id === mesaId)) {
+        return { success: false, message: 'Esa mesa ya está reservada en ese horario' };
+      }
+    }
+
+    await withTenant(claimsFromSession(session), (tx) =>
+      tx
+        .update(reservas)
+        .set({ mesaId: mesaId || null, updatedAt: new Date() })
+        .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId))),
+    );
+
+    revalidatePath('/admin/reservas');
+    return { success: true, message: mesaId ? 'Mesa asignada' : 'Mesa desasignada' };
+  } catch (error) {
+    console.error('[asignarMesaReservaAction]', error);
+    return { success: false, message: 'No se pudo asignar la mesa' };
+  }
+}
+
+/**
+ * Admin: "sienta" una reserva. Abre/reusa la sesión de la mesa asignada,
+ * vincula la sesión a la reserva y marca la mesa como ocupada en el plano.
+ * Si no se pasa mesaId, usa la ya guardada en la reserva.
+ */
+export async function sentarReservaAction(reservaId: string, mesaId?: string | null) {
+  try {
+    const session = await getCurrentSession();
+    if (!session || !hasPermission(session.role, 'canManageReservas')) {
+      return { success: false, message: 'No autorizado' };
+    }
+
+    const reserva = await withTenant(claimsFromSession(session), async (tx) => {
+      const [row] = await tx
+        .select({
+          id: reservas.id,
+          estado: reservas.estado,
+          mesaId: reservas.mesaId,
+          personas: reservas.cantidadPersonas,
+          inicio: reservas.inicio,
+          duracionMin: reservas.duracionMin,
+        })
+        .from(reservas)
+        .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)))
+        .limit(1);
+      return row;
+    });
+    if (!reserva) return { success: false, message: 'Reserva no encontrada' };
+    if (reserva.estado !== 'Confirmada' && reserva.estado !== 'Pendiente') {
+      return { success: false, message: 'Solo se pueden sentar reservas pendientes o confirmadas' };
+    }
+
+    const mesaElegida = mesaId || reserva.mesaId;
+    if (!mesaElegida) {
+      return { success: false, message: 'Asigná una mesa antes de sentar' };
+    }
+
+    const mesa = await withTenant(claimsFromSession(session), async (tx) => {
+      const [m] = await tx
+        .select({ id: mesas.id, identificador: mesas.identificador, capacidad: mesas.capacidad })
         .from(mesas)
         .where(
           and(
-            eq(mesas.id, mesaId),
+            eq(mesas.id, mesaElegida),
             eq(mesas.restauranteId, session.restauranteId),
             isNull(mesas.deletedAt),
           ),
@@ -557,17 +748,44 @@ export async function sentarReservaAction(reservaId: string, mesaId: string) {
       return m;
     });
     if (!mesa) return { success: false, message: 'Mesa no encontrada' };
+    if (mesa.capacidad < reserva.personas) {
+      return {
+        success: false,
+        message: `La mesa ${mesa.identificador} no alcanza para ${reserva.personas} personas`,
+      };
+    }
+
+    // Si se sienta en una mesa distinta a la ya asignada, validar libre en el horario.
+    if (mesaElegida !== reserva.mesaId) {
+      const inicio = new Date(reserva.inicio);
+      const fin = new Date(inicio.getTime() + (reserva.duracionMin ?? 90) * 60_000);
+      const libres = await calcularMesasLibres(
+        session.restauranteId,
+        inicio,
+        fin,
+        reserva.personas,
+        reservaId,
+      );
+      if (!libres.some((m) => m.id === mesaElegida)) {
+        return { success: false, message: 'Esa mesa ya está reservada en ese horario' };
+      }
+    }
 
     const { sesionId } = await abrirOReusarSesion(session.restauranteId, mesa);
 
-    await withTenant(claimsFromSession(session), (db) =>
-      db
+    await withTenant(claimsFromSession(session), (tx) =>
+      tx
         .update(reservas)
-        .set({ estado: 'Sentada', mesaId, sesionMesaId: sesionId, updatedAt: new Date() })
-        .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)))
+        .set({
+          estado: 'Sentada',
+          mesaId: mesaElegida,
+          sesionMesaId: sesionId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId))),
     );
 
-    await broadcastOcupacion(session.restauranteId, mesaId, true);
+    await broadcastOcupacion(session.restauranteId, mesaElegida, true);
 
     revalidatePath('/admin/reservas');
     revalidatePath('/admin/mesas');

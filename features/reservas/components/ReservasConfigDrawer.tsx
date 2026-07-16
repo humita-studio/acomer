@@ -113,7 +113,9 @@ export function ReservasConfigDrawer({
               <div>
                 <p className="text-sm font-medium">Cubiertos máximos</p>
                 <p className="text-xs text-muted-foreground">
-                  {cubiertos > 0 ? 'Tope de cubiertos por turno' : 'Sin límite'}
+                  {cubiertos > 0
+                    ? 'Tope extra por turno (además del aforo de mesas del plano)'
+                    : 'Sin tope manual · el aforo lo marcan las mesas del plano'}
                 </p>
               </div>
               <div className="flex items-center gap-1">

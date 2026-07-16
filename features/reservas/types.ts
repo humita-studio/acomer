@@ -6,6 +6,9 @@ export type Reserva = {
   nombreContacto: string;
   telefono: string;
   mesaId: string | null;
+  /** Identificador legible de la mesa (join); null si no hay mesa asignada. */
+  mesaIdentificador?: string | null;
+  mesaCapacidad?: number | null;
   inicio: string | Date;
   duracionMin: number;
   cantidadPersonas: number;
