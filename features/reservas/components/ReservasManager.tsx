@@ -8,11 +8,14 @@ import {
   CheckCheck,
   Copy,
   ExternalLink,
+  LayoutGrid,
   Link2,
+  List,
   Plus,
   Settings,
 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
+import { cn } from '@/shared/lib/utils';
 import {
   useReservasMes,
   useReservasRealtime,
@@ -31,6 +34,7 @@ import { NuevaReservaDialog, type NuevaReservaDatos } from './NuevaReservaDialog
 import { CancelarReservaDialog } from './CancelarReservaDialog';
 import { ReservasConfigDrawer } from './ReservasConfigDrawer';
 import { AsignarMesaDialog } from './AsignarMesaDialog';
+import { PlanoTurno } from './PlanoTurno';
 
 type Conteo = { reservas: number; cubiertos: number };
 type Grupo = { key: string; titulo: string; rango: string | null; reservas: Reserva[]; cubiertos: number };
@@ -68,6 +72,7 @@ export function ReservasManager({
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{ reserva: Reserva; accion: AccionConfirmable } | null>(null);
   const [asignarTarget, setAsignarTarget] = useState<Reserva | null>(null);
+  const [vistaDia, setVistaDia] = useState<'lista' | 'plano'>('lista');
 
   // Al navegar de mes (cambia `fecha` por URL) saltamos al día correspondiente.
   const [fechaPrev, setFechaPrev] = useState(fecha);
@@ -282,15 +287,49 @@ export function ReservasManager({
 
         {/* Agenda del día */}
         <div className="space-y-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-display text-xl font-semibold">{diaLegibleLargo(diaSel)}</h2>
-            <p className="text-[13px] text-muted-foreground">
-              {plural(cuposDia.reservas, 'reserva', 'reservas')} ·{' '}
-              {plural(cuposDia.cubiertos, 'cubierto', 'cubiertos')}
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="font-display text-xl font-semibold">{diaLegibleLargo(diaSel)}</h2>
+              <p className="text-[13px] text-muted-foreground">
+                {plural(cuposDia.reservas, 'reserva', 'reservas')} ·{' '}
+                {plural(cuposDia.cubiertos, 'cubierto', 'cubiertos')}
+              </p>
+            </div>
+            <div className="flex rounded-lg bg-muted p-0.5">
+              <button
+                type="button"
+                onClick={() => setVistaDia('lista')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  vistaDia === 'lista' ? 'bg-background shadow-sm' : 'text-muted-foreground',
+                )}
+              >
+                <List className="size-3.5" />
+                Lista
+              </button>
+              <button
+                type="button"
+                onClick={() => setVistaDia('plano')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  vistaDia === 'plano' ? 'bg-background shadow-sm' : 'text-muted-foreground',
+                )}
+              >
+                <LayoutGrid className="size-3.5" />
+                Plano
+              </button>
+            </div>
           </div>
 
-          {reservasDelDia.length === 0 ? (
+          {vistaDia === 'plano' ? (
+            <PlanoTurno
+              tenantId={tenantId}
+              reservasDelDia={reservasDelDia}
+              config={config}
+              onAsignarMesa={setAsignarTarget}
+              onNuevaReserva={() => setNuevaOpen(true)}
+            />
+          ) : reservasDelDia.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border bg-card py-10 text-center">
               <p className="font-medium text-foreground">Sin reservas este día</p>
               <p className="max-w-xs text-sm text-muted-foreground">
