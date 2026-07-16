@@ -148,11 +148,32 @@ function ZonaMapaDialog({
   const [draft, setDraft] = useState<ZonaPoligono | null>(value);
   // Remount del mapa cada vez que se abre (evita estado viejo / tamaño 0).
   const [openKey, setOpenKey] = useState(0);
+  // Esperar a que el dialog tenga layout antes de montar Leaflet.
+  const [mapMounted, setMapMounted] = useState(false);
+  // Snapshot de si había zona al abrir (para autoStartDraw, sin races con draft).
+  const [startEmpty, setStartEmpty] = useState(!value);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setMapMounted(false);
+      return;
+    }
+    // Sincronizar borrador con la config actual al abrir.
     setDraft(value);
+    setStartEmpty(!value);
     setOpenKey((k) => k + 1);
+    // Montar el mapa un frame después: el dialog ya midió altura/ancho.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setMapMounted(true));
+    });
+    // Fallback por si el browser no pinta a tiempo (animación del dialog).
+    const t = window.setTimeout(() => setMapMounted(true), 180);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      window.clearTimeout(t);
+    };
     // Solo al abrir el modal; no re-sync si `value` cambia estando abierto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -168,13 +189,14 @@ function ZonaMapaDialog({
         <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12 text-left">
           <DialogTitle>Zona de entrega en el mapa</DialogTitle>
           <DialogDescription>
-            Dibujá el área donde entregás. Tocá para marcar puntos, cerrá la zona y arrastrá
-            los vértices para ajustar.
+            {draft
+              ? 'Tu zona aparece en naranja. Arrastrá los puntos para ajustar, o redibujá desde cero.'
+              : 'Marcá al menos 3 puntos alrededor del área donde entregás. Cerrá con doble clic, el primer punto o el botón.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {open ? (
+          {open && mapMounted ? (
             <ZonaEntregaMapaLazy
               key={openKey}
               mode="edit"
@@ -182,7 +204,12 @@ function ZonaMapaDialog({
               onChange={setDraft}
               direccionLocal={direccionLocal}
               height="min(58vh, 520px)"
+              autoStartDraw={startEmpty}
             />
+          ) : open ? (
+            <div className="flex h-[min(58vh,520px)] min-h-[280px] items-center justify-center rounded-xl border bg-muted text-sm text-muted-foreground">
+              Cargando mapa…
+            </div>
           ) : null}
         </div>
 
@@ -357,7 +384,8 @@ function ConfigBody({
             <div>
               <Label className="text-sm font-medium">Zona de entrega</Label>
               <p className="text-sm text-muted-foreground">
-                Dibujá en el mapa el área donde entregás. Se abre en un modal grande.
+                Definí en el mapa el área donde entregás. El cliente tendrá que marcar su
+                ubicación dentro de esa zona al pedir.
               </p>
             </div>
 
