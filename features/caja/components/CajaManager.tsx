@@ -36,7 +36,6 @@ import {
 } from '@/features/caja/hooks/useCaja';
 import type { CajaActual, CajaCerrada, TipoMovimiento } from '@/features/caja/types';
 import { CajaHistorial } from '@/features/caja/components/CajaHistorial';
-import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
 
 const TIPO_LABEL: Record<TipoMovimiento, string> = {
   ingreso: 'Ingreso',
@@ -55,10 +54,13 @@ export function CajaManager({
   initialCaja,
   initialHistorial,
   tenantId,
+  headerExtras,
 }: {
   initialCaja: CajaActual | null;
   initialHistorial: CajaCerrada[];
   tenantId: string;
+  /** Acciones del shell (p. ej. Nueva venta) — evita import peer feature→feature. */
+  headerExtras?: React.ReactNode;
 }) {
   const { data: caja } = useCajaActual(tenantId, initialCaja);
   const { data: historial = initialHistorial } = useHistorialCajas(tenantId, initialHistorial);
@@ -89,7 +91,7 @@ export function CajaManager({
         </div>
         {caja ? (
           <div className="flex flex-wrap items-center gap-2">
-            <NuevaVentaButton tenantId={tenantId} />
+            {headerExtras}
             <Button onClick={() => setCerrarOpen(true)}>
               <Lock className="size-4" />
               Cerrar caja

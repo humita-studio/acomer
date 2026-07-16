@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { getCurrentSession } from '@/features/auth/session';
+import { getPlatformSession } from '@/features/platform/session';
+import { isPlatformAdminEmail } from '@/features/platform/platformAllowlist';
 import { getBillingSnapshotAction } from '@/features/billing/billingActions';
 import { BillingBanner } from '@/features/billing/components/BillingBanner';
 import { AppSidebar } from './app-sidebar';
@@ -20,6 +22,11 @@ export default async function AdminLayout({
   const session = await getCurrentSession();
 
   if (!session) {
+    // Operador de acomer sin perfil de local: mandar al panel de plataforma.
+    const platform = await getPlatformSession();
+    if (platform) {
+      redirect('/platform');
+    }
     redirect('/login');
   }
 
@@ -40,12 +47,15 @@ export default async function AdminLayout({
     redirect('/unauthorized');
   }
 
+  const showPlatformLink = isPlatformAdminEmail(session.user.email);
+
   return (
     <SidebarProvider>
       <AppSidebar
         role={session.role as RoleType}
         nombreRestaurante={session.nombreRestaurante}
         email={session.user.email}
+        showPlatformLink={showPlatformLink}
       />
       <SidebarInset className="h-svh min-h-0 min-w-0 overflow-hidden">
         {billing && (billing.showPayBanner || !billing.accessOk) ? (

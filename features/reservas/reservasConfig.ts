@@ -21,6 +21,8 @@ export type ReservasConfig = {
   anticipacionMinMin: number; // anticipación mínima (min) para reservar; 0 = sin mínimo
   cupoCubiertosPorTurno: number | null; // cubiertos máximos por turno; null = sin límite
   maxReservasPorDia: number | null; // tope de reservas/día; null = sin límite
+  /** Online: Confirmada de una vs Pendiente (manual). */
+  autoConfirmarOnline: boolean;
 };
 
 /** Paso (min) con el que se generan los horarios concretos de cada turno. */
@@ -38,6 +40,7 @@ export const RESERVAS_CONFIG_DEFAULT: ReservasConfig = {
   anticipacionMinMin: 120,
   cupoCubiertosPorTurno: null,
   maxReservasPorDia: null,
+  autoConfirmarOnline: false,
 };
 
 /** Opciones de duración por defecto que ofrece el drawer de configuración. */

@@ -154,6 +154,12 @@ export const productos = pgTable(
     categoriaId: uuid('categoria_id').notNull(),
     nombre: text('nombre').notNull(),
     descripcion: text('descripcion'),
+    /** URL optimizada de entrega (Cloudinary). */
+    imagenUrl: text('imagen_url'),
+    /** public_id en Cloudinary para borrar/reemplazar. */
+    imagenPublicId: text('imagen_public_id'),
+    /** Tags de alérgenos (p. ej. gluten, lactosa). */
+    alergenos: text('alergenos').array().notNull().default([]),
     permiteAdicionales: boolean('permite_adicionales').notNull().default(false),
     activo: boolean('activo').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -560,6 +566,8 @@ export const reservasConfig = pgTable(
     anticipacionMinMin: integer('anticipacion_min_min').notNull().default(120), // min de anticipación; 0 = sin mínimo
     cupoCubiertosPorTurno: integer('cupo_cubiertos_por_turno'), // null = sin límite
     maxReservasPorDia: integer('max_reservas_por_dia'), // null = sin límite
+    /** Si true, reservas online nacen Confirmada; si false, Pendiente. */
+    autoConfirmarOnline: boolean('auto_confirmar_online').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

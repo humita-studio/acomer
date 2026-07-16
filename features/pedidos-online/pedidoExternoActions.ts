@@ -77,6 +77,12 @@ export async function crearPedidoExternoAction(
     if (!tenantSlug?.trim() || tenantSlug.length > 64) {
       return { success: false, message: 'Restaurante inválido' };
     }
+    const { rateLimit } = await import('@/shared/lib/rateLimit');
+    const { getClientIp } = await import('@/shared/lib/clientIp');
+    const ip = await getClientIp();
+    const rl = rateLimit(`pedido-ext:${tenantSlug}:${ip}`, 10, 60_000);
+    if (!rl.ok) return { success: false, message: rl.message };
+
     const tenantId = await getTenantBySlug(tenantSlug);
     if (!tenantId) {
       return { success: false, message: 'Restaurante no encontrado' };

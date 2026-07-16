@@ -8,7 +8,7 @@ import { withTenant } from '@/shared/db/secure-wrapper';
 import {
   getSesionCajaAbiertaId,
   requireSesionCajaAbierta,
-} from '@/features/caja/sesionCaja';
+} from '@/shared/caja/sesionCaja';
 import type { TransaccionCobro } from './types';
 
 // El restaurante se deriva siempre de la sesión (nunca del cliente) y todo el

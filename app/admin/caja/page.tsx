@@ -4,6 +4,7 @@ import { getCurrentSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
 import { getCajaActualAction, getHistorialCajasAction } from '@/features/caja/cajaActions';
 import { CajaManager } from '@/features/caja/components/CajaManager';
+import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
 import { Skeleton } from '@/shared/ui/skeleton';
 
 function CajaSkeleton() {
@@ -49,6 +50,7 @@ async function CajaContent() {
       initialCaja={initialCaja}
       initialHistorial={initialHistorial}
       tenantId={session.restauranteId}
+      headerExtras={<NuevaVentaButton tenantId={session.restauranteId} />}
     />
   );
 }

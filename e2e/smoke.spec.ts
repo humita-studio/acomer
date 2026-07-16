@@ -60,6 +60,11 @@ test.describe('Auth', () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
   });
 
+  test('/platform redirige a login sin sesión', async ({ page }) => {
+    await page.goto('/platform');
+    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+  });
+
   test('/login muestra form y link de recuperación', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: /Ingresar/i })).toBeVisible();

@@ -47,8 +47,26 @@ import {
 } from '@/shared/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { NuevaCategoriaDialog } from './NuevaCategoriaDialog';
+import { ProductoImagenField } from './ProductoImagenField';
+import { Badge } from '@/shared/ui/badge';
 
 const NUEVA_CATEGORIA_VALUE = '__nueva__';
+
+/** Sugerencias rápidas de alérgenos (el dueño puede sumar otras a mano). */
+const ALERGENOS_SUGERIDOS = [
+  'gluten',
+  'lactosa',
+  'huevo',
+  'frutos secos',
+  'maní',
+  'soja',
+  'pescado',
+  'mariscos',
+  'apio',
+  'mostaza',
+  'sésamo',
+  'sulfitos',
+];
 
 type StagedAdicional = { tempId: string; nombre: string; precioExtra: number };
 type StagedVariante = { tempId: string; nombre: string; precio: number };
@@ -88,6 +106,8 @@ export function ProductoDialog({
     producto && producto.precio != null ? String(producto.precio) : ''
   );
   const [disponible, setDisponible] = useState(producto?.activo ?? true);
+  const [alergenos, setAlergenos] = useState<string[]>(producto?.alergenos ?? []);
+  const [alergenoDraft, setAlergenoDraft] = useState('');
   // Toggle de creación: precio único vs. con variantes (presentaciones de precio fijo).
   const [tieneVariantes, setTieneVariantes] = useState(false);
   const [stagedAdicionales, setStagedAdicionales] = useState<StagedAdicional[]>([]);
@@ -257,6 +277,7 @@ export function ProductoDialog({
         nombre: nombreLimpio,
         descripcion: descripcion.trim(),
         categoriaId,
+        alergenos,
       });
       if (!usarVariantes && canManagePrices && precioNum !== Number(producto!.precio)) {
         modificarPrecio.mutate({ productoId: producto!.id, nuevoPrecio: precioNum });
@@ -267,6 +288,7 @@ export function ProductoDialog({
     } else if (usarVariantes) {
       crearProducto.mutate({
         categoriaId,
+        alergenos,
         nombre: nombreLimpio,
         descripcion: descripcion.trim(),
         disponible,
@@ -280,6 +302,7 @@ export function ProductoDialog({
         descripcion: descripcion.trim(),
         precio: precioNum,
         disponible,
+        alergenos,
         adicionales: adicionalesAEnviar,
       });
     }
@@ -417,16 +440,111 @@ export function ProductoDialog({
               </div>
             )}
 
-            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div
+              className={cn(
+                'flex items-center justify-between rounded-lg border px-4 py-3',
+                disponible
+                  ? 'border-border bg-muted/30'
+                  : 'border-destructive/40 bg-destructive/5',
+              )}
+            >
               <div className="space-y-0.5">
-                <p className="text-sm font-medium">Disponible para la venta</p>
-                <p className="text-xs text-muted-foreground">Se muestra en la carta de tus clientes</p>
+                <p className="text-sm font-medium">
+                  {disponible ? 'Disponible para la venta' : 'Agotado'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {disponible
+                    ? 'Se muestra en la carta de tus clientes'
+                    : 'No se ofrece en la carta hasta reactivarlo'}
+                </p>
               </div>
               <Switch
                 checked={disponible}
                 onCheckedChange={setDisponible}
                 className="data-[state=checked]:bg-success"
               />
+            </div>
+
+            {esEditar ? (
+              <ProductoImagenField
+                productoId={producto!.id}
+                imagenUrl={producto?.imagenUrl}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                La foto se puede subir después de crear el producto (editá el plato).
+              </p>
+            )}
+
+            <div className="grid gap-2">
+              <Label className={labelCls}>Alérgenos</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {ALERGENOS_SUGERIDOS.map((a) => {
+                  const on = alergenos.includes(a);
+                  return (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() =>
+                        setAlergenos((prev) =>
+                          on ? prev.filter((x) => x !== a) : [...prev, a],
+                        )
+                      }
+                      className={cn(
+                        'rounded-full border px-2.5 py-0.5 text-xs capitalize transition-colors',
+                        on
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                      )}
+                    >
+                      {a}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={alergenoDraft}
+                  onChange={(e) => setAlergenoDraft(e.target.value)}
+                  placeholder="Otro alérgeno…"
+                  className="h-9"
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    const t = alergenoDraft.trim().toLowerCase();
+                    if (!t) return;
+                    setAlergenos((prev) => (prev.includes(t) ? prev : [...prev, t]));
+                    setAlergenoDraft('');
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const t = alergenoDraft.trim().toLowerCase();
+                    if (!t) return;
+                    setAlergenos((prev) => (prev.includes(t) ? prev : [...prev, t]));
+                    setAlergenoDraft('');
+                  }}
+                >
+                  Sumar
+                </Button>
+              </div>
+              {alergenos.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {alergenos.map((a) => (
+                    <Badge
+                      key={a}
+                      variant="secondary"
+                      className="cursor-pointer capitalize"
+                      onClick={() => setAlergenos((prev) => prev.filter((x) => x !== a))}
+                    >
+                      {a} ×
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </TabsContent>
 

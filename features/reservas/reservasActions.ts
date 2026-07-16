@@ -199,6 +199,12 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
     if (!tenantSlug?.trim() || tenantSlug.length > 64) {
       return { success: false, message: 'Restaurante inválido' };
     }
+    const { rateLimit } = await import('@/shared/lib/rateLimit');
+    const { getClientIp } = await import('@/shared/lib/clientIp');
+    const ip = await getClientIp();
+    const rl = rateLimit(`reserva:${tenantSlug}:${ip}`, 8, 60_000);
+    if (!rl.ok) return { success: false, message: rl.message };
+
     const tenantId = await getTenantBySlug(tenantSlug);
     if (!tenantId) return { success: false, message: 'Restaurante no encontrado' };
     if (!datos.nombreContacto?.trim() || datos.nombreContacto.trim().length < 2) {
@@ -241,6 +247,8 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
       };
     }
 
+    const estadoInicial = config.autoConfirmarOnline ? 'Confirmada' : 'Pendiente';
+
     const [reserva] = await withPublicTenant(tenantId, (db) =>
       db
         .insert(reservas)
@@ -253,7 +261,7 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
           cantidadPersonas: datos.personas,
           mesaId: datos.mesaId || null,
           notas: datos.notas?.trim() || null,
-          estado: 'Pendiente',
+          estado: estadoInicial,
           origen: 'online',
         })
         .returning({ id: reservas.id })

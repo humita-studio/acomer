@@ -58,8 +58,9 @@ export async function proxy(req: NextRequest) {
     return response;
   }
 
-  const protectedPaths = ['/admin'];
+  const protectedPaths = ['/admin', '/platform'];
   const isProtectedRoute = protectedPaths.some((p) => path.startsWith(p));
+  const isPlatformRoute = path.startsWith('/platform');
   const isAuthRoute =
     path === '/login' || path === '/register' || path === '/forgot-password';
   const isChangePasswordRoute = path === '/cambiar-password';
@@ -78,8 +79,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // Staff con contraseña temporal: no entra al panel hasta cambiarla.
-  if (isProtectedRoute && user && mustChangePassword) {
+  // Staff con contraseña temporal: no entra al panel del local hasta cambiarla.
+  // /platform no exige cambio (operadores de acomer no usan temp password de staff).
+  if (isProtectedRoute && user && mustChangePassword && !isPlatformRoute) {
     return NextResponse.redirect(new URL('/cambiar-password', req.url));
   }
 
@@ -88,6 +90,7 @@ export async function proxy(req: NextRequest) {
   }
 
   // --- 3. Redirigir usuarios autenticados lejos del login/registro ---
+  // Destino fino (admin vs platform) lo resuelve LoginForm / layout admin.
   if (isAuthRoute && user) {
     const dest = mustChangePassword ? '/cambiar-password' : '/admin';
     return NextResponse.redirect(new URL(dest, req.url));

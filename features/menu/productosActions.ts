@@ -18,6 +18,20 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 // El `db` de cada acción es el handle transaccional de withTenant: corre con RLS
 // activo, de modo que la base sólo deja ver/tocar filas del tenant en sesión.
 
+function sanearAlergenos(raw: string[] | undefined): string[] {
+  if (!raw?.length) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const a of raw) {
+    const t = (a ?? '').trim().toLowerCase();
+    if (!t || t.length > 40 || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 /**
  * Lista los productos del menú con su precio vigente. Estado de servidor que
  * consume TanStack Query en el admin (siembra `initialData`).
@@ -32,6 +46,9 @@ export async function obtenerProductosMenu() {
         categoriaId: productos.categoriaId,
         nombre: productos.nombre,
         descripcion: productos.descripcion,
+        imagenUrl: productos.imagenUrl,
+        imagenPublicId: productos.imagenPublicId,
+        alergenos: productos.alergenos,
         precio: productosPrecios.precio,
         permiteAdicionales: productos.permiteAdicionales,
         activo: productos.activo,
@@ -54,6 +71,7 @@ export async function crearProducto(data: {
   /** Precio único. Se omite si el producto se crea con variantes. */
   precio?: number;
   disponible?: boolean;
+  alergenos?: string[];
   /** Adicionales (extras aditivos) a crear junto con el producto. */
   adicionales?: { nombre: string; precioExtra: number }[];
   /** Variantes (presentaciones de precio fijo). Si hay, el producto NO lleva precio base. */
@@ -87,6 +105,7 @@ export async function crearProducto(data: {
             categoriaId: data.categoriaId,
             nombre: data.nombre,
             descripcion: data.descripcion || null,
+            alergenos: sanearAlergenos(data.alergenos),
             activo: data.disponible ?? true,
             permiteAdicionales: adicionalesValidos.length > 0,
           })
@@ -154,7 +173,12 @@ export async function crearProducto(data: {
 
 export async function editarProducto(
   id: string,
-  data: { nombre: string; descripcion?: string; categoriaId?: string }
+  data: {
+    nombre: string;
+    descripcion?: string;
+    categoriaId?: string;
+    alergenos?: string[];
+  }
 ) {
   try {
     const session = await getCurrentSession();
@@ -169,6 +193,9 @@ export async function editarProducto(
           nombre: data.nombre,
           descripcion: data.descripcion || null,
           ...(data.categoriaId ? { categoriaId: data.categoriaId } : {}),
+          ...(data.alergenos !== undefined
+            ? { alergenos: sanearAlergenos(data.alergenos) }
+            : {}),
         })
         .where(
           and(

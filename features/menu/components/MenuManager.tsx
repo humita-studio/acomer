@@ -518,8 +518,13 @@ function ProductoRow({
             <Utensils className="size-4" />
           </span>
           <div className="min-w-0 flex-1 overflow-hidden">
-            <p className="truncate font-medium text-foreground" title={producto.nombre}>
-              {producto.nombre}
+            <p className="flex min-w-0 items-center gap-1.5 truncate font-medium text-foreground" title={producto.nombre}>
+              <span className="truncate">{producto.nombre}</span>
+              {!disponible ? (
+                <Badge variant="destructive" className="shrink-0">
+                  Agotado
+                </Badge>
+              ) : null}
             </p>
             {producto.descripcion && (
               <p

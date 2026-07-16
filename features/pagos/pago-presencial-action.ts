@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
 import type { PromoCanal } from '@/features/promociones/promociones';
-import { getSesionCajaAbiertaId } from '@/features/caja/sesionCaja';
+import { getSesionCajaAbiertaId } from '@/shared/caja/sesionCaja';
 import { pedirCuentaPresencialSchema } from './validation';
 import { withPublicTenant } from '@/shared/db/secure-wrapper';
 

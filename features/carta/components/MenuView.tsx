@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CheckCircle2, CircleAlert, Plus, Search, Tag, X } from 'lucide-react';
+import Image from 'next/image';
+import { Bell, CheckCircle2, CircleAlert, Plus, Search, Tag, X } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { FloatingCart } from './FloatingCart';
 import { filtrarProductosPorBusqueda } from '../buscarProductos';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import { Badge } from '@/shared/ui/badge';
 import {
   Accordion,
   AccordionContent,
@@ -17,7 +19,7 @@ import {
   colorCategoriaMeta,
   ICONOS_CATEGORIA_MAP,
   resolveIconoCategoria,
-} from '@/features/menu/categoriaVisual';
+} from '@/features/carta/categoriaVisual';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import type { CategoriaMenu, ProductoMenu } from '../types';
@@ -81,18 +83,31 @@ function ProductoCard({
   /** Si viene, se muestra arriba del nombre (modo búsqueda plana). */
   categoriaNombre?: string;
 }) {
+  const alergenos = prod.alergenos ?? [];
   return (
     <button
       type="button"
       onClick={() => onSelect(prod)}
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-2xl border bg-card p-3.5 text-left',
+        'flex w-full items-center gap-3 rounded-2xl border bg-card p-3.5 text-left',
         'text-card-foreground shadow-sm transition-colors',
         // Touch: feedback al presionar (hover casi no existe en mobile).
         'active:bg-muted/60 active:scale-[0.99]',
         'touch-manipulation select-none',
       )}
     >
+      {prod.imagenUrl ? (
+        <span className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
+          <Image
+            src={prod.imagenUrl}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="64px"
+            unoptimized
+          />
+        </span>
+      ) : null}
       <div className="min-w-0 flex-1">
         {categoriaNombre && (
           <p className="mb-0.5 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -105,6 +120,18 @@ function ProductoCard({
             {prod.descripcion}
           </p>
         )}
+        {alergenos.length > 0 ? (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {alergenos.slice(0, 4).map((a) => (
+              <Badge key={a} variant="outline" className="h-5 px-1.5 text-[10px] capitalize">
+                {a}
+              </Badge>
+            ))}
+            {alergenos.length > 4 ? (
+              <span className="text-[10px] text-muted-foreground">+{alergenos.length - 4}</span>
+            ) : null}
+          </div>
+        ) : null}
         <p className="mt-1.5 text-[15px] font-bold tabular-nums text-primary">
           {prod.variantes.length > 0 && (
             <span className="font-normal text-muted-foreground">desde </span>
@@ -249,13 +276,14 @@ export function MenuView({
         <div className="sticky top-0 z-10 flex items-center justify-end gap-2 border-b bg-background/95 px-3 py-2 backdrop-blur-md">
           {onLlamarMozo && (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
-              className="h-9 rounded-full px-3.5 text-sm touch-manipulation"
+              className="h-10 rounded-full border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary touch-manipulation shadow-sm"
               onClick={handleLlamarMozo}
               disabled={isCalling}
             >
-              {isCalling ? 'Llamando…' : 'Llamar mozo'}
+              <Bell className="size-4" aria-hidden />
+              {isCalling ? 'Avisando…' : 'Llamar mozo'}
             </Button>
           )}
           {mostrarPagar && (

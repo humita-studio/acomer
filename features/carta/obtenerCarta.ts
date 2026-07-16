@@ -43,6 +43,8 @@ async function fetchCarta(
         categoriaId: productos.categoriaId,
         nombre: productos.nombre,
         descripcion: productos.descripcion,
+        imagenUrl: productos.imagenUrl,
+        alergenos: productos.alergenos,
         permiteAdicionales: productos.permiteAdicionales,
         precio: productosPrecios.precio,
       })
@@ -128,6 +130,8 @@ async function fetchCarta(
       nombre: p.nombre,
       descripcion: p.descripcion,
       precio,
+      imagenUrl: p.imagenUrl?.trim() || null,
+      alergenos: Array.isArray(p.alergenos) ? p.alergenos.filter(Boolean) : [],
       permiteAdicionales: p.permiteAdicionales,
       modificadores: modsDisponibles
         .filter((m) => m.productoId === p.id)

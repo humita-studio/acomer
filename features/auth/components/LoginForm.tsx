@@ -9,6 +9,7 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { traducirErrorAuth, userMustChangePassword } from '../auth-errors';
+import { resolvePostLoginPathAction } from '@/features/platform/postLoginAction';
 
 export function LoginForm() {
   const router = useRouter();
@@ -45,7 +46,9 @@ export function LoginForm() {
         return;
       }
 
-      router.push('/admin');
+      // Local staff → /admin; operador acomer sin perfil → /platform.
+      const dest = await resolvePostLoginPathAction();
+      router.push(dest);
       router.refresh();
     } catch (err) {
       setError(traducirErrorAuth(err, 'No se pudo iniciar sesión.'));

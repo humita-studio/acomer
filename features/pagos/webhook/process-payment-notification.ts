@@ -3,7 +3,7 @@ import { db } from '@/shared/db';
 import { pedidos, sesionesMesa, transaccionesPago } from '@/shared/db/schema';
 import { getPaymentProvider } from '@/features/pagos/core/payment-factory';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
-import { getSesionCajaAbiertaId } from '@/features/caja/sesionCaja';
+import { getSesionCajaAbiertaId } from '@/shared/caja/sesionCaja';
 import {
   decideSettlement,
   isAlreadyProcessed,

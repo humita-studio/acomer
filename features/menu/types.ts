@@ -17,6 +17,9 @@ export type ProductoMenu = {
   descripcion: string | null;
   // null para productos "con variantes" (el precio vive en cada variante).
   precio: string | number | null;
+  imagenUrl?: string | null;
+  imagenPublicId?: string | null;
+  alergenos?: string[];
   permiteAdicionales?: boolean;
   activo: boolean;
 };

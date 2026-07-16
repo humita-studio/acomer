@@ -22,7 +22,7 @@ import { createSupabaseServerClient } from '@/shared/supabase/server';
 import {
   getSesionCajaAbiertaId,
   requireSesionCajaAbierta,
-} from '@/features/caja/sesionCaja';
+} from '@/shared/caja/sesionCaja';
 
 /**
  * Venta de mostrador: el cajero arma un pedido y lo cobra en el acto, sin mesa.

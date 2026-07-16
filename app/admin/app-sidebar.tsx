@@ -18,6 +18,7 @@ import {
   UtensilsCrossed,
   Users,
   Wallet,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 import { canAccessSection, type RoleType } from '@/features/authorization/roles';
@@ -94,10 +95,13 @@ export function AppSidebar({
   role,
   nombreRestaurante,
   email,
+  showPlatformLink = false,
 }: {
   role: RoleType;
   nombreRestaurante: string;
   email: string;
+  /** Operador de acomer (allowlist): link al panel de plataforma. */
+  showPlatformLink?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -203,6 +207,17 @@ export function AppSidebar({
                     <span className="truncate text-xs text-muted-foreground">{email}</span>
                   </div>
                 </DropdownMenuLabel>
+                {showPlatformLink ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/platform">
+                        <Building2 />
+                        Panel acomer
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onClick={handleLogout}>
                   <LogOut />

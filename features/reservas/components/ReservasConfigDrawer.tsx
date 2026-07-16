@@ -53,6 +53,7 @@ export function ReservasConfigDrawer({
   const [duracion, setDuracion] = useState(config.duracionMinDefault);
   const [anticipacion, setAnticipacion] = useState(config.anticipacionMinMin);
   const [cubiertos, setCubiertos] = useState(config.cupoCubiertosPorTurno ?? 0);
+  const [autoConfirmar, setAutoConfirmar] = useState(config.autoConfirmarOnline);
 
   // Re-sembrar el form al abrir (patrón "ajustar estado en render", sin efecto).
   const [prevOpen, setPrevOpen] = useState(open);
@@ -64,6 +65,7 @@ export function ReservasConfigDrawer({
       setDuracion(config.duracionMinDefault);
       setAnticipacion(config.anticipacionMinMin);
       setCubiertos(config.cupoCubiertosPorTurno ?? 0);
+      setAutoConfirmar(config.autoConfirmarOnline);
     }
   }
 
@@ -82,6 +84,7 @@ export function ReservasConfigDrawer({
         anticipacionMinMin: anticipacion,
         cupoCubiertosPorTurno: cubiertos > 0 ? cubiertos : null,
         maxReservasPorDia: config.maxReservasPorDia,
+        autoConfirmarOnline: autoConfirmar,
       });
       if (!res.success) throw new Error(res.message ?? 'No se pudo guardar');
       return res;
@@ -230,6 +233,19 @@ export function ReservasConfigDrawer({
                 <p className="text-xs text-muted-foreground">Los clientes reservan desde tu carta.</p>
               </div>
               <Switch checked={activo} onCheckedChange={setActivo} aria-label="Aceptar reservas web" />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Confirmar automáticamente</p>
+                <p className="text-xs text-muted-foreground">
+                  Si está off, las reservas online quedan pendientes de tu OK.
+                </p>
+              </div>
+              <Switch
+                checked={autoConfirmar}
+                onCheckedChange={setAutoConfirmar}
+                aria-label="Auto confirmar reservas online"
+              />
             </div>
           </div>
         </div>

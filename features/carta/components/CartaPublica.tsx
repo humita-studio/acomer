@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, Search, X } from 'lucide-react';
 import { Input } from '@/shared/ui/input';
@@ -10,13 +11,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/shared/ui/accordion';
+import { Badge } from '@/shared/ui/badge';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import {
   colorCategoriaMeta,
   ICONOS_CATEGORIA_MAP,
   resolveIconoCategoria,
-} from '@/features/menu/categoriaVisual';
+} from '@/features/carta/categoriaVisual';
 import { filtrarProductosPorBusqueda } from '../buscarProductos';
 import type { CategoriaMenu, ProductoMenu } from '../types';
 
@@ -214,13 +216,26 @@ function ProductoCard({
   /** Si viene, se muestra arriba del nombre (modo búsqueda plana). */
   categoriaNombre?: string;
 }) {
+  const alergenos = prod.alergenos ?? [];
   return (
     <div
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-2xl border bg-card p-3.5 text-left',
+        'flex w-full items-center gap-3 rounded-2xl border bg-card p-3.5 text-left',
         'text-card-foreground shadow-sm',
       )}
     >
+      {prod.imagenUrl ? (
+        <span className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
+          <Image
+            src={prod.imagenUrl}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="64px"
+            unoptimized
+          />
+        </span>
+      ) : null}
       <div className="min-w-0 flex-1">
         {categoriaNombre ? (
           <p className="mb-0.5 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -232,6 +247,15 @@ function ProductoCard({
           <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-muted-foreground">
             {prod.descripcion}
           </p>
+        ) : null}
+        {alergenos.length > 0 ? (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {alergenos.slice(0, 4).map((a) => (
+              <Badge key={a} variant="outline" className="h-5 px-1.5 text-[10px] capitalize">
+                {a}
+              </Badge>
+            ))}
+          </div>
         ) : null}
         <p className="mt-1.5 text-[15px] font-bold tabular-nums text-primary">
           {prod.variantes.length > 0 ? (

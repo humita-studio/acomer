@@ -48,6 +48,14 @@ function esEmailDuplicado(message: string | undefined): boolean {
  * falla después de crear el usuario, lo elimina para no dejar cuentas huérfanas.
  */
 export async function registrarLocalAction(input: RegistroLocalInput): Promise<RegistroLocalResult> {
+  const { rateLimit } = await import('@/shared/lib/rateLimit');
+  const { getClientIp } = await import('@/shared/lib/clientIp');
+  const ip = await getClientIp();
+  const rl = rateLimit(`registro:${ip}`, 5, 15 * 60_000);
+  if (!rl.ok) {
+    return { success: false, message: rl.message };
+  }
+
   // 1. Validaciones (server-side; el front valida en vivo pero esto es la red de seguridad)
   const email = (input.email ?? '').trim().toLowerCase();
   if (!emailValido(email)) {

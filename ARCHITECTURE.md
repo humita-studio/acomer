@@ -14,7 +14,8 @@ Hay tres superficies de usuario, que se corresponden con carpetas de `app/`:
 | --- | --- | --- |
 | Landing | `app/(landing)` | público / marketing |
 | Cliente del local | `app/[tenant]` | comensal (escanea el QR, pide, reserva, paga) |
-| Panel de gestión | `app/admin` | dueño / encargado / mozo |
+| Panel de gestión | `app/admin` | dueño / encargado / mozo del **local** |
+| Panel de plataforma | `app/platform` | operadores de **acomer** (`PLATFORM_ADMIN_EMAILS`) |
 
 La autenticación de empleados es por Supabase Auth; el comensal opera **sin login** (se identifica por el QR de la mesa o por el flujo de checkout).
 
@@ -113,8 +114,9 @@ Son 17 dominios. Los **cimientos** son consumidos por otros (única dirección p
 | --- | --- | --- |
 | `auth` | Sesión/login, perfil de empleado (`getCurrentSession`) | cimiento |
 | `authorization` | Roles y permisos (`hasPermission`, `canAccessSection`) | cimiento |
+| `platform` | Ops multi-tenant de acomer (`getPlatformSession`, allowlist env) | cimiento (solo `app/platform`) |
 | `tenant` | Resolución del local por slug (`getTenantBySlug`) | cimiento |
-| `carta` | Carta + carrito (kernel de UI: `MenuView`, `cart.ts`, `useLocalCart`) | cimiento |
+| `carta` | Carta + carrito (kernel de UI: `MenuView`, `cart.ts`, `useLocalCart`, `categoriaVisual`) | cimiento |
 | `pedidos` | Kernel de creación de pedidos (`crearPedidoCore`) + lecturas de ticket | cimiento |
 | `comanda` | Servicio en mesa: sesión, borrador compartido, ticket, carga del mozo, realtime | operación |
 | `cocina` | KDS: tablero de pedidos (Pendiente → En prep. → Listo → Entregado) | operación |
@@ -145,7 +147,9 @@ Código genérico, transversal a todos los dominios:
 | `shared/ui` | Componentes base (shadcn/ui) |
 | `shared/query` | Claves de TanStack Query (`queryKeys`) |
 | `shared/supabase` | Clientes Supabase (`browser` / `server`) |
-| `shared/lib`, `shared/utils` | Helpers, formateadores (`formatPeso`, `cn`, …) |
+| `shared/lib`, `shared/utils` | Helpers, formateadores (`formatPeso`, `cn`, rateLimit, reportError) |
+| `shared/caja` | Kernel de sesión de caja abierta (`getSesionCajaAbiertaId`) — cimiento plata |
+| `shared/maps` | Zona de entrega (polígono, mapa Leaflet lazy, geocode) |
 
 ---
 

@@ -55,6 +55,7 @@ Mínimo para dev:
 | `MP_CLIENT_SECRET` | Client secret de Mercado Pago (OAuth) |
 | `MP_WEBHOOK_SECRET` | (Opcional en local) Firma de webhooks MP |
 | `MP_BILLING_ACCESS_TOKEN` | (Opcional en dev) Cobro de suscripción SaaS |
+| `PLATFORM_ADMIN_EMAILS` | Ops acomer: emails con acceso a `/platform` |
 
 ```bash
 bun run test       # unit tests (vitest)

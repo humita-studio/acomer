@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { getPaymentProvider } from './core/payment-factory';
 import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
 import type { PromoCanal } from '@/features/promociones/promociones';
-import { getSesionCajaAbiertaId } from '@/features/caja/sesionCaja';
+import { getSesionCajaAbiertaId } from '@/shared/caja/sesionCaja';
 import { pedirCuentaSchema } from './validation';
 import { withPublicTenant } from '@/shared/db/secure-wrapper';
 

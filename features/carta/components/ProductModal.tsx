@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Minus, Plus } from 'lucide-react';
 import type { Modificador, CartApi } from '../cart';
 import type { ProductoMenu } from '../types';
@@ -11,6 +12,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
 import { formatPeso } from '@/shared/lib/format';
 
 type ProductModalProps = {
@@ -75,9 +77,30 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
 
         {/* Contenido scrolleable */}
         <div className="flex-1 space-y-6 overflow-y-auto p-4">
+          {product.imagenUrl ? (
+            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted">
+              <Image
+                src={product.imagenUrl}
+                alt=""
+                fill
+                className="object-cover"
+                sizes="(max-width: 480px) 100vw, 420px"
+                unoptimized
+              />
+            </div>
+          ) : null}
           {product.descripcion && (
             <p className="text-muted-foreground">{product.descripcion}</p>
           )}
+          {(product.alergenos?.length ?? 0) > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {product.alergenos.map((a) => (
+                <Badge key={a} variant="outline" className="capitalize">
+                  {a}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
 
           {/* Variantes: elección única y obligatoria (precio fijo por opción) */}
           {tieneVariantes ? (

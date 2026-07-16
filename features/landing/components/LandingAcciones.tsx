@@ -19,8 +19,8 @@ import {
   type RedesLanding,
 } from '../landingConfig';
 import { formatPeso } from '@/shared/lib/format';
-import type { ZonaPoligono } from '@/features/pedidos-online/zonaMapa';
-import { ZonaEntregaMapaLazy } from '@/features/pedidos-online/components/ZonaEntregaMapaLazy';
+import type { ZonaPoligono } from '@/shared/maps/zonaMapa';
+import { ZonaEntregaMapaLazy } from '@/shared/maps/ZonaEntregaMapaLazy';
 
 // lucide-react ya no exporta íconos de marca (Instagram); lo dibujamos inline.
 function InstagramGlyph({ className }: { className?: string }) {

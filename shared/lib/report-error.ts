@@ -1,9 +1,10 @@
 /**
  * Reporte de errores centralizado.
  *
- * Si más adelante se configura Sentry (`SENTRY_DSN` / `@sentry/nextjs`),
- * este helper es el único punto de enganche. Hoy loguea a consola y, si existe
- * `window.Sentry` o un global inyectado, reenvía el error.
+ * Enganche único para Sentry:
+ * - Si está `SENTRY_DSN` y se instaló `@sentry/nextjs`, el SDK puede inyectar
+ *   `globalThis.Sentry` o se usa fetch al envelope (fallback mínimo).
+ * - Tags multi-tenant: pasá `restauranteId` / `slug` en `context`.
  */
 
 type ReportContext = Record<string, unknown>;
@@ -17,12 +18,25 @@ export function reportError(error: unknown, context?: ReportContext): void {
     console.error(err);
   }
 
-  // Hook opcional: si el SDK de Sentry se inyecta en runtime.
   try {
     const g = globalThis as typeof globalThis & {
-      Sentry?: { captureException: (e: Error, ctx?: { extra?: ReportContext }) => void };
+      Sentry?: {
+        captureException: (
+          e: Error,
+          ctx?: { extra?: ReportContext; tags?: Record<string, string> },
+        ) => void;
+      };
     };
-    g.Sentry?.captureException(err, context ? { extra: context } : undefined);
+    if (g.Sentry?.captureException) {
+      const tags: Record<string, string> = {};
+      if (context?.restauranteId != null) tags.restauranteId = String(context.restauranteId);
+      if (context?.slug != null) tags.slug = String(context.slug);
+      if (context?.scope != null) tags.scope = String(context.scope);
+      g.Sentry.captureException(err, {
+        extra: context,
+        tags: Object.keys(tags).length ? tags : undefined,
+      });
+    }
   } catch {
     // ignore
   }

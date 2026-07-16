@@ -95,6 +95,11 @@ export async function llamarMozoAction(tenantId: string, mesaIdentificador: stri
     if (!tenantId?.trim() || !mesaIdentificador?.trim()) {
       return { success: false, message: 'Faltan datos de la mesa' };
     }
+    const { rateLimit } = await import('@/shared/lib/rateLimit');
+    const { getClientIp } = await import('@/shared/lib/clientIp');
+    const ip = await getClientIp();
+    const rl = rateLimit(`llamar-mozo:${tenantId}:${ip}`, 12, 60_000);
+    if (!rl.ok) return { success: false, message: rl.message };
 
     const mesa = mesaIdentificador.trim();
     // 1) Persistir (si el mozo no está con el panel abierto, igual la ve al

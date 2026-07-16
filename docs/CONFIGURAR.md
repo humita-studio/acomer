@@ -19,6 +19,7 @@ Demo comercial: [VENTA-PILOTO.md](./VENTA-PILOTO.md)
 | Mercado Pago **de acomer** (billing) | No (trial igual anda) | Sí |
 | Cloudinary | Solo si subís fotos | No |
 | Migración billing `0026` | Sí si usás trial/planes | Sí |
+| Migración `0029` (fotos/alérgenos/auto-confirm) | Sí para menú con foto y auto-confirm reservas | No |
 
 ---
 
@@ -55,9 +56,24 @@ Cargalas en **Vercel → Settings → Environment Variables** (Production + Prev
 | `SUPABASE_SECRET_KEY` | Admin Auth, bypass RLS server | `sb_secret_…` o service role |
 | `NEXT_PUBLIC_APP_URL` | Callbacks de pago, preferencias MP | `https://acomer.com.ar` |
 | `NEXT_PUBLIC_ROOT_DOMAIN` | Multi-tenant (`proxy.ts`) | `acomer.com.ar` |
+| `PLATFORM_ADMIN_EMAILS` | Panel de plataforma (`/platform`): dueños de acomer | `vos@mail.com,ops@mail.com` |
+| `SENTRY_DSN` | (Opcional) Errores a Sentry si el SDK inyecta `globalThis.Sentry` | `https://…@….ingest.sentry.io/…` |
+| `NEXT_PUBLIC_CLOUDINARY_*` / `CLOUDINARY_*` | Fotos de local y **productos** | ver sección Cloudinary |
 
 En **local**, `NEXT_PUBLIC_ROOT_DOMAIN` puede ser `localhost:3000`.  
 Tenants de prueba: `http://demo.localhost:3000` (el browser resuelve `*.localhost`).
+
+### Panel de plataforma (ops acomer)
+
+Ruta: **`/platform`** (no confundir con `/admin` = panel del local).
+
+1. Creá un usuario en Supabase Auth (email/password) con el mail del operador.
+2. Agregá ese email a `PLATFORM_ADMIN_EMAILS` (coma-separado, case-insensitive) en Vercel y en `.env` local.
+3. Redeploy / reiniciá `bun run dev` para que tome el env.
+4. Login en `/login` → si el user **no** tiene perfil de local, cae en `/platform`; si también es owner de un local, entra a `/admin` y ve “Panel acomer” en el menú de usuario.
+
+Desde ahí: listar locales, marcar **exempt**, extender trial, cambiar plan/billing, activar/desactivar.  
+**No** hace falta fila en `perfiles_empleados` para operar la plataforma.
 
 ### Mercado Pago — cobros del **local** al comensal (OAuth)
 

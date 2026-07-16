@@ -22,6 +22,10 @@ export type ProductoMenu = {
   descripcion: string | null;
   // Precio para la tarjeta: el base, o el de la variante más barata si tiene variantes.
   precio: number;
+  /** URL de foto (Cloudinary); null si no hay. */
+  imagenUrl: string | null;
+  /** Tags de alérgenos para badges en carta. */
+  alergenos: string[];
   permiteAdicionales: boolean;
   modificadores: ModificadorMenu[];
   variantes: VarianteMenu[];

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import { Download } from 'lucide-react';
 import { formatPeso } from '@/shared/lib/format';
 import { useReporte } from '@/features/reportes/hooks/useReporte';
 import {
@@ -12,8 +13,10 @@ import {
   rangoTexto,
 } from '@/features/reportes/dateRange';
 import { DateRangePicker } from '@/features/reportes/components/DateRangePicker';
+import { reporteToCsv } from '@/features/reportes/exportCsv';
 import type { ReporteData } from '@/features/reportes/types';
 import { Card, CardContent } from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 
 // recharts se carga aparte (next/dynamic) para no incluirlo en el bundle
@@ -78,6 +81,17 @@ export function ReportesManager({
     setPreset(detectarPreset(d, h, hoy));
   }
 
+  function descargarCsv() {
+    const csv = reporteToCsv(reporte, desde, hasta);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte-${desde}_${hasta}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6">
       {/* Encabezado: título + rango de fechas */}
@@ -89,7 +103,13 @@ export function ReportesManager({
             {isFetching && <span className="ml-2 text-xs text-muted-foreground/70">· actualizando…</span>}
           </p>
         </div>
-        <DateRangePicker desde={desde} hasta={hasta} hoy={hoy} onApply={aplicarRango} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={descargarCsv}>
+            <Download className="size-4" aria-hidden />
+            Exportar CSV
+          </Button>
+          <DateRangePicker desde={desde} hasta={hasta} hoy={hoy} onApply={aplicarRango} />
+        </div>
       </div>
 
       {/* Presets de rango */}

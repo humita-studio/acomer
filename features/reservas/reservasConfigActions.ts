@@ -61,6 +61,7 @@ export async function obtenerReservasConfig(tenantId: string): Promise<ReservasC
     anticipacionMinMin: row.anticipacionMinMin ?? RESERVAS_CONFIG_DEFAULT.anticipacionMinMin,
     cupoCubiertosPorTurno: row.cupoCubiertosPorTurno ?? null,
     maxReservasPorDia: row.maxReservasPorDia ?? null,
+    autoConfirmarOnline: row.autoConfirmarOnline ?? RESERVAS_CONFIG_DEFAULT.autoConfirmarOnline,
   };
 }
 
@@ -129,6 +130,7 @@ export async function actualizarReservasConfigAction(datos: ReservasConfig) {
       anticipacionMinMin: anticipacion,
       cupoCubiertosPorTurno: cupoTurno,
       maxReservasPorDia: maxDia,
+      autoConfirmarOnline: !!datos.autoConfirmarOnline,
       updatedAt: new Date(),
     };
 
@@ -145,6 +147,7 @@ export async function actualizarReservasConfigAction(datos: ReservasConfig) {
             anticipacionMinMin: valores.anticipacionMinMin,
             cupoCubiertosPorTurno: valores.cupoCubiertosPorTurno,
             maxReservasPorDia: valores.maxReservasPorDia,
+            autoConfirmarOnline: valores.autoConfirmarOnline,
             updatedAt: valores.updatedAt,
           },
         })

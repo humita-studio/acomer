@@ -28,6 +28,7 @@ export type CrearProductoVars = {
   descripcion?: string;
   precio?: number;
   disponible?: boolean;
+  alergenos?: string[];
   adicionales?: { nombre: string; precioExtra: number }[];
   variantes?: { nombre: string; precio: number }[];
 };
@@ -51,6 +52,7 @@ export function useCrearProducto() {
         nombre: vars.nombre,
         descripcion: vars.descripcion || null,
         precio: vars.precio ?? null,
+        alergenos: vars.alergenos ?? [],
         permiteAdicionales: (vars.adicionales?.length ?? 0) > 0,
         activo: vars.disponible ?? true,
       };
@@ -76,6 +78,7 @@ export type EditarProductoVars = {
   nombre: string;
   descripcion?: string;
   categoriaId?: string;
+  alergenos?: string[];
 };
 
 export function useEditarProducto() {
@@ -88,6 +91,7 @@ export function useEditarProducto() {
         nombre: vars.nombre,
         descripcion: vars.descripcion,
         categoriaId: vars.categoriaId,
+        alergenos: vars.alergenos,
       });
       if (!res.success) throw new Error(res.message);
       return res;
@@ -104,6 +108,7 @@ export function useEditarProducto() {
                 nombre: vars.nombre,
                 descripcion: vars.descripcion || null,
                 categoriaId: vars.categoriaId ?? p.categoriaId,
+                alergenos: vars.alergenos ?? p.alergenos,
               }
             : p
         )
