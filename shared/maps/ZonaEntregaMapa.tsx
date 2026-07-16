@@ -619,6 +619,16 @@ export function ZonaEntregaMapa({
     if (drawing) redrawRubber(cursorRef.current);
   }, [ready, value, draft, drawing, pin, redraw, redrawRubber]);
 
+  // En pick: si el pin llega de afuera (GPS / geocode de dirección), centrar el mapa.
+  useEffect(() => {
+    if (!ready || mode !== 'pick' || !pin || !mapRef.current) return;
+    try {
+      mapRef.current.panTo([pin.lat, pin.lng], { animate: true, duration: 0.35 });
+    } catch {
+      /* ignore */
+    }
+  }, [ready, mode, pin?.lat, pin?.lng]);
+
   // Modal/sheet: re-encuadrar cuando el contenedor gana tamaño real (Leaflet 0×0).
   useEffect(() => {
     if (!ready || !mapRef.current) return;
