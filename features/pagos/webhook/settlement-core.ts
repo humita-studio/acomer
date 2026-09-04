@@ -13,6 +13,7 @@ export type TransaccionLite = {
   id: string;
   estado: string;
   monto: number | string;
+  descuento?: number | string | null;
 };
 
 export type TipoSesion = 'salon' | 'takeaway' | 'delivery' | string | null | undefined;
@@ -76,7 +77,17 @@ export function decideSettlement(opts: {
     return acc + (t.estado === 'Aprobado' ? num(t.monto) : 0);
   }, 0);
 
-  if (totalPagado + 1e-9 < totalPedidos) {
+  // Total de descuentos aplicados en las transacciones de la sesión
+  const totalDescuentos = opts.transacciones.reduce((acc, t) => {
+    if (t.id === opts.currentTxId) {
+      return acc + (opts.newStatus === 'Aprobado' ? num(t.descuento ?? 0) : 0);
+    }
+    return acc + (t.estado === 'Aprobado' ? num(t.descuento ?? 0) : 0);
+  }, 0);
+
+  const cubierto = totalPagado + totalDescuentos;
+
+  if (cubierto + 1e-9 < totalPedidos) {
     return {
       kind: 'partial',
       totalPedidos,

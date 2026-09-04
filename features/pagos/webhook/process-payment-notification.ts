@@ -92,6 +92,22 @@ export async function processPaymentNotification(opts: {
       };
     }
 
+    if (verification.status === 'Aprobado') {
+      const montoEsperado = Number(row.monto);
+      if (Math.abs(verification.monto - montoEsperado) > 0.05) {
+        console.error(
+          `[Webhook/pagos] Discrepancia de monto en tx ${row.id}: esperado ${montoEsperado}, verificado ${verification.monto}`
+        );
+        return {
+          result: {
+            ok: false,
+            httpStatus: 400,
+            error: 'Monto pagado no coincide con el total de la transacción',
+          },
+        };
+      }
+    }
+
     const metadata = mergePaymentMetadata(row.metadata, paymentId, verification.metadata);
 
     const [sesion] = await tx
@@ -114,6 +130,7 @@ export async function processPaymentNotification(opts: {
         id: transaccionesPago.id,
         estado: transaccionesPago.estado,
         monto: transaccionesPago.monto,
+        descuento: transaccionesPago.descuento,
       })
       .from(transaccionesPago)
       .where(eq(transaccionesPago.sesionMesaId, row.sesionMesaId));

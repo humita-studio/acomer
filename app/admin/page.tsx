@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/features/auth/session';
 import { getDashboardMetricsAction } from '@/features/dashboard/dashboardActions';
 import { getOnboardingStatusAction } from '@/features/dashboard/onboardingActions';
@@ -50,14 +51,17 @@ function DashboardSkeleton() {
 
 async function DashboardContent() {
   const session = await getCurrentSession();
+  if (!session) redirect('/login');
 
-  const [metrics, onboarding, headersList] = session
-    ? await Promise.all([
-        getDashboardMetricsAction(),
-        getOnboardingStatusAction(),
-        headers(),
-      ])
-    : [null, null, null];
+  if (session.role === 'cocina') redirect('/admin/cocina');
+  if (session.role === 'mozo') redirect('/admin/mesas');
+  if (session.role === 'cajero') redirect('/admin/caja');
+
+  const [metrics, onboarding, headersList] = await Promise.all([
+    getDashboardMetricsAction(),
+    getOnboardingStatusAction(),
+    headers(),
+  ]);
 
   const ahora = new Date();
   const horaBA = Number(

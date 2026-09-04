@@ -30,7 +30,7 @@ export function SelectorSubMesa({
           {opciones.map((o) => (
             <Link
               key={o.id}
-              href={`/mesa/${qrToken}?cuenta=${o.id}`}
+              href={`?cuenta=${o.id}`}
               className="flex flex-col items-center justify-center gap-1 border-2 border-border rounded-xl py-5 px-3 text-center hover:border-primary/40 hover:bg-accent/40 transition"
             >
               <span className="font-bold text-foreground">{o.identificador}</span>

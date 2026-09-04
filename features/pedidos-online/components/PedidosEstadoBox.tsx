@@ -13,12 +13,14 @@ export function PedidosEstadoBox({
   message,
   whatsapp,
   mostrarCarta = true,
+  tenantSlug,
 }: {
   variante: Variante;
   message?: string;
   /** Solo dígitos con código de país, ej. 54911… */
   whatsapp?: string;
   mostrarCarta?: boolean;
+  tenantSlug?: string;
 }) {
   const titulo =
     variante === 'offline'
@@ -62,7 +64,7 @@ export function PedidosEstadoBox({
         <div className="flex flex-col gap-2">
           {mostrarCarta && variante !== 'not_found' ? (
             <Button asChild className="w-full" size="lg">
-              <Link href="/carta">
+              <Link href={tenantSlug ? `/${tenantSlug}/carta` : '/carta'}>
                 <UtensilsCrossed className="size-4" aria-hidden />
                 Ver la carta
               </Link>

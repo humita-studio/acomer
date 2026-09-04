@@ -21,6 +21,7 @@ import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { PaymentMethodModal } from '@/features/pagos/components/PaymentMethodModal';
+import { CalificarExperienciaWidget } from '@/features/resenas/components/CalificarExperienciaWidget';
 import type { MetodoPago } from '@/features/pagos/get-metodos-pago';
 import type { SeguimientoPedido as SeguimientoData } from '../obtenerSeguimiento';
 
@@ -31,6 +32,7 @@ type Props = {
   pagado: boolean;
   permiteAgregar: boolean;
   autoAbrirPago?: boolean;
+  tenantSlug?: string;
 };
 
 const PASOS_DELIVERY = ['Recibido', 'EnPreparacion', 'Listo', 'EnCamino', 'Entregado'] as const;
@@ -85,6 +87,7 @@ export function SeguimientoPedido({
   pagado,
   permiteAgregar,
   autoAbrirPago = false,
+  tenantSlug,
 }: Props) {
   const router = useRouter();
   const { sesionMesaId, tipo, estadoEntrega } = pedido;
@@ -114,10 +117,12 @@ export function SeguimientoPedido({
       })
     : null;
 
+  const basePath = tenantSlug ? `/${tenantSlug}/pedir` : '/pedir';
+
   const shareUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/pedir?sesion=${sesionMesaId}`
-      : `/pedir?sesion=${sesionMesaId}`;
+      ? `${window.location.origin}${basePath}?sesion=${sesionMesaId}`
+      : `${basePath}?sesion=${sesionMesaId}`;
 
   const compartir = async () => {
     const text = `Seguí mi pedido: ${shareUrl}`;
@@ -208,7 +213,7 @@ export function SeguimientoPedido({
             ) : null}
             {permiteAgregar ? (
               <Button asChild variant="outline" size="lg" className="h-12 w-full">
-                <Link href={`/pedir?sesion=${sesionMesaId}&agregar=1`}>
+                <Link href={`${basePath}?sesion=${sesionMesaId}&agregar=1`}>
                   <Plus className="size-4" aria-hidden />
                   Agregar más productos
                 </Link>
@@ -379,8 +384,15 @@ export function SeguimientoPedido({
           ) : null}
         </div>
 
+        {estadoEntrega === 'Entregado' && tenantSlug ? (
+          <CalificarExperienciaWidget
+            slug={tenantSlug}
+            origen={tipo === 'delivery' ? 'delivery' : 'mostrador'}
+          />
+        ) : null}
+
         <Link
-          href="/pedir"
+          href={basePath}
           className="block py-2 text-center text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           Hacer otro pedido

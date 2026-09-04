@@ -55,6 +55,7 @@ import {
 } from '@/features/pedidos-online/pedidoExternoActions';
 import type { DeliveryConfig } from '@/features/pedidos-online/deliveryConfig';
 import { DeliveryConfigSheet } from './DeliveryConfigSheet';
+import { TicketPrintButton } from '@/features/pagos/components/TicketPrintButton';
 
 type OrdenItem = {
   nombre: string;
@@ -239,34 +240,56 @@ function OrdenCardBody({
           <Clock className="size-3" />
           {tiempoRelativo(orden.createdAt, now)}
         </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Acciones del pedido"
-              // Evita que el sensor de arrastre tome el click sobre el menú.
-              onPointerDown={(e) => e.stopPropagation()}
-              className="-mr-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-44">
-            {next && (
-              <>
-                <DropdownMenuItem onClick={() => onAdvance(orden.sesionMesaId, next)}>
-                  <ArrowRight className="size-4" />
-                  Marcar como {LABEL[next].toLowerCase()}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
-            <DropdownMenuItem variant="destructive" onClick={() => onCancel(orden)}>
-              <Ban className="size-4" />
-              Cancelar pedido
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1">
+          <span onPointerDown={(e) => e.stopPropagation()}>
+            <TicketPrintButton
+              ticket={{
+                titulo: `${orden.tipo === 'delivery' ? 'DELIVERY' : 'RETIRO'} #${orden.sesionMesaId.slice(0, 6).toUpperCase()}`,
+                subtitulo: `${orden.nombreContacto} · ${orden.telefono}${orden.direccion ? `\nDir: ${orden.direccion}` : ''}`,
+                lineas: orden.items.map((it) => ({
+                  nombre: it.nombre + (it.modificadores.length ? ` (${it.modificadores.join(', ')})` : ''),
+                  cantidad: it.cantidad,
+                  subtotal: 0,
+                })),
+                total: orden.total,
+                metodo: orden.estadoPago === 'Pagado' ? 'Pagado online' : 'Cobrar al entregar',
+                fecha: orden.createdAt,
+                footer: orden.direccion ? `Entrega: ${orden.direccion}` : 'Retiro en mostrador',
+              }}
+              size="icon"
+              variant="ghost"
+              label=""
+            />
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Acciones del pedido"
+                // Evita que el sensor de arrastre tome el click sobre el menú.
+                onPointerDown={(e) => e.stopPropagation()}
+                className="-mr-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-44">
+              {next && (
+                <>
+                  <DropdownMenuItem onClick={() => onAdvance(orden.sesionMesaId, next)}>
+                    <ArrowRight className="size-4" />
+                    Marcar como {LABEL[next].toLowerCase()}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem variant="destructive" onClick={() => onCancel(orden)}>
+                <Ban className="size-4" />
+                Cancelar pedido
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   );

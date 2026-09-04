@@ -19,6 +19,7 @@ import {
   Users,
   Wallet,
   Building2,
+  Star,
   type LucideIcon,
 } from 'lucide-react';
 import { canAccessSection, type RoleType } from '@/features/authorization/roles';
@@ -74,7 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
     links: [
       { href: '/admin/cocina', label: 'Cocina', section: 'kitchen', icon: ChefHat },
       { href: '/admin/caja', label: 'Caja', section: 'cashier', icon: Wallet },
-      { href: '/admin/cobros', label: 'Cobros', section: 'cashier', icon: Banknote },
+      { href: '/admin/cobros', label: 'Cobros', section: 'cobros', icon: Banknote },
       { href: '/admin/pedidos-online', label: 'Pedidos online', section: 'delivery', icon: Bike },
       { href: '/admin/reservas', label: 'Reservas', section: 'reservas', icon: CalendarDays },
     ],
@@ -83,6 +84,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Gestión',
     links: [
       { href: '/admin/reportes', label: 'Reportes', section: 'reports', icon: BarChart3 },
+      { href: '/admin/resenas', label: 'Reseñas', section: 'resenas', icon: Star },
       { href: '/admin/staff', label: 'Empleados', section: 'staff', icon: Users },
       { href: '/admin/promociones', label: 'Promociones', section: 'menu', icon: TicketPercent },
       { href: '/admin/billing', label: 'Plan y facturación', section: 'billing', icon: CreditCard },

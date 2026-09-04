@@ -31,10 +31,12 @@ export function CartaPublica({
   nombre,
   categorias,
   productos,
+  tenantSlug,
 }: {
   nombre: string;
   categorias: CategoriaMenu[];
   productos: ProductoMenu[];
+  tenantSlug?: string;
 }) {
   const [busqueda, setBusqueda] = useState('');
   // Primera categoría abierta para que la carta no se vea vacía.
@@ -76,7 +78,7 @@ export function CartaPublica({
       <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-lg items-center gap-3 px-3">
           <Link
-            href="/"
+            href={tenantSlug ? `/${tenantSlug}` : '/'}
             aria-label="Volver"
             className="flex size-9 items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground touch-manipulation"
           >

@@ -71,7 +71,7 @@ export function MenuExterno({
     if (metodosPago.length > 0) {
       setSesionPago(sesionId);
     } else {
-      router.push(`/pedir?sesion=${sesionId}`);
+      router.push(`/${tenantSlug}/pedir?sesion=${sesionId}`);
     }
   };
 
@@ -96,7 +96,7 @@ export function MenuExterno({
   const handleCerrarPago = () => {
     const sesionId = sesionPago;
     setSesionPago(null);
-    if (sesionId) router.push(`/pedir?sesion=${sesionId}`);
+    if (sesionId) router.push(`/${tenantSlug}/pedir?sesion=${sesionId}`);
   };
 
   // Las modalidades online son canales de promo válidos (takeaway/delivery). El

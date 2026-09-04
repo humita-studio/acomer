@@ -13,7 +13,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { ChefHat, Clock, GripVertical, Loader2 } from 'lucide-react';
+import { ChefHat, Clock, GripVertical, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { formatHora, formatPeso } from '@/shared/lib/format';
@@ -22,6 +22,7 @@ import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
+import { TicketPrintButton } from '@/features/pagos/components/TicketPrintButton';
 import {
   avanzarPedidoCocinaAction,
   getHistorialCocinaHoyAction,
@@ -34,24 +35,40 @@ import {
   type PedidoCocina,
 } from '@/features/cocina/types';
 
-/** Beep corto al llegar un pedido nuevo (mismo patrón que pedidos online). */
+let sharedAudioCtx: AudioContext | null = null;
+
+function getOrCreateAudioContext(): AudioContext | null {
+  try {
+    if (!sharedAudioCtx) {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctx) sharedAudioCtx = new Ctx();
+    }
+    if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+      void sharedAudioCtx.resume();
+    }
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
+/** Beep de notificación al llegar un pedido nuevo a la comanda. */
 function beepNuevoPedido() {
   try {
-    const Ctx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 880;
-    gain.gain.value = 0.08;
+    gain.gain.value = 0.12;
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
-    osc.stop(ctx.currentTime + 0.25);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.3);
   } catch {
     // autoplay / permisos
   }
@@ -186,7 +203,7 @@ function PedidoCardContent({
                 {it.cantidad}× {it.nombre}
               </span>
               {it.modificadores.length > 0 && (
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-0.5 inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
                   {it.modificadores.join(', ')}
                 </p>
               )}
@@ -194,20 +211,38 @@ function PedidoCardContent({
           ))}
         </ul>
         {pedido.notas && (
-          <p className="rounded-md bg-muted/60 px-2 py-1.5 text-xs italic text-muted-foreground">
-            {pedido.notas}
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-amber-950 dark:text-amber-200">
+            ⚠️ Nota: {pedido.notas}
           </p>
         )}
-        {next && onAdvance && (
-          <Button
-            className="w-full"
+        <div className="flex items-center gap-2">
+          {next && onAdvance && (
+            <Button
+              className="flex-1 h-12 text-sm font-bold shadow-sm active:scale-[0.98] transition-transform"
+              disabled={busy}
+              onClick={() => onAdvance(pedido.id, next)}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : labelAccion(pedido.estado)}
+            </Button>
+          )}
+          <TicketPrintButton
+            ticket={{
+              titulo: pedido.etiquetaOrigen,
+              subtitulo: pedido.notas || undefined,
+              lineas: pedido.items.map((it) => ({
+                nombre: it.nombre + (it.modificadores.length ? ` (${it.modificadores.join(', ')})` : ''),
+                cantidad: it.cantidad,
+                subtotal: 0,
+              })),
+              total: pedido.total,
+              fecha: pedido.createdAt,
+              footer: 'Comanda de Cocina',
+            }}
+            variant="outline"
             size="sm"
-            disabled={busy}
-            onClick={() => onAdvance(pedido.id, next)}
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : labelAccion(pedido.estado)}
-          </Button>
-        )}
+            label="Imprimir"
+          />
+        </div>
       </CardContent>
     </Card>
   );
@@ -273,7 +308,7 @@ function BoardColumn({
     <section
       ref={setNodeRef}
       className={cn(
-        'flex min-h-0 min-w-[280px] flex-1 flex-col gap-3 rounded-xl bg-muted/50 p-3 transition-colors',
+        'flex min-h-0 min-w-[260px] sm:min-w-[280px] flex-1 shrink-0 md:shrink flex-col gap-3 rounded-xl bg-muted/50 p-3 transition-colors snap-center md:snap-align-none',
         resaltar && 'bg-primary/5 ring-2 ring-inset ring-primary/50',
         isOver && activePedido && !esDestinoValido(activePedido, estado) && 'opacity-60',
       )}
@@ -380,6 +415,18 @@ export function CocinaManager({
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const [activePedido, setActivePedido] = useState<PedidoCocina | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [audioHabilitado, setAudioHabilitado] = useState(false);
+
+  const toggleAudio = () => {
+    if (!audioHabilitado) {
+      beepNuevoPedido();
+      setAudioHabilitado(true);
+      toast.success('Sonido de cocina activado');
+    } else {
+      setAudioHabilitado(false);
+      toast.info('Sonido silenciado');
+    }
+  };
 
   /** Pedidos con mutación en vuelo: no pisar su estado optimista con un refresh. */
   const inflightRef = useRef<Map<string, PedidoCocina[]>>(new Map());
@@ -592,14 +639,35 @@ export function CocinaManager({
                 : `${totalActivos} pedido${totalActivos === 1 ? '' : 's'} de hoy · arrastrá o usá el botón`}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void refresh()}
-          disabled={refreshing || (tab === 'activos' && pendingIds.size > 0)}
-        >
-          {refreshing ? <Loader2 className="size-4 animate-spin" /> : 'Actualizar'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={audioHabilitado ? 'outline' : 'secondary'}
+            size="sm"
+            onClick={toggleAudio}
+            className={cn(!audioHabilitado && 'border-warning/50 bg-warning/10 text-warning')}
+          >
+            {audioHabilitado ? (
+              <>
+                <Volume2 className="mr-1.5 size-4 text-success" />
+                Sonido activo
+              </>
+            ) : (
+              <>
+                <VolumeX className="mr-1.5 size-4 text-warning" />
+                Activar sonido
+              </>
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void refresh()}
+            disabled={refreshing || (tab === 'activos' && pendingIds.size > 0)}
+          >
+            {refreshing ? <Loader2 className="size-4 animate-spin" /> : 'Actualizar'}
+          </Button>
+        </div>
       </div>
 
       <Tabs
@@ -626,7 +694,7 @@ export function CocinaManager({
             onDragEnd={handleDragEnd}
             onDragCancel={() => setActivePedido(null)}
           >
-            <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto">
+            <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
               {COLUMNAS_KDS.map((col) => {
                 const lista = porColumna.get(col.estado) ?? [];
                 return (

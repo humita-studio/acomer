@@ -163,11 +163,33 @@ export function PasoCobrar({
               <label className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Vuelto
               </label>
-              <div className="flex h-9 items-center rounded-3xl bg-success-subtle px-3 font-semibold tabular-nums text-success-foreground">
+              <div className="flex h-9 items-center rounded-3xl border border-emerald-500/30 bg-emerald-500/10 px-3 font-bold tabular-nums text-emerald-800 dark:text-emerald-300">
                 {formatPeso(vuelto)}
               </div>
             </div>
           </div>
+
+          {/* Atajos rápidos de billetes comunes */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setMontoRecibido(String(total))}
+              className="rounded-lg border bg-primary/10 border-primary/30 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 active:scale-95 transition-all cursor-pointer"
+            >
+              Exacto ({formatPeso(total)})
+            </button>
+            {[2000, 5000, 10000, 20000].map((billete) => (
+              <button
+                key={billete}
+                type="button"
+                onClick={() => setMontoRecibido(String(billete))}
+                className="rounded-lg border bg-muted/60 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary hover:bg-accent/40 active:scale-95 transition-all cursor-pointer"
+              >
+                {formatPeso(billete)}
+              </button>
+            ))}
+          </div>
+
           {faltante ? (
             <p className="text-xs font-medium text-destructive">
               Falta {formatPeso(total - recibidoNum)} para cubrir el total.

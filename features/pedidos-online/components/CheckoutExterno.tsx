@@ -314,7 +314,7 @@ export function CheckoutExterno({
     >
       <SheetContent
         side="bottom"
-        className="mx-auto flex max-h-[92vh] flex-col gap-0 bg-background p-0 sm:max-w-md sm:rounded-t-2xl"
+        className="mx-auto flex max-h-[min(92dvh,92vh)] flex-col gap-0 bg-background p-0 sm:max-w-md sm:rounded-t-2xl"
       >
         <SheetHeader className="border-b p-5 text-left">
           <SheetTitle className="text-lg">Finalizá tu pedido</SheetTitle>
@@ -507,7 +507,7 @@ export function CheckoutExterno({
             ) : null}
           </div>
 
-          <div className="space-y-3 border-t bg-muted/40 p-5">
+          <div className="space-y-3 border-t bg-muted/40 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
             <div className="space-y-1 text-sm">
               {descuento > 0 || envio > 0 ? (
                 <>

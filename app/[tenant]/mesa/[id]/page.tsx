@@ -42,7 +42,13 @@ export default async function ComandaPage({
   ) {
     const ticketResult = await obtenerTicketAction(tx);
     if (ticketResult.success && ticketResult.data) {
-      return <ResumenPago ticket={ticketResult.data} pagoState={pagoState} />;
+      return (
+        <ResumenPago
+          ticket={ticketResult.data}
+          pagoState={pagoState}
+          tenantSlug={tenant}
+        />
+      );
     }
     // tx inválida o no accesible: mensaje claro en vez de caer a la carta mudamente
     if (pagoState === 'error') {

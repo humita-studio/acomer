@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/shared/db';
-import { itemsBorradorMesa, transaccionesPago } from '@/shared/db/schema';
+import { itemsBorradorMesa, sesionesMesa, transaccionesPago } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { withPublicTenant } from '@/shared/db/secure-wrapper';
@@ -14,9 +14,9 @@ type ModificadorSnapshot = {
 };
 
 /**
- * Reads items directly from the items_borrador_mesa table for the given session,
- * creates the pedido + comanda_items + modifiers, and then clears the borrador.
- * All within a single transaction for consistency.
+ * Reads and clears items directly from the items_borrador_mesa table atomically,
+ * creates the pedido + comanda_items + modifiers, and notifies both staff and table.
+ * All within a single transaction for concurrency safety.
  */
 export async function enviarPedidoAction(
   tenantId: string, 
@@ -24,18 +24,36 @@ export async function enviarPedidoAction(
   notas?: string
 ) {
   try {
-    // 1. Read the current borrador items from the DB
-    const borradorItems = await db
-      .select()
-      .from(itemsBorradorMesa)
-      .where(eq(itemsBorradorMesa.sesionMesaId, sesionMesaId));
-
-    if (!borradorItems.length) {
-      return { success: false, message: 'El carrito está vacío' };
-    }
-
-    // 2. Process within a transaction (RLS activo: rol anon + tenant del subdominio)
     const resultado = await withPublicTenant(tenantId, async (tx) => {
+      // 1. Validar que la sesión pertenece a este restaurante y está activa
+      const [sesion] = await tx
+        .select({ id: sesionesMesa.id })
+        .from(sesionesMesa)
+        .where(
+          and(
+            eq(sesionesMesa.id, sesionMesaId),
+            eq(sesionesMesa.restauranteId, tenantId),
+            eq(sesionesMesa.estado, 'Activa'),
+          )
+        )
+        .limit(1);
+
+      if (!sesion) {
+        throw new Error('La mesa no tiene una sesión activa');
+      }
+
+      // 2. Consumir atómicamente el borrador (DELETE ... RETURNING)
+      // Si dos comensales confirman en paralelo, solo uno obtiene los ítems
+      const borradorItems = await tx
+        .delete(itemsBorradorMesa)
+        .where(eq(itemsBorradorMesa.sesionMesaId, sesionMesaId))
+        .returning();
+
+      if (!borradorItems.length) {
+        throw new Error('El carrito está vacío o el pedido ya fue enviado');
+      }
+
+      // 3. Crear pedido con snapshots de precios desde la DB
       const { pedidoId, totalPedido } = await crearPedidoConItems(tx, {
         tenantId,
         sesionMesaId,
@@ -47,10 +65,6 @@ export async function enviarPedidoAction(
           modificadores: ((item.modificadores as ModificadorSnapshot[]) || []).map((m) => ({ id: m.id })),
         })),
       });
-
-      // Clear the borrador (this triggers Realtime → all devices see empty cart)
-      await tx.delete(itemsBorradorMesa)
-        .where(eq(itemsBorradorMesa.sesionMesaId, sesionMesaId));
 
       // If there is any pending payment transaction, update its amount or cancel if it's digital
       const pendingTxs = await tx.select({ 
@@ -96,6 +110,15 @@ export async function enviarPedidoAction(
         event: 'nuevo_pedido',
         payload: { sesionMesaId, pedidoId: resultado.pedidoId },
       });
+
+      // Notificar a todos los comensales de la mesa para que vean sus pedidos confirmados
+      const mesaChannel = supabase.channel(`mesa_${sesionMesaId}`);
+      await mesaChannel.send({
+        type: 'broadcast',
+        event: 'pedido_confirmado',
+        payload: { pedidoId: resultado.pedidoId },
+      });
+
       if (resultado.updatedPendingTx) {
         await channel.send({
           type: 'broadcast',

@@ -700,8 +700,22 @@ export function usePlanoAcciones({
     if (!ok) return;
     setLiberandoId(mesa.id);
     patchOcupacion(mesa.id, false);
-    setSeleccion(null);
-    const res = await liberarMesaAction(mesa.id);
+    let res = await liberarMesaAction(mesa.id);
+    if (!res.success && (res as { requiereConfirmacion?: boolean }).requiereConfirmacion) {
+      const forzarOk = await confirm({
+        title: 'Atención: Saldo pendiente',
+        description: res.message,
+        confirmLabel: 'Liberar de todas formas',
+        variant: 'destructive',
+      });
+      if (forzarOk) {
+        res = await liberarMesaAction(mesa.id, true);
+      } else {
+        setLiberandoId(null);
+        patchOcupacion(mesa.id, true);
+        return;
+      }
+    }
     setLiberandoId(null);
     if (res.success) {
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });

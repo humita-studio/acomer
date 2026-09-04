@@ -39,25 +39,29 @@ function preprocessMoneyRaw(raw: string): string {
     return s.replace(/,/g, '').replace('.', ',');
   }
 
-  const dots = (s.match(/\./g) || []).length;
-  if (dots > 1) {
-    // "1.234.567" → miles
-    return s.replace(/\./g, '');
+  // Si tiene coma, la coma es el separador decimal (es-AR). Los puntos son miles.
+  if (s.includes(',')) {
+    const parts = s.split(',');
+    const intPart = parts[0].replace(/\./g, '');
+    const decPart = parts.slice(1).join('').replace(/[^\d]/g, '');
+    return `${intPart},${decPart}`;
   }
 
-  const commas = (s.match(/,/g) || []).length;
-  if (commas > 1) {
-    return s.replace(/,/g, '');
+  // Si termina con punto (ej. el usuario tipeó '.' en el numpad para indicar decimal)
+  if (s.endsWith('.')) {
+    return `${s.slice(0, -1).replace(/\./g, '')},`;
   }
 
-  // Un solo punto: "1.500" (miles) vs "1.5" / "1.50" (decimal)
-  const m = s.match(/^(\d+)\.(\d+)$/);
-  if (m) {
-    if (m[2].length === 3) return m[1] + m[2];
+  // Pegado en formato US explícito con punto decimal, ej. "0.99" o "1500.50"
+  // (empieza con 0 antes del punto, o 4+ dígitos antes del punto con 1-2 decimales)
+  const m = s.match(/^(\d+)\.(\d{1,2})$/);
+  if (m && (m[1] === '0' || m[1].length >= 4)) {
     return `${m[1]},${m[2]}`;
   }
 
-  return s;
+  // En cualquier otro caso sin coma, los puntos son separadores de miles
+  // generados automáticamente al tipear o borrar dígitos. Se eliminan.
+  return s.replace(/\./g, '');
 }
 
 export type MoneyTypingResult = {

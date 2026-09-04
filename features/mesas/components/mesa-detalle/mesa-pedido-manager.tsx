@@ -196,7 +196,21 @@ export function MesaPedidoManager({
     if (!ok) return;
     setIsLiberating(true);
     setError(null);
-    const res = await liberarMesaAction(mesaId);
+    let res = await liberarMesaAction(mesaId);
+    if (!res.success && (res as { requiereConfirmacion?: boolean }).requiereConfirmacion) {
+      const forzarOk = await confirm({
+        title: 'Atención: Saldo pendiente',
+        description: res.message,
+        confirmLabel: 'Liberar de todas formas',
+        variant: 'destructive',
+      });
+      if (forzarOk) {
+        res = await liberarMesaAction(mesaId, true);
+      } else {
+        setIsLiberating(false);
+        return;
+      }
+    }
     setIsLiberating(false);
     if (res.success) {
       toast.success('Mesa liberada');

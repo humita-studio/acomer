@@ -35,8 +35,20 @@ export async function obtenerTicketMesa(
   for (const pedido of pedidosMesa) {
     for (const item of pedido.items) {
       const mods = item.modificadores ?? [];
-      const modKey = JSON.stringify(mods);
-      const key = `${item.productoId}-${modKey}`;
+      const modKey = JSON.stringify(
+        mods.map((m) => ({
+          nombre: m.nombreModificadorSnapshot,
+          precio: m.precioExtraSnapshot,
+        }))
+      );
+
+      // Si es ítem libre (productoId null), agrupar por nombre snapshot y precio base
+      // Si es producto normal, agrupar por productoId, variante y modificadores
+      const baseKey = item.productoId
+        ? `${item.productoId}_${item.varianteId ?? 'base'}_${item.nombreProductoSnapshot}`
+        : `libre_${item.nombreProductoSnapshot}_${item.precioUnitarioSnapshot}`;
+
+      const key = `${baseKey}-${modKey}`;
       const existing = map.get(key);
 
       const precioTotalMods = mods.reduce(

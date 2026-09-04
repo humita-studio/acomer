@@ -21,6 +21,7 @@ import { modosPermitidos, puedeAgregar } from '@/features/pedidos-online/deliver
 import { PedidosEstadoBox } from '@/features/pedidos-online/components/PedidosEstadoBox';
 import { obtenerPromocionesPublicas } from '@/features/promociones/promosPublicasActions';
 import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
+import { estaAbierto, ahoraLocal, horarioDeHoy } from '@/features/landing/landingConfig';
 
 export const metadata: Metadata = {
   title: 'Pedir online',
@@ -45,7 +46,7 @@ export default async function PedirPage({
 
   const tenantId = await getTenantBySlug(tenant);
   if (!tenantId) {
-    return <PedidosEstadoBox variante="not_found" />;
+    return <PedidosEstadoBox variante="not_found" tenantSlug={tenant} />;
   }
 
   // Config del local: qué modalidades ofrece y hasta cuándo se puede agregar.
@@ -83,11 +84,18 @@ export default async function PedirPage({
               metodosPago={metodosPago}
               pagado={seg.pagado || pagoState === 'exito'}
               permiteAgregar={puedeAgregar(config, seg.estadoEntrega)}
+              tenantSlug={tenant}
             />
           );
         }
       }
-      return <ResumenPago ticket={d} pagoState={pagoState} />;
+      return (
+        <ResumenPago
+          ticket={d}
+          pagoState={pagoState}
+          tenantSlug={tenant}
+        />
+      );
     }
   }
 
@@ -95,8 +103,21 @@ export default async function PedirPage({
   // sólo en el checkout se crea sesión + datos de entrega + pedido.
   const sesionId = typeof sp?.sesion === 'string' ? sp.sesion : undefined;
   if (!sesionId) {
-    if (!config.activo) {
-      return <PedidosEstadoBox variante="offline" whatsapp={whatsapp} />;
+    const tieneHorarios = landing.horarios?.some((h) => !h.cerrado && h.turnos && h.turnos.length > 0);
+    const cerrado = tieneHorarios && !estaAbierto(landing.horarios, ahoraLocal());
+
+    if (!config.activo || cerrado) {
+      const msg = !config.activo
+        ? undefined
+        : `En este momento el local se encuentra cerrado. Horario de hoy: ${horarioDeHoy(landing.horarios, ahoraLocal())}.`;
+      return (
+        <PedidosEstadoBox
+          variante="offline"
+          message={msg}
+          whatsapp={whatsapp}
+          tenantSlug={tenant}
+        />
+      );
     }
     // Catálogo + promos + métodos de pago: el flujo "menú primero" los necesita
     // acá (los métodos, para abrir el cobro apenas se confirma el pedido sin
@@ -147,6 +168,7 @@ export default async function PedirPage({
         variante="error"
         message="No encontramos ese pedido. Revisá el link o pedile al local el seguimiento."
         whatsapp={whatsapp}
+        tenantSlug={tenant}
       />
     );
   }
@@ -171,6 +193,7 @@ export default async function PedirPage({
           pagado={seg.pagado}
           permiteAgregar={permiteAgregar}
           autoAbrirPago={sp?.pagar === '1'}
+          tenantSlug={tenant}
         />
       );
     }
@@ -179,6 +202,7 @@ export default async function PedirPage({
         variante="error"
         message="Este pedido ya fue cerrado. Si necesitás ayuda, escribinos."
         whatsapp={whatsapp}
+        tenantSlug={tenant}
       />
     );
   }

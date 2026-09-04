@@ -70,7 +70,7 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+      <DialogContent className="flex max-h-[min(90dvh,90vh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
         <DialogHeader className="border-b p-4 text-left">
           <DialogTitle className="text-xl">{product.nombre}</DialogTitle>
         </DialogHeader>
@@ -188,7 +188,7 @@ export function ProductModal({ product, cart, onClose }: ProductModalProps) {
         </div>
 
         {/* Footer / Agregar */}
-        <div className="border-t bg-muted/40 p-4">
+        <div className="border-t bg-muted/40 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button
             onClick={handleAddToCart}
             size="lg"

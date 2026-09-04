@@ -198,7 +198,8 @@ function CajaAbierta({ caja, tenantId }: { caja: CajaActual; tenantId: string })
                   id="monto-mov"
                   value={montoMov}
                   onValueChange={setMontoMov}
-                  placeholder="0,00"
+                  placeholder="0"
+                  allowDecimals={false}
                   required
                 />
               </div>
@@ -280,7 +281,7 @@ function AbrirCajaCard({ tenantId }: { tenantId: string }) {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            const n = Number(montoInicial);
+            const n = Number(montoInicial === '' ? 0 : montoInicial);
             if (!Number.isFinite(n) || n < 0) {
               toast.error('Ingresá un monto inicial válido (0 o más).');
               return;
@@ -297,8 +298,8 @@ function AbrirCajaCard({ tenantId }: { tenantId: string }) {
               id="monto-inicial"
               value={montoInicial}
               onValueChange={setMontoInicial}
-              placeholder="0,00"
-              required
+              placeholder="0"
+              allowDecimals={false}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
@@ -380,7 +381,8 @@ function CerrarCajaDialog({
               id="monto-contado"
               value={montoContado}
               onValueChange={setMontoContado}
-              placeholder="0,00"
+              placeholder="0"
+              allowDecimals={false}
               className="text-base font-semibold"
               autoFocus
             />

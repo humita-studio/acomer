@@ -155,7 +155,14 @@ export async function resolverLineasBulk(
         ? db
             .select({ id: productos.id, nombre: productos.nombre })
             .from(productos)
-            .where(and(eq(productos.restauranteId, tenantId), inArray(productos.id, productoIds)))
+            .where(
+              and(
+                eq(productos.restauranteId, tenantId),
+                inArray(productos.id, productoIds),
+                eq(productos.activo, true),
+                isNull(productos.deletedAt),
+              ),
+            )
         : Promise.resolve([] as { id: string; nombre: string }[]),
       productoIds.length
         ? db
@@ -188,6 +195,7 @@ export async function resolverLineasBulk(
               and(
                 eq(productoVariantes.restauranteId, tenantId),
                 inArray(productoVariantes.id, varianteIds),
+                eq(productoVariantes.activo, true),
                 isNull(productoVariantes.deletedAt),
               ),
             )
@@ -207,7 +215,14 @@ export async function resolverLineasBulk(
         ? db
             .select({ id: modificadores.id, nombre: modificadores.nombre })
             .from(modificadores)
-            .where(and(eq(modificadores.restauranteId, tenantId), inArray(modificadores.id, modIds)))
+            .where(
+              and(
+                eq(modificadores.restauranteId, tenantId),
+                inArray(modificadores.id, modIds),
+                eq(modificadores.disponible, true),
+                isNull(modificadores.deletedAt),
+              ),
+            )
         : Promise.resolve([] as { id: string; nombre: string }[]),
       modIds.length
         ? db
@@ -236,7 +251,7 @@ export async function resolverLineasBulk(
 
   return items.map((item) => {
     const prodNombre = nombrePorProducto.get(item.productoId);
-    if (prodNombre === undefined) throw new Error(`Producto no encontrado: ${item.productoId}`);
+    if (prodNombre === undefined) throw new Error('Un producto de tu pedido no está disponible en este momento');
 
     let varianteId: string | null = null;
     let nombreSnapshot = prodNombre;
@@ -245,13 +260,13 @@ export async function resolverLineasBulk(
     if (item.varianteId) {
       const variante = variantePorId.get(item.varianteId);
       if (!variante || variante.productoId !== item.productoId) {
-        throw new Error(`Variante no encontrada para el producto: ${item.productoId}`);
+        throw new Error(`La opción seleccionada para "${prodNombre}" ya no está disponible`);
       }
       varianteId = item.varianteId;
       nombreSnapshot = `${prodNombre} ${variante.nombre}`;
       precio = precioPorVariante.get(item.varianteId) ?? 0;
     } else if (productosConVariantes.has(item.productoId)) {
-      throw new Error(`El producto requiere elegir una variante: ${item.productoId}`);
+      throw new Error(`El producto "${prodNombre}" requiere elegir una opción`);
     }
 
     const mods = (item.modificadores ?? [])

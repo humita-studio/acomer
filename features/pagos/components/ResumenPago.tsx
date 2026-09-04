@@ -12,12 +12,15 @@ import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
+import { CalificarExperienciaWidget } from '@/features/resenas/components/CalificarExperienciaWidget';
 import type { TicketData } from '../obtener-ticket-action';
 
 type ResumenPagoProps = {
   ticket: TicketData;
   /** Estado forzado desde la URL (ej. retorno failure de MP). */
   pagoState?: string;
+  /** Slug del restaurante para calificación inteligente */
+  tenantSlug?: string;
 };
 
 function metodoLabel(proveedor: string) {
@@ -72,8 +75,8 @@ function resolveTone(
 }
 
 const TONE_HEADER: Record<Tone, string> = {
-  success: 'bg-success text-success-foreground',
-  pending: 'bg-warning text-warning-foreground',
+  success: 'bg-emerald-600 text-white dark:bg-emerald-700',
+  pending: 'bg-amber-500 text-slate-950 font-medium dark:bg-amber-600 dark:text-slate-950',
   error: 'bg-destructive text-destructive-foreground',
   neutral: 'bg-foreground text-background',
 };
@@ -82,7 +85,7 @@ const TONE_HEADER: Record<Tone, string> = {
  * Pantalla post-pago del comensal (mesa u online).
  * Escucha cambios de la tx en realtime (efectivo/tarjeta o webhook MP).
  */
-export function ResumenPago({ ticket, pagoState }: ResumenPagoProps) {
+export function ResumenPago({ ticket, pagoState, tenantSlug }: ResumenPagoProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { tone, titulo, subtitulo } = resolveTone(ticket.transaccion.estado, pagoState);
@@ -131,7 +134,9 @@ export function ResumenPago({ ticket, pagoState }: ResumenPagoProps) {
   const handleVolver = () => {
     // Pedidos online: volver al seguimiento del pedido (no a un /pedir vacío).
     if (ticket.tipo === 'takeaway' || ticket.tipo === 'delivery') {
-      router.replace(`/pedir?sesion=${ticket.sesionMesaId}`);
+      const tenantSlug = pathname.split('/').filter(Boolean)[0];
+      const basePath = tenantSlug ? `/${tenantSlug}/pedir` : '/pedir';
+      router.replace(`${basePath}?sesion=${ticket.sesionMesaId}`);
       return;
     }
     // Mesa: limpiar query params y reabrir la comanda.
@@ -263,6 +268,17 @@ export function ResumenPago({ ticket, pagoState }: ResumenPagoProps) {
               <p className="mt-4 rounded-xl bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">
                 El pago no se acreditó. No te preocupes: podés elegir otro medio o reintentar.
               </p>
+            ) : null}
+
+            {isApproved && tenantSlug ? (
+              <div className="mt-6 pt-6 border-t">
+                <CalificarExperienciaWidget
+                  slug={tenantSlug}
+                  identificadorMesa={ticket.mesaIdentificador}
+                  origen={ticket.tipo === 'delivery' ? 'delivery' : 'mesa'}
+                  className="border-0 bg-transparent p-0 shadow-none"
+                />
+              </div>
             ) : null}
           </div>
         </div>

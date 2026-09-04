@@ -26,5 +26,12 @@ export default async function CartaPage({ params }: { params: Promise<{ tenant: 
 
   const { categorias, productos } = await obtenerCarta(rest.id);
 
-  return <CartaPublica nombre={rest.nombre} categorias={categorias} productos={productos} />;
+  return (
+    <CartaPublica
+      nombre={rest.nombre}
+      categorias={categorias}
+      productos={productos}
+      tenantSlug={tenant}
+    />
+  );
 }

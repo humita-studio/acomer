@@ -225,6 +225,22 @@ export async function registrarMovimientoAction(
         return { success: false, message: 'La caja no está abierta.' };
       }
 
+      if (tipo === 'egreso' || tipo === 'retiro') {
+        const totales = await calcularTotales(
+          session.restauranteId,
+          sesionCajaId,
+          sesion.abiertaAt,
+          Number(sesion.montoInicial),
+          sesion.cerradaAt
+        );
+        if (m > totales.esperadoEnCaja + 1e-9) {
+          return {
+            success: false,
+            message: `Fondos insuficientes: el efectivo disponible en caja es de $${totales.esperadoEnCaja.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+          };
+        }
+      }
+
       await db.insert(movimientosCaja).values({
         restauranteId: session.restauranteId,
         sesionCajaId,

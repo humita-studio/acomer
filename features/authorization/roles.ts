@@ -12,7 +12,8 @@ export interface RolePermissions {
   canManageTables: boolean;    // Crear/modificar mesas (alta, QR, eliminar)
   canTakeOrders: boolean;      // Cargar productos al ticket de una mesa desde el admin (mozo)
   canViewReports: boolean;     // Ver reportes y estadísticas
-  canProcessPayments: boolean; // Procesar pagos
+  canProcessPayments: boolean; // Procesar pagos en la mesa
+  canManageCashier: boolean;   // Abrir/cerrar caja registradora, retiros, arqueo
   canMarkDelivered: boolean;   // Marcar platos como entregados (mozo)
   canManageReservas: boolean;  // Gestionar reservas (agenda, confirmar, sentar)
   canManageDelivery: boolean;  // Gestionar pedidos online (takeaway/delivery)
@@ -32,6 +33,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageTables: true,
     canViewReports: true,
     canProcessPayments: true,
+    canManageCashier: true,
     canMarkDelivered: true,
     canManageReservas: true,
     canManageDelivery: true,
@@ -50,6 +52,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageTables: true,
     canViewReports: true,
     canProcessPayments: true,
+    canManageCashier: true,
     canMarkDelivered: true,
     canManageReservas: true,
     canManageDelivery: true,
@@ -60,13 +63,14 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageSettings: true,
   },
   cajero: {
-    canTakeOrders: false,
+    canTakeOrders: true,
     canManageMenu: false,
     canManagePrices: false,
     canManageStaff: false,
     canManageTables: false,
     canViewReports: false,
     canProcessPayments: true,
+    canManageCashier: true,
     canMarkDelivered: false,
     canManageReservas: false,
     canManageDelivery: false,
@@ -84,6 +88,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageTables: false,
     canViewReports: false,
     canProcessPayments: true, // Permitir al mozo procesar cobros en la mesa
+    canManageCashier: false,  // Los mozos NO tienen acceso a abrir/cerrar caja ni retiros de efectivo
     canMarkDelivered: true,
     canManageReservas: true,
     canManageDelivery: true,
@@ -101,6 +106,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, RolePermissions> = {
     canManageTables: false,
     canViewReports: false,
     canProcessPayments: false,
+    canManageCashier: false,
     canMarkDelivered: false,
     canManageReservas: false,
     canManageDelivery: false,
@@ -138,9 +144,11 @@ export function canAccessSection(
     | 'reports'
     | 'kitchen'
     | 'cashier'
+    | 'cobros'
     | 'settings'
     | 'reservas'
     | 'delivery'
+    | 'resenas'
 ): boolean {
   const permissions = getRolePermissions(role);
 
@@ -154,9 +162,13 @@ export function canAccessSection(
       return permissions.canManageTables || permissions.canTakeOrders;
     case 'reports':
       return permissions.canViewReports;
+    case 'resenas':
+      return permissions.canViewReports || permissions.canManageSettings;
     case 'kitchen':
       return permissions.canViewKanban;
     case 'cashier':
+      return permissions.canManageCashier;
+    case 'cobros':
       return permissions.canProcessPayments;
     case 'settings':
       return permissions.canManageSettings;

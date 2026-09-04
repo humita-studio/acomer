@@ -46,11 +46,15 @@ export function MoneyInput({
 
   const [focused, setFocused] = React.useState(false);
   const [display, setDisplay] = React.useState(() => formatMoneyFromValue(value, opts));
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const lastEmittedValue = React.useRef<string | null>(null);
 
-  // Sincroniza cuando el valor llega de afuera y el input no tiene foco.
+  // Sincroniza cuando el valor llega de afuera (ej. reset o carga inicial)
   React.useEffect(() => {
-    if (!focused) {
+    const isExternalChange = value !== lastEmittedValue.current;
+    if (!focused || isExternalChange) {
       setDisplay(formatMoneyFromValue(value, opts));
+      lastEmittedValue.current = value == null ? '' : String(value);
     }
   }, [value, focused, opts]);
 
@@ -74,14 +78,40 @@ export function MoneyInput({
       {name ? <input type="hidden" name={name} value={canonical} /> : null}
       <Input
         {...props}
+        ref={inputRef}
         type="text"
         inputMode={allowDecimals ? 'decimal' : 'numeric'}
         autoComplete="off"
         value={display}
         onChange={(e) => {
-          const result = formatMoneyTyping(e.target.value, opts);
+          const input = e.target;
+          const rawValue = input.value;
+          const selectionStart = input.selectionStart ?? rawValue.length;
+
+          // Contamos cuántos caracteres significativos (dígitos y coma) había antes del cursor
+          const charsBefore = rawValue.slice(0, selectionStart).replace(/[^\d,]/g, '').length;
+
+          const result = formatMoneyTyping(rawValue, opts);
           setDisplay(result.display);
+          lastEmittedValue.current = result.value;
           onValueChange(result.value);
+
+          // Ajustar la posición del cursor luego del render para que no salte al final
+          requestAnimationFrame(() => {
+            if (!inputRef.current) return;
+            let counted = 0;
+            let newCursor = result.display.length;
+            for (let i = 0; i < result.display.length; i++) {
+              if (/[\d,]/.test(result.display[i])) {
+                counted++;
+              }
+              if (counted === charsBefore) {
+                newCursor = i + 1;
+                break;
+              }
+            }
+            inputRef.current.setSelectionRange(newCursor, newCursor);
+          });
         }}
         onFocus={(e) => {
           setFocused(true);

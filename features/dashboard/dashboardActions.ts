@@ -4,6 +4,7 @@ import { db } from '@/shared/db';
 import { mesas, sesionesMesa, transaccionesPago, pedidos, comandaItems, reservas } from '@/shared/db/schema';
 import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
+import { hasPermission } from '@/features/authorization/roles';
 
 import type {
   CanalPedido,
@@ -138,7 +139,9 @@ export async function getDashboardMetricsAction(
 ): Promise<DashboardMetrics> {
   // El tenant se toma de la sesión, nunca del cliente.
   const session = await getCurrentSession();
-  if (!session) return metricasVacias(periodo);
+  if (!session || !hasPermission(session.role, 'canViewReports')) {
+    return metricasVacias(periodo);
+  }
   const tenantId = session.restauranteId;
 
   const { inicio, prevInicio, prevCorte, modo, dias } = ventanaPeriodo(periodo);

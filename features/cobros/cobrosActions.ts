@@ -9,6 +9,8 @@ import {
   getSesionCajaAbiertaId,
   requireSesionCajaAbierta,
 } from '@/shared/caja/sesionCaja';
+import { broadcastOcupacion } from '@/features/comanda/sesion-mesa-core';
+import { createSupabaseServerClient } from '@/shared/supabase/server';
 import type { TransaccionCobro } from './types';
 
 // El restaurante se deriva siempre de la sesión (nunca del cliente) y todo el
@@ -147,10 +149,32 @@ export async function aprobarPagoPresencialAction(
                 })
                 .where(eq(transaccionesPago.id, transactionId));
 
-            // 2. Cerrar la sesión de la mesa
-            await db.update(sesionesMesa)
+            // 2. Cerrar la sesión de la mesa y obtener mesaId
+            const [sesionActualizada] = await db
+                .update(sesionesMesa)
                 .set({ estado: 'Cerrada' })
-                .where(eq(sesionesMesa.id, tx.sesionMesaId));
+                .where(eq(sesionesMesa.id, tx.sesionMesaId))
+                .returning({ mesaId: sesionesMesa.mesaId });
+
+            if (sesionActualizada?.mesaId) {
+                void broadcastOcupacion(tenantId, sesionActualizada.mesaId, false);
+            }
+
+            try {
+                const supabase = await createSupabaseServerClient();
+                await supabase.channel(`mesa_${tx.sesionMesaId}`).send({
+                    type: 'broadcast',
+                    event: 'sesion_cerrada',
+                    payload: { sesionMesaId: tx.sesionMesaId },
+                });
+                await supabase.channel(`admin_restaurant_${tenantId}`).send({
+                    type: 'broadcast',
+                    event: 'cuenta_solicitada',
+                    payload: { sesionMesaId: tx.sesionMesaId },
+                });
+            } catch {
+                // best-effort
+            }
 
             return { success: true, message: 'Pago aprobado y mesa cerrada.' };
         });

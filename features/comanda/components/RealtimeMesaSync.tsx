@@ -36,6 +36,15 @@ export function RealtimeMesaSync({ sesionMesaId }: RealtimeMesaSyncProps) {
       .on('broadcast', { event: 'ticket_actualizado' }, () => {
         router.refresh();
       })
+      // Otro dispositivo confirmó el pedido → vaciar borrador y actualizar vista de pedidos
+      .on('broadcast', { event: 'pedido_confirmado' }, () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.borrador(sesionMesaId) });
+        router.refresh();
+      })
+      // La mesa fue liberada o cerrada → refrescar vista del comensal
+      .on('broadcast', { event: 'sesion_cerrada' }, () => {
+        router.refresh();
+      })
       // Cambios de estado de pedidos (cocina, etc.)
       .on(
         'postgres_changes',
@@ -48,7 +57,7 @@ export function RealtimeMesaSync({ sesionMesaId }: RealtimeMesaSyncProps) {
         (payload) => {
           const estado = (payload.new as { estado?: string } | null)?.estado;
           if (estado) {
-            console.log(`Un pedido cambió a estado: ${estado}`);
+            router.refresh();
           }
         }
       )

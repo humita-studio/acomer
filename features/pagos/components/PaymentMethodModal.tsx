@@ -131,7 +131,7 @@ export function PaymentMethodModal({
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
       <SheetContent
         side="bottom"
-        className="mx-auto flex max-h-[90vh] flex-col gap-0 bg-background p-0 sm:max-w-md sm:rounded-t-2xl"
+        className="mx-auto flex max-h-[min(90dvh,90vh)] flex-col gap-0 bg-background p-0 sm:max-w-md sm:rounded-t-2xl"
       >
         <SheetHeader className="border-b p-5">
           <SheetTitle className="text-xl">¿Cómo querés pagar?</SheetTitle>
@@ -244,7 +244,7 @@ export function PaymentMethodModal({
           )}
         </div>
 
-        <div className="space-y-2 border-t bg-muted/40 p-5">
+        <div className="space-y-2 border-t bg-muted/40 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <Button
             onClick={handleConfirm}
             disabled={!selected || processing}

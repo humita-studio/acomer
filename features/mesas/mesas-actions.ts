@@ -1,7 +1,7 @@
 'use server';
 
 import { mesas, perfilesEmpleados } from '@/shared/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, ne } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
@@ -18,6 +18,20 @@ export async function crearMesa(identificador: string) {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canManageTables')) {
       return { success: false, message: 'No tenés permiso para gestionar mesas' };
+    }
+
+    // Límite de mesas del plan
+    const { getBillingSnapshotAction } = await import('@/features/billing/billingActions');
+    const billing = await getBillingSnapshotAction();
+    if (billing?.maxMesas != null) {
+      const { countMesasActivas } = await import('@/features/billing/limits');
+      const n = await countMesasActivas(session.restauranteId);
+      if (n >= billing.maxMesas) {
+        return {
+          success: false,
+          message: `Tu plan permite hasta ${billing.maxMesas} mesas. Pasate a Pro o eliminá alguna mesa.`,
+        };
+      }
     }
 
     await withTenant(claimsFromSession(session), (db) =>
@@ -63,7 +77,7 @@ export async function eliminarMesa(id: string) {
   }
 }
 
-export async function liberarMesaAction(mesaId: string) {
+export async function liberarMesaAction(mesaId: string, forzar = false) {
   try {
     const session = await getCurrentSession();
     // La libera quien gestiona mesas (owner/admin) o quien toma pedidos (mozo)
@@ -71,21 +85,74 @@ export async function liberarMesaAction(mesaId: string) {
       return { success: false, message: 'No tenés permiso para liberar la mesa' };
     }
 
-    const { sesionesMesa } = await import('@/shared/db/schema');
+    const { sesionesMesa, pedidos, transaccionesPago } = await import('@/shared/db/schema');
 
-    // Cerramos cualquier sesión activa de esta mesa
+    // Buscar la sesión activa de esta mesa
+    const sesion = await withTenant(claimsFromSession(session), (db) =>
+      db.query.sesionesMesa.findFirst({
+        where: and(
+          eq(sesionesMesa.mesaId, mesaId),
+          eq(sesionesMesa.restauranteId, session.restauranteId),
+          eq(sesionesMesa.estado, 'Activa'),
+        ),
+      })
+    );
+
+    if (!sesion) {
+      await broadcastOcupacion(session.restauranteId, mesaId, false);
+      revalidatePath('/admin/mesas');
+      return { success: true, message: 'Mesa liberada correctamente' };
+    }
+
+    // Si no se forzó el cierre, verificar si hay deuda pendiente
+    if (!forzar) {
+      const [pedidosMesa, pagosAprobados] = await withTenant(claimsFromSession(session), (db) =>
+        Promise.all([
+          db.query.pedidos.findMany({
+            where: and(eq(pedidos.sesionMesaId, sesion.id), ne(pedidos.estado, 'Cancelado')),
+            columns: { total: true },
+          }),
+          db.query.transaccionesPago.findMany({
+            where: and(eq(transaccionesPago.sesionMesaId, sesion.id), eq(transaccionesPago.estado, 'Aprobado')),
+            columns: { monto: true },
+          }),
+        ])
+      );
+
+      const totalConsumido = pedidosMesa.reduce((acc, p) => acc + Number(p.total), 0);
+      const totalPagado = pagosAprobados.reduce((acc, tx) => acc + Number(tx.monto), 0);
+      const saldoPendiente = totalConsumido - totalPagado;
+
+      if (saldoPendiente > 0.01) {
+        return {
+          success: false,
+          requiereConfirmacion: true,
+          saldoPendiente,
+          message: `La mesa tiene un saldo pendiente de $${saldoPendiente.toLocaleString('es-AR')}. ¿Querés liberarla igualmente?`,
+        };
+      }
+    }
+
+    // Cerramos la sesión activa
     await withTenant(claimsFromSession(session), (db) =>
       db
         .update(sesionesMesa)
         .set({ estado: 'Cerrada' })
-        .where(
-          and(
-            eq(sesionesMesa.mesaId, mesaId),
-            eq(sesionesMesa.restauranteId, session.restauranteId),
-            eq(sesionesMesa.estado, 'Activa')
-          )
-        )
+        .where(eq(sesionesMesa.id, sesion.id))
     );
+
+    // Avisar al comensal en tiempo real para que refresque su pantalla
+    try {
+      const { createSupabaseServerClient } = await import('@/shared/supabase/server');
+      const supabase = await createSupabaseServerClient();
+      await supabase.channel(`mesa_${sesion.id}`).send({
+        type: 'broadcast',
+        event: 'sesion_cerrada',
+        payload: { mesaId, sesionId: sesion.id },
+      });
+    } catch {
+      // best-effort
+    }
 
     // Avisar al panel admin (plano del local) que la mesa pasó a libre
     await broadcastOcupacion(session.restauranteId, mesaId, false);

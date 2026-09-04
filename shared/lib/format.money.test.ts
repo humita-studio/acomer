@@ -39,6 +39,21 @@ describe('formatMoneyTyping', () => {
     });
   });
 
+  it('soporta tipeo secuencial con puntos de miles ya formateados', () => {
+    // Cuando el usuario sigue escribiendo sobre un valor ya formateado como "1.000"
+    expect(formatMoneyTyping('1.0000')).toEqual({ display: '10.000', value: '10000' });
+    expect(formatMoneyTyping('10.0000')).toEqual({ display: '100.000', value: '100000' });
+    expect(formatMoneyTyping('100.0000')).toEqual({ display: '1.000.000', value: '1000000' });
+    expect(formatMoneyTyping('5.0000')).toEqual({ display: '50.000', value: '50000' });
+  });
+
+  it('soporta borrar dígitos (backspace) sobre valores con puntos de miles', () => {
+    // Al borrar el último dígito de "1.000" queda "1.00"
+    expect(formatMoneyTyping('1.00')).toEqual({ display: '100', value: '100' });
+    expect(formatMoneyTyping('10.00')).toEqual({ display: '1.000', value: '1000' });
+    expect(formatMoneyTyping('50.00')).toEqual({ display: '5.000', value: '5000' });
+  });
+
   it('vacío devuelve vacío', () => {
     expect(formatMoneyTyping('')).toEqual({ display: '', value: '' });
     expect(formatMoneyTyping('abc')).toEqual({ display: '', value: '' });

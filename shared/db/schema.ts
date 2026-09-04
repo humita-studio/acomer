@@ -12,6 +12,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  varchar,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
@@ -1024,6 +1025,73 @@ export const staffAlerts = pgTable(
 )
 
 // ============================================================================
+// Reseñas y Feedback Inteligente
+// ============================================================================
+
+export const configuracionResenas = pgTable(
+  'configuracion_resenas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    googleReviewUrl: text('google_review_url'),
+    resenasActivas: boolean('resenas_activas').default(true).notNull(),
+    minEstrellasGoogle: integer('min_estrellas_google').default(4).notNull(),
+    recibirAlertaNegativa: boolean('recibir_alerta_negativa').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    restauranteIdUnique: uniqueIndex('configuracion_resenas_restaurant_id_idx').on(table.restauranteId),
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'configuracion_resenas_restaurant_id_fk',
+    }).onDelete('cascade'),
+  })
+)
+
+export const resenasClientes = pgTable(
+  'resenas_clientes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    restauranteId: uuid('restaurant_id').notNull(),
+    origen: varchar('origen', { length: 20 }).default('mesa').notNull(), // 'mesa' | 'delivery' | 'mostrador' | 'directo'
+    mesaId: uuid('mesa_id'),
+    pedidoId: uuid('pedido_id'),
+    identificadorMesa: text('identificador_mesa'),
+    estrellas: integer('estrellas').notNull(),
+    aspectos: jsonb('aspectos').$type<string[]>().default([]).notNull(),
+    comentario: text('comentario'),
+    contactoNombre: text('contacto_nombre'),
+    contactoTelefono: text('contacto_telefono'),
+    derivadaAGoogle: boolean('derivada_a_google').default(false).notNull(),
+    estado: varchar('estado', { length: 20 }).default('nuevo').notNull(), // 'nuevo' | 'leido' | 'contactado' | 'resuelto'
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    restauranteCreatedAtIdx: index('resenas_clientes_restaurante_created_at_idx').on(
+      table.restauranteId,
+      table.createdAt,
+    ),
+    restauranteIdFk: foreignKey({
+      columns: [table.restauranteId],
+      foreignColumns: [restaurantes.id],
+      name: 'resenas_clientes_restaurant_id_fk',
+    }).onDelete('cascade'),
+    mesaIdFk: foreignKey({
+      columns: [table.mesaId],
+      foreignColumns: [mesas.id],
+      name: 'resenas_clientes_mesa_id_fk',
+    }).onDelete('set null'),
+    pedidoIdFk: foreignKey({
+      columns: [table.pedidoId],
+      foreignColumns: [pedidos.id],
+      name: 'resenas_clientes_pedido_id_fk',
+    }).onDelete('set null'),
+  })
+)
+
+// ============================================================================
 // Auditoría y Logs
 // ============================================================================
 
@@ -1054,7 +1122,7 @@ export const auditLog = pgTable(
 // Relations
 // ============================================================================
 
-export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
+export const restaurantesRelations = relations(restaurantes, ({ many, one }) => ({
   perfilesEmpleados: many(perfilesEmpleados),
   staffAlerts: many(staffAlerts),
   categorias: many(categorias),
@@ -1077,6 +1145,30 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   datosEntrega: many(datosEntrega),
   reservas: many(reservas),
   pagosSuscripcion: many(pagosSuscripcion),
+  configuracionResenas: one(configuracionResenas),
+  resenasClientes: many(resenasClientes),
+}))
+
+export const configuracionResenasRelations = relations(configuracionResenas, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [configuracionResenas.restauranteId],
+    references: [restaurantes.id],
+  }),
+}))
+
+export const resenasClientesRelations = relations(resenasClientes, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [resenasClientes.restauranteId],
+    references: [restaurantes.id],
+  }),
+  mesa: one(mesas, {
+    fields: [resenasClientes.mesaId],
+    references: [mesas.id],
+  }),
+  pedido: one(pedidos, {
+    fields: [resenasClientes.pedidoId],
+    references: [pedidos.id],
+  }),
 }))
 
 export const pagosSuscripcionRelations = relations(pagosSuscripcion, ({ one }) => ({

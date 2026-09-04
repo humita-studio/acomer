@@ -21,6 +21,13 @@ import {
   modosPermitidos,
 } from './deliveryConfig';
 import { isLatLng, puntoEnZona, type LatLng } from './zonaMapa';
+import { obtenerLandingConfig } from '@/features/landing/landingConfigActions';
+import {
+  estaAbierto,
+  ahoraLocal,
+  horarioDeHoy,
+  type HorarioDia,
+} from '@/features/landing/landingConfig';
 
 type TipoExterno = 'takeaway' | 'delivery';
 
@@ -127,8 +134,9 @@ export async function crearPedidoExternoAction(
     // la transacción. `resolverLineasBulk` usa `db` (fuera de tx) y hace todas las
     // lecturas de producto/precio/modificadores en lote; hacerlo dentro del lock
     // de la transacción alargaba innecesariamente el tiempo de espera en la DB.
-    const [config, lineasResueltas] = await Promise.all([
+    const [config, landing, lineasResueltas] = await Promise.all([
       obtenerDeliveryConfig(tenantId),
+      obtenerLandingConfig(tenantId),
       resolverLineasBulk(
         tenantId,
         itemsLimpios.map((i) => ({
@@ -138,11 +146,20 @@ export async function crearPedidoExternoAction(
           modificadores: (i.modificadores ?? []).map((m) => ({ id: m.id })),
         })),
       ),
-    ]);
+    ] as const);
 
     if (!config.activo) {
       return { success: false, message: 'El local no está tomando pedidos online en este momento' };
     }
+
+    const tieneHorariosCargados = landing.horarios?.some((h: HorarioDia) => !h.cerrado && h.turnos && h.turnos.length > 0);
+    if (tieneHorariosCargados && !estaAbierto(landing.horarios, ahoraLocal())) {
+      return {
+        success: false,
+        message: `El local está cerrado en este momento. Horario de hoy: ${horarioDeHoy(landing.horarios, ahoraLocal())}`,
+      };
+    }
+
     if (!modosPermitidos(config).includes(tipo)) {
       return { success: false, message: 'Esa modalidad de pedido no está disponible' };
     }

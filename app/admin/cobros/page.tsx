@@ -33,7 +33,7 @@ async function CobrosContent() {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
 
-  if (!canAccessSection(session.role, 'cashier')) {
+  if (!canAccessSection(session.role, 'cobros')) {
     redirect('/unauthorized');
   }
 

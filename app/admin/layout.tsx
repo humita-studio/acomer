@@ -13,6 +13,7 @@ import { hasPermission, type RoleType } from '@/features/authorization/roles';
 import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
 import { StaffNotifications } from '@/features/notificaciones/components/StaffNotifications';
 import { AdminSearch } from '@/features/busqueda/components/AdminSearch';
+import { CopilotWidget } from '@/features/copilot/components/CopilotWidget';
 
 export default async function AdminLayout({
   children,
@@ -88,6 +89,7 @@ export default async function AdminLayout({
           </div>
         </header>
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">{children}</main>
+        <CopilotWidget />
       </SidebarInset>
     </SidebarProvider>
   );

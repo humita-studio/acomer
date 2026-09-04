@@ -75,28 +75,40 @@ export async function proxy(req: NextRequest) {
   const mustChangePassword =
     user?.user_metadata?.must_change_password === true;
 
+function withCookies(target: NextResponse, source: NextResponse): NextResponse {
+  source.cookies.getAll().forEach((cookie) => {
+    target.cookies.set(cookie);
+  });
+  return target;
+}
+
   if (isProtectedRoute && !user) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    return withCookies(NextResponse.redirect(new URL('/login', req.url)), response);
   }
 
   // Staff con contraseña temporal: no entra al panel del local hasta cambiarla.
   // /platform no exige cambio (operadores de acomer no usan temp password de staff).
   if (isProtectedRoute && user && mustChangePassword && !isPlatformRoute) {
-    return NextResponse.redirect(new URL('/cambiar-password', req.url));
+    return withCookies(NextResponse.redirect(new URL('/cambiar-password', req.url)), response);
   }
 
   if (isChangePasswordRoute && !user) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    return withCookies(NextResponse.redirect(new URL('/login', req.url)), response);
   }
 
   // --- 3. Redirigir usuarios autenticados lejos del login/registro ---
   // Destino fino (admin vs platform) lo resuelve LoginForm / layout admin.
   if (isAuthRoute && user) {
     const dest = mustChangePassword ? '/cambiar-password' : '/admin';
-    return NextResponse.redirect(new URL(dest, req.url));
+    return withCookies(NextResponse.redirect(new URL(dest, req.url)), response);
   }
 
   // --- 4. Lógica de subdominios (tenants) ---
+  // Rutas del sistema (/admin, /platform, /login, etc.) viven en la raíz y no deben reescribirse a /[tenant]/...
+  if (isProtectedRoute || isAuthRoute || isChangePasswordRoute) {
+    return response;
+  }
+
   // Configurable por env var; cae al dominio final en prod y a localhost en dev.
   const mainDomain =
     process.env.NEXT_PUBLIC_ROOT_DOMAIN ||
@@ -113,7 +125,8 @@ export async function proxy(req: NextRequest) {
   // Reescribimos internamente la ruta.
   // La URL original de la barra del navegador NO cambia para el usuario.
   // Internamente, Next.js buscará en la carpeta: app/[tenant]/...
-  return NextResponse.rewrite(
-    new URL(`/${tenantSlug}${url.pathname}${url.search}`, req.url)
+  return withCookies(
+    NextResponse.rewrite(new URL(`/${tenantSlug}${url.pathname}${url.search}`, req.url)),
+    response
   );
 }

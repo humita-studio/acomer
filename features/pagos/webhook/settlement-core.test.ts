@@ -67,6 +67,24 @@ describe('decideSettlement', () => {
     }
   });
 
+  it('full con descuento aplicado en la transacción cubre el total de pedidos', () => {
+    const d = decideSettlement({
+      currentTxId: 'tx1',
+      newStatus: 'Aprobado',
+      pedidos, // 1000 + 500 = 1500
+      transacciones: [
+        { id: 'tx1', estado: 'Pendiente', monto: 1200, descuento: 300 },
+      ],
+      tipoSesion: 'salon',
+    });
+    expect(d.kind).toBe('full');
+    if (d.kind === 'full') {
+      expect(d.cerrarSesion).toBe(true);
+      expect(d.pedidoIdsAMarcarPagado).toEqual(['p1', 'p2']);
+      expect(d.totalPagado).toBe(1200);
+    }
+  });
+
   it('full en takeaway NO cierra sesión y deja el pedido en cocina', () => {
     const d = decideSettlement({
       currentTxId: 'tx1',
