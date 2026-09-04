@@ -1,40 +1,32 @@
 import { cache } from 'react';
 import { db } from '@/shared/db';
 import { restaurantes } from '@/shared/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 /**
- * Extrae el restaurant_id a partir del slug del subdominio.
- * Por ejemplo: "pizzeria" desde "pizzeria.acomer.com.ar"
- * 
- * @param slug - El slug del restaurante extraído del hostname
- * @returns El restaurant_id o null si no existe el restaurante
+ * Un local "opera" para el público si existe, no fue borrado (soft delete) y
+ * está activo. Desactivarlo desde /platform lo saca de la web pública (carta,
+ * pedidos, reservas, QR de mesa) sin borrar datos.
  */
-export const getTenantBySlug = cache(async (slug: string): Promise<string | null> => {
-  try {
-    const tenant = await db
-      .select({ id: restaurantes.id })
-      .from(restaurantes)
-      .where(eq(restaurantes.slug, slug.toLowerCase()))
-      .limit(1);
-
-    return tenant[0]?.id ?? null;
-  } catch (error) {
-    console.error(`[getTenantBySlug] Error fetching tenant for slug "${slug}":`, error);
-    return null;
-  }
-});
+function localOperativo(slug: string) {
+  return and(
+    eq(restaurantes.slug, slug.toLowerCase()),
+    eq(restaurantes.activo, true),
+    isNull(restaurantes.deletedAt),
+  );
+}
 
 /**
- * Obtiene los detalles completos del restaurante.
- * Cacheado por request (metadata + page + opengraph-image).
+ * Detalles completos del restaurante (sólo si está operativo). Cacheado por
+ * request: layout (metadata), página y `getTenantBySlug` comparten la misma
+ * lectura, así el subdominio se resuelve con una única query.
  */
 export const getTenantDetails = cache(async (slug: string) => {
   try {
     const tenant = await db
       .select()
       .from(restaurantes)
-      .where(eq(restaurantes.slug, slug.toLowerCase()))
+      .where(localOperativo(slug))
       .limit(1);
 
     return tenant[0] ?? null;
@@ -45,6 +37,17 @@ export const getTenantDetails = cache(async (slug: string) => {
 });
 
 /**
+ * Extrae el restaurant_id a partir del slug del subdominio.
+ * Por ejemplo: "pizzeria" desde "pizzeria.acomer.com.ar"
+ *
+ * @returns El restaurant_id o null si no existe / no está activo
+ */
+export const getTenantBySlug = cache(async (slug: string): Promise<string | null> => {
+  const tenant = await getTenantDetails(slug);
+  return tenant?.id ?? null;
+});
+
+/**
  * Valida que un restaurante existe y está activo.
  */
 export async function validateTenant(tenantId: string): Promise<boolean> {
@@ -52,7 +55,13 @@ export async function validateTenant(tenantId: string): Promise<boolean> {
     const tenant = await db
       .select({ id: restaurantes.id })
       .from(restaurantes)
-      .where(eq(restaurantes.id, tenantId))
+      .where(
+        and(
+          eq(restaurantes.id, tenantId),
+          eq(restaurantes.activo, true),
+          isNull(restaurantes.deletedAt),
+        ),
+      )
       .limit(1);
 
     return !!tenant[0];

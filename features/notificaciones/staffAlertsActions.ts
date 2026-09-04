@@ -6,6 +6,9 @@ import { staffAlerts } from '@/shared/db/schema';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { withTenant } from '@/shared/db/secure-wrapper';
 import { broadcastAdminEvent } from '@/shared/supabase/broadcast';
+// Cimiento de plata: la campana muestra el estado de caja junto a las alertas.
+import { getCajaActualAction } from '@/features/caja/cajaActions';
+import type { CajaActual } from '@/features/caja/types';
 
 export type StaffAlertDto = {
   id: string;
@@ -85,6 +88,21 @@ export async function crearStaffAlert(opts: {
     console.error('[crearStaffAlert]', error);
     return { success: false, message: 'No se pudo crear el aviso' };
   }
+}
+
+/**
+ * Un solo round-trip para la campana: alertas recientes + estado de caja.
+ * Antes eran dos server actions (cada una con su sesión y su transacción RLS)
+ * cada 20 s en todas las pantallas del panel.
+ */
+export async function getEstadoCampanaAction(opts: {
+  conCaja: boolean;
+}): Promise<{ alertas: StaffAlertDto[]; caja: CajaActual | null }> {
+  const [alertas, caja] = await Promise.all([
+    getAlertasStaffRecientesAction(),
+    opts.conCaja ? getCajaActualAction() : Promise.resolve(null),
+  ]);
+  return { alertas, caja };
 }
 
 /** Últimas alertas del restaurante (ventana corta) para la campana del staff. */

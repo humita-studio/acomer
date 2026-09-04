@@ -20,6 +20,7 @@ Demo comercial: [VENTA-PILOTO.md](./VENTA-PILOTO.md)
 | Cloudinary | Solo si subís fotos | No |
 | Migración billing `0026` | Sí si usás trial/planes | Sí |
 | Migración `0029` (fotos/alérgenos/auto-confirm) | Sí para menú con foto y auto-confirm reservas | No |
+| Migración `0031` (índices por `restaurant_id` / FKs) | Recomendada (rendimiento con volumen) | Recomendada |
 
 ---
 
@@ -93,6 +94,10 @@ Cada restaurante vincula **su** cuenta MP desde Configuración → Pagos.
    https://acomer.com.ar/api/webhooks/pagos/mp-oauth
    ```
    (en local, si probás OAuth: la misma con tu URL pública tipo ngrok)
+
+   El callback exige que el **dueño/admin esté logueado en ese mismo navegador**
+   y que el `state` coincida con su local: si vuelve con `?error=state_mismatch`
+   es que el link se abrió con el id de otro restaurante.
 3. **Webhooks** de pagos del local (Checkout del comensal):
    ```
    https://acomer.com.ar/api/webhooks/pagos/mercado_pago?tenantId=<uuid>
@@ -168,6 +173,12 @@ Billing (plan, trial, `pagos_suscripcion`):
 
 ```bash
 node scripts/apply-migration.mjs drizzle/0026_billing.sql
+```
+
+Índices de rendimiento (auditoría 2026-09-04, idempotente):
+
+```bash
+node scripts/apply-migration.mjs drizzle/0031_indices_fk.sql
 ```
 
 O pegá el SQL en el SQL Editor de Supabase.
@@ -261,6 +272,7 @@ Online / reservas: activar en cada módulo si los usan.
 | [DEPLOY.md](../DEPLOY.md) | DNS, Vercel, wildcard |
 | [docs/VENTA-PILOTO.md](./VENTA-PILOTO.md) | Guión de demo y venta |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) | Cómo está armado el código |
+| [docs/AUDITORIA-2026-09-04.md](./AUDITORIA-2026-09-04.md) | Auditoría pre-clientes: qué se corrigió y qué queda |
 | `drizzle/0026_billing.sql` | Schema de billing |
 
 ---

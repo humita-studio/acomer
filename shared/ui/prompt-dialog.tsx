@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -57,12 +57,17 @@ export function PromptDialog({
   const [value, setValue] = useState(defaultValue);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Reset del input cada vez que el diálogo se abre (o cambia el valor inicial),
+  // ajustando el estado durante el render en vez de en un efecto.
+  const resetKey = open ? `open:${defaultValue}` : 'closed';
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey);
     if (open) {
       setValue(defaultValue);
       setError(null);
     }
-  }, [open, defaultValue]);
+  }
 
   const submit = () => {
     const trimmed = value.trim();

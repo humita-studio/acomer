@@ -41,7 +41,11 @@ function createClient() {
 }
 
 export const client = globalForDb.__acomer_pg ?? createClient()
-export const db = globalForDb.__acomer_drizzle ?? drizzle(client, { schema })
+/** `DEBUG_SQL=1 bun run dev` loguea cada query (para contar round-trips por pantalla). */
+const logQueries = process.env.DEBUG_SQL === '1'
+
+export const db =
+  globalForDb.__acomer_drizzle ?? drizzle(client, { schema, logger: logQueries })
 
 globalForDb.__acomer_pg = client
 globalForDb.__acomer_drizzle = db

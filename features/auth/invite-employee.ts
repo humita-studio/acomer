@@ -13,6 +13,7 @@ import {
   perfilIdSchema,
 } from './validation';
 import { META_MUST_CHANGE_PASSWORD } from './auth-errors';
+import { findAuthUserByEmail, getEmailsByUserIds } from './authUsers';
 
 /** Roles que se pueden asignar al invitar (nunca owner). */
 export type AssignableRole = Exclude<RoleType, 'owner'>;
@@ -129,7 +130,7 @@ export async function inviteEmployee(
     const claims = claimsFromSession(session);
 
     // ¿Ya tiene perfil en este local?
-    const existingByEmail = await findAuthUserByEmail(supabase, email);
+    const existingByEmail = await findAuthUserByEmail(email);
     if (existingByEmail) {
       const existingPerfil = await withTenant(claims, (tx) =>
         tx
@@ -258,20 +259,6 @@ export async function inviteEmployee(
       message: 'Error al invitar al empleado',
     };
   }
-}
-
-/** Busca un usuario de Auth por email (paginado; alcanza para locales chicos). */
-async function findAuthUserByEmail(
-  supabase: ReturnType<typeof createSupabaseAdminClient>,
-  email: string,
-): Promise<{ id: string; email?: string } | null> {
-  const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-  if (error) {
-    console.error('[findAuthUserByEmail]', error);
-    return null;
-  }
-  const found = data?.users.find((u) => u.email?.toLowerCase() === email);
-  return found ? { id: found.id, email: found.email } : null;
 }
 
 /**
@@ -585,14 +572,10 @@ export async function listEmployees(): Promise<EmployeeListItem[]> {
         .where(eq(perfilesEmpleados.restauranteId, session.restauranteId)),
     );
 
-    // El email no está en la tabla: lo resolvemos por userId contra Auth.
-    const emailPorUserId = new Map<string, string>();
+    // El email no está en la tabla: lo resolvemos por userId contra auth.users.
+    let emailPorUserId = new Map<string, string>();
     try {
-      const supabase = createSupabaseAdminClient();
-      const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-      for (const u of data?.users ?? []) {
-        if (u.email) emailPorUserId.set(u.id, u.email);
-      }
+      emailPorUserId = await getEmailsByUserIds(empleados.map((e) => e.userId));
     } catch (e) {
       console.error('[listEmployees] No se pudieron obtener los emails:', e);
     }

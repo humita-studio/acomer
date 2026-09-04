@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, sql } from 'drizzle-orm';
 import { tool, asSchema } from 'ai';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import {
   categorias,
@@ -24,7 +25,6 @@ import { hasPermission } from '@/features/authorization/roles';
 
 // Día operativo en horario de Buenos Aires (igual que dashboard y KDS)
 const INICIO_HOY = sql`(date_trunc('day', now() AT TIME ZONE 'America/Argentina/Buenos_Aires')) AT TIME ZONE 'America/Argentina/Buenos_Aires'`;
-const FIN_HOY = sql`${INICIO_HOY} + interval '1 day'`;
 
 /**
  * Crea las herramientas (Tools) para que el Copiloto de IA opere
@@ -33,6 +33,16 @@ const FIN_HOY = sql`${INICIO_HOY} + interval '1 day'`;
 export function createCopilotTools(session: AuthSession) {
   const claims = claimsFromSession(session);
   const tenantId = session.restauranteId;
+
+  /**
+   * La carta pública se sirve desde `unstable_cache` (tag `carta-<tenant>`):
+   * toda mutación de precios/disponibilidad tiene que invalidarla, si no el
+   * comensal ve un precio y se le cobra otro (snapshot desde la DB).
+   */
+  const invalidarCarta = () => {
+    revalidateTag(`carta-${tenantId}`, 'default');
+    revalidatePath('/admin/menu');
+  };
 
   return {
     consultarMetricasDelDia: tool({
@@ -283,6 +293,17 @@ export function createCopilotTools(session: AuthSession) {
         nombrePlato: string;
         accion: 'pausar' | 'activar';
       }) => {
+        // Gestiona la carta (owner/admin) o cocina, que es quien detecta el faltante.
+        if (
+          !hasPermission(session.role, 'canManageMenu') &&
+          !hasPermission(session.role, 'canAcceptOrders')
+        ) {
+          return {
+            exito: false,
+            mensaje: 'Tu rol no tiene permisos para pausar o activar platos de la carta.',
+          };
+        }
+
         return await withTenant(claims, async (db) => {
           const matches = await db
             .select({
@@ -314,6 +335,7 @@ export function createCopilotTools(session: AuthSession) {
             .update(productos)
             .set({ activo: nuevoEstado })
             .where(and(eq(productos.id, plato.id), eq(productos.restauranteId, tenantId)));
+          invalidarCarta();
 
           return {
             exito: true,
@@ -878,6 +900,7 @@ export function createCopilotTools(session: AuthSession) {
               creadoPor: session.user.id,
             });
           });
+          invalidarCarta();
 
           return {
             exito: true,
@@ -1027,6 +1050,7 @@ export function createCopilotTools(session: AuthSession) {
               // 2. Insertar todos los nuevos precios en 1 sola consulta batch
               await tx.insert(productosPrecios).values(nuevosPrecios);
             });
+            invalidarCarta();
           }
 
           return {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutGrid, Loader2, MapPinOff, Users } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
@@ -317,8 +318,8 @@ export function PlanoTurno({
                   }}
                   title={
                     principal
-                      ? `Mesa ${mesa.identificador} · ${principal.nombreContacto} · ${horaDe(principal.inicio)} · ${principal.cantidadPersonas}p`
-                      : `Mesa ${mesa.identificador} · libre · ${mesa.capacidad} lugares`
+                      ? `${etiquetaMesa(mesa.identificador)} · ${principal.nombreContacto} · ${horaDe(principal.inicio)} · ${principal.cantidadPersonas}p`
+                      : `${etiquetaMesa(mesa.identificador)} · libre · ${mesa.capacidad} lugares`
                   }
                 >
                   <span className="max-w-full truncate text-center text-[11px] font-semibold leading-tight opacity-90">
@@ -374,7 +375,7 @@ export function PlanoTurno({
                     {horaDe(reservaSeleccionada.inicio)} · {reservaSeleccionada.cantidadPersonas}{' '}
                     pers
                     {reservaSeleccionada.mesaIdentificador
-                      ? ` · Mesa ${reservaSeleccionada.mesaIdentificador}`
+                      ? ` · ${etiquetaMesa(reservaSeleccionada.mesaIdentificador)}`
                       : ''}
                   </p>
                 </div>

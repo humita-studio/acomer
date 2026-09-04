@@ -257,7 +257,7 @@ export function CobrosManager({
             <DialogTitle>¿Rechazar este cobro?</DialogTitle>
             <DialogDescription>
               {rechazarTarget
-                ? `El cobro de la mesa ${rechazarTarget.mesaIdentificador} se marca como rechazado. `
+                ? `El cobro de ${rechazarTarget.mesaIdentificador} se marca como rechazado. `
                 : ''}
               La mesa seguirá abierta para volver a cobrar.
             </DialogDescription>

@@ -21,16 +21,20 @@ export function useCobrosTablero(tenantId: string, initial: TransaccionCobro[]) 
   });
 }
 
-/** Invalida la lista cuando una mesa solicita la cuenta. */
+/** Invalida la lista cuando una mesa pide la cuenta o un cobro cambia (otra caja, webhook). */
 export function useCobrosRealtime(tenantId: string) {
   const queryClient = useQueryClient();
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
+    const invalidar = () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cobros(tenantId) });
+    };
     const channel = supabase.channel(`admin_restaurant_${tenantId}`);
     channel
-      .on('broadcast', { event: 'cuenta_solicitada' }, () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.cobros(tenantId) });
-      })
+      .on('broadcast', { event: 'cuenta_solicitada' }, invalidar)
+      .on('broadcast', { event: 'cobro_actualizado' }, invalidar)
+      .on('broadcast', { event: 'mesa_pagada' }, invalidar)
+      .on('broadcast', { event: 'pago_parcial' }, invalidar)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);

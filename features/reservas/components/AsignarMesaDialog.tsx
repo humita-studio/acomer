@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutGrid, List, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
@@ -32,6 +33,8 @@ import { PlanoAsignacion, type MesaEstadoAsignacion } from './PlanoAsignacion';
  * Diálogo para asignar mesa a una reserva: plano del salón + lista.
  * Persiste al confirmar (o al hacer click en una mesa libre del plano).
  */
+const SIN_MESAS: never[] = [];
+
 export function AsignarMesaDialog({
   open,
   onOpenChange,
@@ -51,13 +54,15 @@ export function AsignarMesaDialog({
   const [ambienteId, setAmbienteId] = useState<string | 'all'>('all');
 
   const inicioISO = reserva ? new Date(reserva.inicio).toISOString() : '';
-  const { data: mesasLibres = [], isFetching: cargandoLibres } = useMesasDisponibles({
+  const { data: mesasLibresData, isFetching: cargandoLibres } = useMesasDisponibles({
     inicioISO,
     personas: reserva?.cantidadPersonas ?? 1,
     duracionMin: reserva?.duracionMin ?? 90,
     excluirReservaId: reserva?.id ?? null,
     enabled: open && !!reserva,
   });
+  // Referencia estable mientras la query no trajo datos (evita recomputar los memos de abajo).
+  const mesasLibres: NonNullable<typeof mesasLibresData> = mesasLibresData ?? SIN_MESAS;
 
   const { data: plano, isFetching: cargandoPlano } = useQuery({
     queryKey: queryKeys.plano(tenantId),
@@ -102,29 +107,35 @@ export function AsignarMesaDialog({
     return els.filter((e) => e.ambienteId === ambienteId);
   }, [plano?.elementos, ambienteId]);
 
-  const libresSet = useMemo(() => new Set(mesasLibres.map((m) => m.id)), [mesasLibres]);
+  const libresSet = useMemo(
+    () => new Set((mesasLibresData ?? []).map((m) => m.id)),
+    [mesasLibresData],
+  );
 
+  // Primitivas fuera del memo: así las dependencias son exactas (no el objeto reserva).
+  const reservaMesaId = reserva?.mesaId ?? null;
+  const reservaPersonas = reserva?.cantidadPersonas ?? 1;
   const estadoPorMesa = useMemo(() => {
     const map: Record<string, MesaEstadoAsignacion> = {};
     for (const m of mesasPlano) {
-      if (reserva?.mesaId && m.id === reserva.mesaId) {
+      if (reservaMesaId && m.id === reservaMesaId) {
         map[m.id] = 'actual';
       } else if (libresSet.has(m.id)) {
         map[m.id] = 'libre';
-      } else if (m.capacidad < (reserva?.cantidadPersonas ?? 1)) {
+      } else if (m.capacidad < reservaPersonas) {
         map[m.id] = 'chica';
       } else {
         map[m.id] = 'ocupada';
       }
     }
     return map;
-  }, [mesasPlano, libresSet, reserva?.mesaId, reserva?.cantidadPersonas]);
+  }, [mesasPlano, libresSet, reservaMesaId, reservaPersonas]);
 
   if (!reserva) return null;
 
   const cargando = cargandoLibres || cargandoPlano;
   const mesaLabel = reserva.mesaIdentificador
-    ? `Mesa ${reserva.mesaIdentificador}`
+    ? etiquetaMesa(reserva.mesaIdentificador)
     : reserva.mesaId
       ? 'Mesa asignada'
       : 'Sin mesa';
@@ -245,7 +256,7 @@ export function AsignarMesaDialog({
                         actual && 'border-primary bg-primary/5',
                       )}
                     >
-                      <span className="font-medium">Mesa {m.identificador}</span>
+                      <span className="font-medium">{etiquetaMesa(m.identificador)}</span>
                       <span className="text-xs text-muted-foreground">{m.capacidad} lugares</span>
                     </button>
                   );

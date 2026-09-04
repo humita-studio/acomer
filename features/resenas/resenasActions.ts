@@ -3,7 +3,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/shared/db';
-import { configuracionResenas, resenasClientes, restaurantes } from '@/shared/db/schema';
+import { configuracionResenas, resenasClientes } from '@/shared/db/schema';
 import { getCurrentSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';

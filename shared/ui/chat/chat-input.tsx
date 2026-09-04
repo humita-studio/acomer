@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
-import { CornerDownLeft, Loader2, Square } from 'lucide-react';
+import { CornerDownLeft, Square } from 'lucide-react';
 
 export interface ChatInputProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   isGenerating?: boolean;

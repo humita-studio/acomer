@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown, MapPinned } from 'lucide-react';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { Button } from '@/shared/ui/button';
 import type { Reserva } from '../types';
 
@@ -18,7 +19,7 @@ export function AsignarMesaTrigger({
   disabled?: boolean;
 }) {
   const label = reserva.mesaIdentificador
-    ? `Mesa ${reserva.mesaIdentificador}`
+    ? etiquetaMesa(reserva.mesaIdentificador)
     : reserva.mesaId
       ? 'Mesa asignada'
       : 'Asignar mesa';

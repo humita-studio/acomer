@@ -13,7 +13,7 @@ import {
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent, broadcastMesaEvent } from '@/shared/supabase/broadcast';
 import { cocinaAEntrega } from '@/features/pedidos/estadoSync';
 import type { EstadoPedidoCocina, PedidoCocina } from './types';
 
@@ -344,36 +344,25 @@ export async function avanzarPedidoCocinaAction(
     });
 
     if (result.success && 'sesionMesaId' in result) {
-      try {
-        const supabase = await createSupabaseServerClient();
-        const adminChannel = supabase.channel(`admin_restaurant_${tenantId}`);
-        await adminChannel.send({
-          type: 'broadcast',
-          event: 'pedido_estado',
-          payload: {
-            pedidoId,
-            estado: nuevoEstado,
+      const avisos = [
+        broadcastAdminEvent(tenantId, 'pedido_estado', {
+          pedidoId,
+          estado: nuevoEstado,
+          sesionMesaId: result.sesionMesaId,
+        }),
+      ];
+      if (result.esExterno && result.estadoEntrega) {
+        avisos.push(
+          broadcastAdminEvent(tenantId, 'orden_externa_actualizada', {
             sesionMesaId: result.sesionMesaId,
-          },
-        });
-        if (result.esExterno && result.estadoEntrega) {
-          await adminChannel.send({
-            type: 'broadcast',
-            event: 'orden_externa_actualizada',
-            payload: {
-              sesionMesaId: result.sesionMesaId,
-              estadoEntrega: result.estadoEntrega,
-            },
-          });
-          await supabase.channel(`mesa_${result.sesionMesaId}`).send({
-            type: 'broadcast',
-            event: 'estado_entrega_actualizado',
-            payload: { estadoEntrega: result.estadoEntrega },
-          });
-        }
-      } catch {
-        // best-effort
+            estadoEntrega: result.estadoEntrega,
+          }),
+          broadcastMesaEvent(result.sesionMesaId, 'estado_entrega_actualizado', {
+            estadoEntrega: result.estadoEntrega,
+          }),
+        );
       }
+      await Promise.all(avisos);
     }
 
     return { success: result.success, message: result.message };

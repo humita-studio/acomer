@@ -6,7 +6,7 @@ import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { canAccessSection } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent } from '@/shared/supabase/broadcast';
 import type { TipoMovimiento, CajaActual, CajaCerrada, DetalleCierre } from './types';
 
 // El `db` de cada acción es el handle transaccional de withTenant (RLS activo).
@@ -27,16 +27,7 @@ type Resultado = { success: boolean; message: string };
 
 /** Avisa a otras pestañas/cajeros que el turno cambió (apertura, movimiento, cierre, venta). */
 async function broadcastCajaActualizada(tenantId: string) {
-  try {
-    const supabase = await createSupabaseServerClient();
-    await supabase.channel(`admin_restaurant_${tenantId}`).send({
-      type: 'broadcast',
-      event: 'caja_actualizada',
-      payload: { t: Date.now() },
-    });
-  } catch {
-    // best-effort
-  }
+  await broadcastAdminEvent(tenantId, 'caja_actualizada', { t: Date.now() });
 }
 
 /**

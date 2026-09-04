@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, MapPinned, Clock, LocateFixed } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatPeso } from '@/shared/lib/format';
@@ -28,6 +28,13 @@ import { ZonaEntregaMapaLazy } from './ZonaEntregaMapaLazy';
 type Tipo = 'takeaway' | 'delivery';
 
 type GeoStatus = 'idle' | 'buscando' | 'ok' | 'fuera' | 'denegado' | 'error' | 'sin_dir';
+
+const SIN_GEO_HINT = 'Tu dispositivo no permite geolocalización. Escribí la dirección.';
+const DETECTANDO_HINT = 'Detectando tu ubicación…';
+
+function puedeGeolocalizar(): boolean {
+  return typeof navigator !== 'undefined' && Boolean(navigator.geolocation);
+}
 
 function Campo({
   label,
@@ -74,8 +81,13 @@ export function CheckoutExterno({
   promoResumen?: CartPromoResumen | null;
   onPedidoCreado: (sesionId: string, tipo: Tipo) => void;
 }) {
-  const opciones: Tipo[] = modos.length > 0 ? modos : ['takeaway', 'delivery'];
+  const opciones = useMemo<Tipo[]>(
+    () => (modos.length > 0 ? modos : ['takeaway', 'delivery']),
+    [modos],
+  );
   const [tipo, setTipo] = useState<Tipo>(opciones[0]);
+  // Si el local cambió las modalidades y la elegida ya no existe, volver a la primera.
+  if (!opciones.includes(tipo)) setTipo(opciones[0]);
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
   const [direccion, setDireccion] = useState('');
@@ -96,28 +108,40 @@ export function CheckoutExterno({
   const poly = deliveryConfig.zonaPoligono;
   const tieneMapa = Boolean(poly);
 
-  useEffect(() => {
-    if (!opciones.includes(tipo)) setTipo(opciones[0]);
-  }, [opciones, tipo]);
+  // Al abrir en delivery con mapa arrancamos en "buscando" (el efecto de auto-GPS
+  // de abajo dispara la geolocalización); al cerrar, limpiamos hints.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) {
+      setGeoStatus('idle');
+      setGeoHint(null);
+    } else if (tipo === 'delivery' && tieneMapa && !pin) {
+      if (puedeGeolocalizar()) {
+        setGeoStatus('buscando');
+        setGeoHint(DETECTANDO_HINT);
+      } else {
+        setGeoStatus('error');
+        setGeoHint(SIN_GEO_HINT);
+      }
+    }
+  }
 
-  // Al cambiar a takeaway limpiamos pin/hints de delivery.
-  useEffect(() => {
-    if (tipo !== 'delivery') {
+  // Cambio de modalidad: al salir de delivery se limpian pin y hints; al entrar,
+  // si todavía no se intentó el GPS en esta apertura, se muestra "buscando".
+  const cambiarTipo = (t: Tipo) => {
+    if (t === tipo) return;
+    setTipo(t);
+    if (t !== 'delivery') {
       setPin(null);
       setGeoStatus('idle');
       setGeoHint(null);
       pinOrigenRef.current = null;
+    } else if (tieneMapa && !pin && !geoTriedRef.current && puedeGeolocalizar()) {
+      setGeoStatus('buscando');
+      setGeoHint(DETECTANDO_HINT);
     }
-  }, [tipo]);
-
-  // Reset de auto-GPS al cerrar el sheet (próxima apertura reintenta).
-  useEffect(() => {
-    if (!open) {
-      geoTriedRef.current = false;
-      setGeoStatus('idle');
-      setGeoHint(null);
-    }
-  }, [open]);
+  };
 
   const aplicarPin = useCallback(
     async (pt: LatLng, origen: 'gps' | 'mapa' | 'direccion', opts?: { rellenarDir?: boolean }) => {
@@ -157,17 +181,9 @@ export function CheckoutExterno({
     [poly],
   );
 
-  const pedirUbicacion = useCallback(
-    (opts?: { manual?: boolean }) => {
-      if (typeof window === 'undefined' || !navigator.geolocation) {
-        setGeoStatus('error');
-        setGeoHint('Tu dispositivo no permite geolocalización. Escribí la dirección.');
-        return;
-      }
-
-      setGeoStatus('buscando');
-      setGeoHint(opts?.manual ? 'Obteniendo tu ubicación…' : 'Detectando tu ubicación…');
-
+  /** Pide la posición al browser. Todo el estado se actualiza en los callbacks (async). */
+  const solicitarPosicion = useCallback(
+    () => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           void aplicarPin(
@@ -196,14 +212,34 @@ export function CheckoutExterno({
     [aplicarPin],
   );
 
-  // Auto-GPS al abrir checkout en modo delivery (una vez por apertura).
+  /** Botón "Usar mi ubicación": marca el estado y pide la posición. */
+  const pedirUbicacion = useCallback(
+    (opts?: { manual?: boolean }) => {
+      if (!puedeGeolocalizar()) {
+        setGeoStatus('error');
+        setGeoHint(SIN_GEO_HINT);
+        return;
+      }
+      setGeoStatus('buscando');
+      setGeoHint(opts?.manual ? 'Obteniendo tu ubicación…' : DETECTANDO_HINT);
+      solicitarPosicion();
+    },
+    [solicitarPosicion],
+  );
+
+  // Auto-GPS al abrir checkout en modo delivery (una vez por apertura). El
+  // estado "buscando" ya lo puso el ajuste de render de arriba; acá sólo se
+  // dispara la petición al browser, cuyos callbacks actualizan el estado.
   useEffect(() => {
-    if (!open || tipo !== 'delivery' || !tieneMapa) return;
-    if (geoTriedRef.current) return;
-    if (pin) return;
+    if (!open) {
+      geoTriedRef.current = false; // próxima apertura reintenta
+      return;
+    }
+    if (tipo !== 'delivery' || !tieneMapa || pin || geoTriedRef.current) return;
+    if (!puedeGeolocalizar()) return;
     geoTriedRef.current = true;
-    pedirUbicacion();
-  }, [open, tipo, tieneMapa, pin, pedirUbicacion]);
+    solicitarPosicion();
+  }, [open, tipo, tieneMapa, pin, solicitarPosicion]);
 
   // Geocode de la dirección tipeada → pin en el mapa.
   useEffect(() => {
@@ -330,7 +366,7 @@ export function CheckoutExterno({
                 {opciones.includes('takeaway') && (
                   <button
                     type="button"
-                    onClick={() => setTipo('takeaway')}
+                    onClick={() => cambiarTipo('takeaway')}
                     className={cn(
                       'rounded-lg border py-3 text-sm font-medium transition-colors',
                       tipo === 'takeaway'
@@ -344,7 +380,7 @@ export function CheckoutExterno({
                 {opciones.includes('delivery') && (
                   <button
                     type="button"
-                    onClick={() => setTipo('delivery')}
+                    onClick={() => cambiarTipo('delivery')}
                     className={cn(
                       'rounded-lg border py-3 text-sm font-medium transition-colors',
                       tipo === 'delivery'

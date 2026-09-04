@@ -2,7 +2,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db } from '@/shared/db';
 import { pedidos, sesionesMesa, transaccionesPago } from '@/shared/db/schema';
 import { getPaymentProvider } from '@/features/pagos/core/payment-factory';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent, broadcastMesaEvent } from '@/shared/supabase/broadcast';
 import { getSesionCajaAbiertaId } from '@/shared/caja/sesionCaja';
 import {
   decideSettlement,
@@ -235,37 +235,19 @@ export async function processPaymentNotification(opts: {
     };
   });
 
-  // Realtime best-effort (fuera de la tx DB).
+  // Realtime best-effort (fuera de la tx DB, ya commiteada).
   if (notify) {
-    try {
-      const supabase = await createSupabaseServerClient();
-      const adminChannel = supabase.channel(`admin_restaurant_${tenantId}`);
-
-      if (notify.kind === 'full') {
-        const mesaChannel = supabase.channel(`mesa_${notify.sesionMesaId}`);
-        await mesaChannel.send({
-          type: 'broadcast',
-          event: 'pago_completado',
-          payload: { transactionId },
-        });
-        await adminChannel.send({
-          type: 'broadcast',
-          event: 'mesa_pagada',
-          payload: { sesionMesaId: notify.sesionMesaId },
-        });
-      } else {
-        await adminChannel.send({
-          type: 'broadcast',
-          event: 'pago_parcial',
-          payload: {
-            sesionMesaId: notify.sesionMesaId,
-            pagado: notify.totalPagado,
-            total: notify.totalPedidos,
-          },
-        });
-      }
-    } catch (err) {
-      console.error('[processPaymentNotification] realtime notify failed', err);
+    if (notify.kind === 'full') {
+      await Promise.all([
+        broadcastMesaEvent(notify.sesionMesaId, 'pago_completado', { transactionId }),
+        broadcastAdminEvent(tenantId, 'mesa_pagada', { sesionMesaId: notify.sesionMesaId }),
+      ]);
+    } else {
+      await broadcastAdminEvent(tenantId, 'pago_parcial', {
+        sesionMesaId: notify.sesionMesaId,
+        pagado: notify.totalPagado,
+        total: notify.totalPedidos,
+      });
     }
   }
 

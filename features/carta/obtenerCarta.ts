@@ -147,16 +147,21 @@ async function fetchCarta(
   return { categorias: cats, productos: productosMenu };
 }
 
+/** Vida máxima de la carta cacheada si nadie la invalida (segundos). */
+const CARTA_CACHE_TTL_S = 10 * 60;
+
 /**
  * Carta activa de un restaurante cacheada.
- * Se invalida automáticamente cuando el admin actualiza la carta
- * usando revalidateTag(`carta-${tenantId}`).
+ * Se invalida cuando el admin actualiza la carta (revalidateTag(`carta-${tenantId}`)).
+ * El TTL es la red de seguridad: una mutación que olvide invalidar (pasó con el
+ * Copiloto) no puede dejar precios viejos a la vista para siempre, porque el
+ * pedido siempre snapshotea el precio vigente de la base.
  */
 export async function obtenerCarta(tenantId: string) {
   return unstable_cache(
     async () => fetchCarta(tenantId),
     ['carta', tenantId],
-    { tags: [`carta-${tenantId}`] }
+    { tags: [`carta-${tenantId}`], revalidate: CARTA_CACHE_TTL_S }
   )();
 }
 

@@ -2,11 +2,24 @@ import { streamText, stepCountIs, convertToModelMessages } from 'ai';
 import { getCurrentSession } from '@/features/auth/session';
 import { geminiModel, isGeminiConfigured } from '@/shared/ai/gemini';
 import { createCopilotTools } from '@/features/copilot/copilotTools';
+import { rateLimit } from '@/shared/lib/rateLimit';
+
+/** Consultas al copiloto por usuario (cada request llama a Gemini y ejecuta tools). */
+const COPILOT_MAX_REQUESTS = 40;
+const COPILOT_WINDOW_MS = 10 * 60_000;
 
 export async function POST(req: Request) {
   const session = await getCurrentSession();
   if (!session) {
     return new Response('No autorizado', { status: 401 });
+  }
+
+  const rl = rateLimit(`copilot:${session.user.id}`, COPILOT_MAX_REQUESTS, COPILOT_WINDOW_MS);
+  if (!rl.ok) {
+    return new Response(rl.message, {
+      status: 429,
+      headers: { 'Retry-After': String(rl.retryAfterSec) },
+    });
   }
 
   if (!isGeminiConfigured()) {

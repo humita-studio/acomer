@@ -5,7 +5,8 @@ import { eq, and, isNull, ne } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { createSupabaseAdminClient } from '@/shared/supabase/admin';
+import { getEmailsByUserIds } from '@/features/auth/authUsers';
+import { broadcastMesaEvent } from '@/shared/supabase/broadcast';
 import { abrirOReusarSesion, broadcastOcupacion } from '@/features/comanda/sesion-mesa-core';
 import { revalidatePath } from 'next/cache';
 
@@ -142,17 +143,7 @@ export async function liberarMesaAction(mesaId: string, forzar = false) {
     );
 
     // Avisar al comensal en tiempo real para que refresque su pantalla
-    try {
-      const { createSupabaseServerClient } = await import('@/shared/supabase/server');
-      const supabase = await createSupabaseServerClient();
-      await supabase.channel(`mesa_${sesion.id}`).send({
-        type: 'broadcast',
-        event: 'sesion_cerrada',
-        payload: { mesaId, sesionId: sesion.id },
-      });
-    } catch {
-      // best-effort
-    }
+    await broadcastMesaEvent(sesion.id, 'sesion_cerrada', { mesaId, sesionId: sesion.id });
 
     // Avisar al panel admin (plano del local) que la mesa pasó a libre
     await broadcastOcupacion(session.restauranteId, mesaId, false);
@@ -256,13 +247,9 @@ export async function listMozosAction(): Promise<MozoOption[]> {
 
     if (perfiles.length === 0) return [];
 
-    const emailPorUserId = new Map<string, string>();
+    let emailPorUserId = new Map<string, string>();
     try {
-      const supabase = createSupabaseAdminClient();
-      const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-      for (const u of data?.users ?? []) {
-        if (u.email) emailPorUserId.set(u.id, u.email);
-      }
+      emailPorUserId = await getEmailsByUserIds(perfiles.map((p) => p.userId));
     } catch (e) {
       console.error('[listMozosAction] emails:', e);
     }

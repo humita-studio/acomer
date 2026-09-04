@@ -124,6 +124,7 @@ export function MenuExterno({
         cart={cart}
         pedidosConfirmados={[]}
         confirmLabel="Finalizar pedido"
+        confirmHint="Después elegís retiro o envío, tus datos y cómo pagar."
         onConfirm={async () => {
           setCheckoutOpen(true);
           return { success: true };

@@ -3,7 +3,7 @@
 import { db } from '@/shared/db';
 import { transaccionesPago } from '@/shared/db/schema';
 import { eq } from 'drizzle-orm';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent } from '@/shared/supabase/broadcast';
 import { calcularCobroConPromos } from '@/features/promociones/cobroPromosActions';
 import type { PromoCanal } from '@/features/promociones/promociones';
 import { getSesionCajaAbiertaId } from '@/shared/caja/sesionCaja';
@@ -150,24 +150,12 @@ export async function pedirCuentaPresencialAction(
 
     // Notificar al staff vía Supabase Realtime. Fire-and-forget: el broadcast no
     // debe alargar el tiempo de respuesta del comensal; los errores se loguean.
-    void (async () => {
-      try {
-        const supabase = await createSupabaseServerClient();
-        const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-        await channel.send({
-          type: 'broadcast',
-          event: 'cuenta_solicitada',
-          payload: {
-            sesionMesaId,
-            transactionId,
-            metodoPago,
-            monto: totalCalculado,
-          },
-        });
-      } catch (realtimeError) {
-        console.warn('[pedirCuentaPresencialAction] Error enviando notificación realtime:', realtimeError);
-      }
-    })();
+    void broadcastAdminEvent(tenantId, 'cuenta_solicitada', {
+      sesionMesaId,
+      transactionId,
+      metodoPago,
+      monto: totalCalculado,
+    });
 
     const metodoLabel = metodoPago === 'efectivo' ? 'efectivo' : 'tarjeta';
     const totalFmt = totalCalculado.toFixed(2);

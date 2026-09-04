@@ -1,4 +1,5 @@
 import { db } from '@/shared/db';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { itemsBorradorMesa } from '@/shared/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import { getOrCreateSesionMesa } from '@/features/comanda/sesion-mesa-actions';
@@ -155,7 +156,7 @@ export default async function ComandaPage({
       {/* No sticky: MenuView ya fija las categorías. Dos sticky top-0 se pisan. */}
       <header className="border-b bg-background p-4 text-center shadow-sm">
         <h1 className="font-display text-xl font-semibold tracking-tight">
-          Mesa {mesaIdentificador}
+          {etiquetaMesa(mesaIdentificador)}
         </h1>
         <p className="text-sm text-muted-foreground">
           Pedido compartido · enviá a cocina y pagá cuando quieras

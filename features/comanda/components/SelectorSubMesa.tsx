@@ -12,7 +12,6 @@ type OpcionSubMesa = {
  * así no hace falta que el mozo le muestre un QR distinto por sub-mesa.
  */
 export function SelectorSubMesa({
-  qrToken,
   opciones,
 }: {
   qrToken: string;

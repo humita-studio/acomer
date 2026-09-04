@@ -168,20 +168,25 @@ export function ZonaEntregaMapa({
   const [hint, setHint] = useState('');
   const [geoLabel, setGeoLabel] = useState<string | null>(null);
 
+  // Refs "latest" para que los handlers de Leaflet (registrados una sola vez)
+  // lean siempre el valor actual. Se sincronizan en un efecto declarado ANTES
+  // que el resto, así ya están al día cuando corren los efectos de redibujo.
   const valueRef = useRef(value);
-  valueRef.current = value;
   const draftRef = useRef(draft);
-  draftRef.current = draft;
   const drawingRef = useRef(drawing);
-  drawingRef.current = drawing;
   const modeRef = useRef(mode);
-  modeRef.current = mode;
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
   const onPinChangeRef = useRef(onPinChange);
-  onPinChangeRef.current = onPinChange;
   const pinRefState = useRef(pin);
-  pinRefState.current = pin;
+  useEffect(() => {
+    valueRef.current = value;
+    draftRef.current = draft;
+    drawingRef.current = drawing;
+    modeRef.current = mode;
+    onChangeRef.current = onChange;
+    onPinChangeRef.current = onPinChange;
+    pinRefState.current = pin;
+  });
 
   const setMapCursor = useCallback((style: string) => {
     const el = mapRef.current?.getContainer?.() as HTMLElement | undefined;
@@ -620,14 +625,17 @@ export function ZonaEntregaMapa({
   }, [ready, value, draft, drawing, pin, redraw, redrawRubber]);
 
   // En pick: si el pin llega de afuera (GPS / geocode de dirección), centrar el mapa.
+  // Se depende de las coordenadas (no del objeto) para no re-panear si sólo cambió la identidad.
+  const pinLat = pin?.lat;
+  const pinLng = pin?.lng;
   useEffect(() => {
-    if (!ready || mode !== 'pick' || !pin || !mapRef.current) return;
+    if (!ready || mode !== 'pick' || pinLat == null || pinLng == null || !mapRef.current) return;
     try {
-      mapRef.current.panTo([pin.lat, pin.lng], { animate: true, duration: 0.35 });
+      mapRef.current.panTo([pinLat, pinLng], { animate: true, duration: 0.35 });
     } catch {
       /* ignore */
     }
-  }, [ready, mode, pin?.lat, pin?.lng]);
+  }, [ready, mode, pinLat, pinLng]);
 
   // Modal/sheet: re-encuadrar cuando el contenedor gana tamaño real (Leaflet 0×0).
   useEffect(() => {

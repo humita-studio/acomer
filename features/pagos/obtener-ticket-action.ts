@@ -1,6 +1,7 @@
 'use server';
 
 import { db } from '@/shared/db';
+import { etiquetaOrigenSesion } from '@/shared/lib/mesaLabel';
 import { eq, and, ne } from 'drizzle-orm';
 import {
     transaccionesPago,
@@ -41,8 +42,8 @@ export async function obtenerTicketAction(transactionId: string): Promise<{ succ
         const tx = await db.query.transaccionesPago.findFirst({
             where: eq(transaccionesPago.id, transactionId),
             with: {
-                sesionMesa: true
-            }
+                sesionMesa: { with: { mesa: { columns: { identificador: true } } } },
+            },
         });
 
         if (!tx) {
@@ -129,7 +130,7 @@ export async function obtenerTicketAction(transactionId: string): Promise<{ succ
                 },
                 sesionMesaId: tx.sesionMesaId,
                 tipo: tx.sesionMesa?.tipo ?? 'salon',
-                mesaIdentificador: tx.sesionMesa?.mesaId || 'Mesa',
+                mesaIdentificador: etiquetaOrigenSesion(tx.sesionMesa),
                 items,
                 totalPagado,
                 saldoPendiente

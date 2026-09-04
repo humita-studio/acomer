@@ -45,22 +45,10 @@ export function RealtimeMesaSync({ sesionMesaId }: RealtimeMesaSyncProps) {
       .on('broadcast', { event: 'sesion_cerrada' }, () => {
         router.refresh();
       })
-      // Cambios de estado de pedidos (cocina, etc.)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'pedidos',
-          filter: `sesion_mesa_id=eq.${sesionMesaId}`,
-        },
-        (payload) => {
-          const estado = (payload.new as { estado?: string } | null)?.estado;
-          if (estado) {
-            router.refresh();
-          }
-        }
-      )
+      // La mesa se pagó (webhook MP o cajero) → refrescar (la sesión se cierra).
+      .on('broadcast', { event: 'pago_completado' }, () => {
+        router.refresh();
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           // Registrar la función de broadcast para que las mutaciones avisen a otros dispositivos.

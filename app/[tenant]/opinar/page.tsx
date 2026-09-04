@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import Link from 'next/link';
 import { getTenantDetails } from '@/features/tenant/get-tenant';
 import { getConfigResenasPublicAction } from '@/features/resenas/resenasActions';
@@ -65,7 +66,7 @@ export default async function OpinarPage({
         {/* Widget interactivo de calificación */}
         <CalificarExperienciaWidget
           slug={tenant}
-          identificadorMesa={mesa ? `Mesa ${mesa}` : undefined}
+          identificadorMesa={mesa ? etiquetaMesa(mesa) : undefined}
           googleReviewUrl={resenasConfig.googleReviewUrl}
           minEstrellasGoogle={resenasConfig.minEstrellasGoogle}
           origen="directo"

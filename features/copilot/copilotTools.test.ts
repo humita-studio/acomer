@@ -23,7 +23,7 @@ vi.mock('@/shared/db/secure-wrapper', () => ({
       groupBy: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue([]),
-      transaction: vi.fn(async (txCb: any) => txCb({
+      transaction: vi.fn(async (txCb: (tx: unknown) => unknown) => txCb({
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([]),
@@ -38,9 +38,14 @@ vi.mock('@/shared/db/secure-wrapper', () => ({
 import { createCopilotTools } from './copilotTools';
 import type { AuthSession } from '@/features/auth/session';
 
+/** Forma mínima de una tool para ejecutarla directo en tests. */
+type ToolEjecutable = {
+  execute: (input: Record<string, unknown>) => Promise<{ exito: boolean; mensaje: string }>;
+};
+
 describe('createCopilotTools Suite', () => {
   const fakeSession: AuthSession = {
-    user: { id: 'usr-123', email: 'owner@acomer.com' } as any,
+    user: { id: 'usr-123', email: 'owner@acomer.com', aud: 'authenticated' },
     perfilId: 'prf-123',
     restauranteId: 'rest-123',
     nombreRestaurante: 'Bodegón de Pepe',
@@ -84,14 +89,14 @@ describe('createCopilotTools Suite', () => {
     };
     const tools = createCopilotTools(mozoSession);
 
-    const resIndividual = await (tools.actualizarPrecioPlato as any).execute({
+    const resIndividual = await (tools.actualizarPrecioPlato as unknown as ToolEjecutable).execute({
       nombrePlato: 'Milanesa',
       nuevoPrecio: 5000,
     });
     expect(resIndividual.exito).toBe(false);
     expect(resIndividual.mensaje).toContain('permisos');
 
-    const resMasivo = await (tools.ajustarPreciosMasivo as any).execute({
+    const resMasivo = await (tools.ajustarPreciosMasivo as unknown as ToolEjecutable).execute({
       porcentaje: 10,
     });
     expect(resMasivo.exito).toBe(false);

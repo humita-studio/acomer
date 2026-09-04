@@ -104,32 +104,25 @@ export function ResumenPago({ ticket, pagoState, tenantSlug }: ResumenPagoProps)
       return;
     }
 
+    // Broadcast de la sesión: el cajero aprobó/rechazó, el webhook de MP
+    // confirmó, o el ticket cambió. Antes se escuchaba `postgres_changes` sobre
+    // transacciones_pago, que nunca llegaba (la tabla no está en la publicación
+    // de Realtime) y el comensal quedaba en "cuenta solicitada" hasta recargar.
     const supabase = createSupabaseBrowserClient();
+    const refrescar = () => router.refresh();
     const channel = supabase
-      .channel(`tx_${ticket.transaccion.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'transacciones_pago',
-          filter: `id=eq.${ticket.transaccion.id}`,
-        },
-        (payload) => {
-          if (!payload.new) return;
-          const hasStateChanged = payload.new.estado !== 'Pendiente';
-          const hasAmountChanged = payload.new.monto !== ticket.transaccion.monto;
-          if (hasStateChanged || hasAmountChanged) {
-            router.refresh();
-          }
-        },
-      )
+      .channel(`mesa_${ticket.sesionMesaId}`)
+      .on('broadcast', { event: 'pago_completado' }, refrescar)
+      .on('broadcast', { event: 'pago_actualizado' }, refrescar)
+      .on('broadcast', { event: 'sesion_cerrada' }, refrescar)
+      .on('broadcast', { event: 'pedido_confirmado' }, refrescar)
+      .on('broadcast', { event: 'ticket_actualizado' }, refrescar)
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [ticket.transaccion.id, ticket.transaccion.estado, ticket.transaccion.monto, router]);
+  }, [ticket.sesionMesaId, ticket.transaccion.estado, router]);
 
   const handleVolver = () => {
     // Pedidos online: volver al seguimiento del pedido (no a un /pedir vacío).
@@ -159,7 +152,7 @@ export function ResumenPago({ ticket, pagoState, tenantSlug }: ResumenPagoProps)
             )}
           </div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">{titulo}</h1>
-          <p className="mt-1 font-medium opacity-90">Mesa {ticket.mesaIdentificador}</p>
+          <p className="mt-1 font-medium opacity-90">{ticket.mesaIdentificador}</p>
           {subtitulo ? <p className="mt-2 text-sm opacity-85">{subtitulo}</p> : null}
         </div>
 

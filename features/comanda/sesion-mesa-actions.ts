@@ -1,10 +1,10 @@
 'use server';
 
 import { db } from '@/shared/db';
-import { mesas } from '@/shared/db/schema';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
+import { mesas, sesionesMesa } from '@/shared/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
 import { crearStaffAlert } from '@/features/notificaciones/staffAlertsActions';
 import { abrirOReusarSesion } from './sesion-mesa-core';
 
@@ -64,10 +64,19 @@ export async function getOrCreateSesionMesa(
     }
 
     // 4. Mesa madre dividida: ofrecer selector (madre + sub-mesas vigentes).
-    const hijos = await db
-      .select({ id: mesas.id, identificador: mesas.identificador, capacidad: mesas.capacidad })
-      .from(mesas)
-      .where(and(eq(mesas.parentMesaId, mesa.id), isNull(mesas.deletedAt)));
+    //    Sub-mesas y sesión activa se leen en paralelo: en el caso común (mesa
+    //    simple, sesión ya abierta) el QR se resuelve con un round-trip menos.
+    const [hijos, [activa]] = await Promise.all([
+      db
+        .select({ id: mesas.id, identificador: mesas.identificador, capacidad: mesas.capacidad })
+        .from(mesas)
+        .where(and(eq(mesas.parentMesaId, mesa.id), isNull(mesas.deletedAt))),
+      db
+        .select({ id: sesionesMesa.id })
+        .from(sesionesMesa)
+        .where(and(eq(sesionesMesa.mesaId, mesa.id), eq(sesionesMesa.estado, 'Activa')))
+        .limit(1),
+    ]);
 
     if (hijos.length > 0) {
       return {
@@ -81,7 +90,10 @@ export async function getOrCreateSesionMesa(
       };
     }
 
-    // 5. Mesa simple (no dividida): abrir/reusar su sesión (comportamiento de siempre).
+    // 5. Mesa simple (no dividida): reusar la sesión activa o abrir una nueva.
+    if (activa) {
+      return { success: true, sesionId: activa.id, mesaIdentificador: mesa.identificador, tenantId };
+    }
     const { sesionId } = await abrirOReusarSesion(tenantId, mesa);
     return { success: true, sesionId, mesaIdentificador: mesa.identificador, tenantId };
   } catch (error) {
@@ -108,7 +120,7 @@ export async function llamarMozoAction(tenantId: string, mesaIdentificador: stri
       restauranteId: tenantId,
       tipo: 'llamar_mozo',
       titulo: 'Llaman al mozo',
-      cuerpo: `Mesa ${mesa}`,
+      cuerpo: etiquetaMesa(mesa),
       href: '/admin/mesas',
       metadata: { mesaIdentificador: mesa },
     });

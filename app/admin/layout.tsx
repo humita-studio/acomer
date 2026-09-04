@@ -72,6 +72,7 @@ export default async function AdminLayout({
           <AdminSearch />
 
           <StaffNotifications
+            key={session.restauranteId}
             tenantId={session.restauranteId}
             alertarCajaCerrada={hasPermission(
               session.role as RoleType,

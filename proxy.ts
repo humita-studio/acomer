@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { extractTenantSlug } from '@/shared/lib/tenant-host';
+import { getVerifiedUser, type VerifiedUser } from '@/shared/supabase/claims';
 
 export const config = {
   matcher: [
@@ -65,15 +66,14 @@ export async function proxy(req: NextRequest) {
     path === '/login' || path === '/register' || path === '/forgot-password';
   const isChangePasswordRoute = path === '/cambiar-password';
 
-  // Optimización: Solo hacemos getUser() (que requiere request a BD) en rutas que lo necesitan
-  let user = null;
+  // Sólo verificamos al usuario en las rutas que lo necesitan. La verificación
+  // es local (firma del JWT); sólo va a Supabase si hay que refrescar el token.
+  let user: VerifiedUser | null = null;
   if (isProtectedRoute || isAuthRoute || isChangePasswordRoute) {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    user = await getVerifiedUser(supabase);
   }
 
-  const mustChangePassword =
-    user?.user_metadata?.must_change_password === true;
+  const mustChangePassword = user?.mustChangePassword === true;
 
 function withCookies(target: NextResponse, source: NextResponse): NextResponse {
   source.cookies.getAll().forEach((cookie) => {

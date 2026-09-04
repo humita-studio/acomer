@@ -1,6 +1,7 @@
 'use server';
 
 import { transaccionesPago, sesionesMesa } from '@/shared/db/schema';
+import { etiquetaOrigenSesion } from '@/shared/lib/mesaLabel';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
@@ -10,13 +11,9 @@ import {
   requireSesionCajaAbierta,
 } from '@/shared/caja/sesionCaja';
 import { broadcastOcupacion } from '@/features/comanda/sesion-mesa-core';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent, broadcastMesaEvent } from '@/shared/supabase/broadcast';
 import type { TransaccionCobro } from './types';
 
-// El restaurante se deriva siempre de la sesión (nunca del cliente) y todo el
-// trabajo de base corre bajo `withTenant` (RLS activo), de modo que la propia
-// base impide leer o tocar filas de otro restaurante aunque la capa de
-// aplicación tuviera un bug.
 export async function getTransaccionesPendientesAction(): Promise<TransaccionCobro[]> {
     const session = await getCurrentSession();
     if (!session || !hasPermission(session.role, 'canProcessPayments')) return [];
@@ -29,7 +26,7 @@ export async function getTransaccionesPendientesAction(): Promise<TransaccionCob
                     inArray(transaccionesPago.estado, ['Pendiente'])
                 ),
                 with: {
-                    sesionMesa: true,
+                    sesionMesa: { with: { mesa: { columns: { identificador: true } } } },
                 },
                 orderBy: [desc(transaccionesPago.createdAt)],
             });
@@ -42,7 +39,7 @@ export async function getTransaccionesPendientesAction(): Promise<TransaccionCob
                 estado: tx.estado,
                 fecha: tx.createdAt,
                 sesionMesaId: tx.sesionMesaId,
-                mesaIdentificador: tx.sesionMesa?.mesaId || 'Desconocida',
+                mesaIdentificador: etiquetaOrigenSesion(tx.sesionMesa),
                 metadata: tx.metadata as Record<string, unknown> | null,
                 resueltaAt: tx.updatedAt,
             }));
@@ -66,7 +63,7 @@ export async function getTransaccionesTableroAction(): Promise<TransaccionCobro[
                     inArray(transaccionesPago.estado, ['Pendiente', 'Aprobado', 'Rechazado'])
                 ),
                 with: {
-                    sesionMesa: true,
+                    sesionMesa: { with: { mesa: { columns: { identificador: true } } } },
                 },
                 orderBy: [desc(transaccionesPago.createdAt)],
             });
@@ -79,7 +76,7 @@ export async function getTransaccionesTableroAction(): Promise<TransaccionCobro[
                 estado: tx.estado,
                 fecha: tx.createdAt,
                 sesionMesaId: tx.sesionMesaId,
-                mesaIdentificador: tx.sesionMesa?.mesaId || 'Desconocida',
+                mesaIdentificador: etiquetaOrigenSesion(tx.sesionMesa),
                 metadata: tx.metadata as Record<string, unknown> | null,
                 resueltaAt: tx.updatedAt,
             }));
@@ -106,7 +103,7 @@ export async function aprobarPagoPresencialAction(
     }
     const tenantId = session.restauranteId;
     try {
-        return await withTenant(claimsFromSession(session), async (db) => {
+        const result = await withTenant(claimsFromSession(session), async (db) => {
             const tx = await db.query.transaccionesPago.findFirst({
                 where: and(
                     eq(transaccionesPago.id, transactionId),
@@ -156,28 +153,36 @@ export async function aprobarPagoPresencialAction(
                 .where(eq(sesionesMesa.id, tx.sesionMesaId))
                 .returning({ mesaId: sesionesMesa.mesaId });
 
-            if (sesionActualizada?.mesaId) {
-                void broadcastOcupacion(tenantId, sesionActualizada.mesaId, false);
-            }
-
-            try {
-                const supabase = await createSupabaseServerClient();
-                await supabase.channel(`mesa_${tx.sesionMesaId}`).send({
-                    type: 'broadcast',
-                    event: 'sesion_cerrada',
-                    payload: { sesionMesaId: tx.sesionMesaId },
-                });
-                await supabase.channel(`admin_restaurant_${tenantId}`).send({
-                    type: 'broadcast',
-                    event: 'cuenta_solicitada',
-                    payload: { sesionMesaId: tx.sesionMesaId },
-                });
-            } catch {
-                // best-effort
-            }
-
-            return { success: true, message: 'Pago aprobado y mesa cerrada.' };
+            return {
+                success: true,
+                message: 'Pago aprobado y mesa cerrada.',
+                sesionMesaId: tx.sesionMesaId,
+                mesaId: sesionActualizada?.mesaId ?? null,
+            };
         });
+
+        // Avisos DESPUÉS del commit: si se emiten dentro de la transacción, el
+        // comensal y el plano refrescan antes de que el pago sea visible.
+        if (result.success && result.sesionMesaId) {
+            if (result.mesaId) void broadcastOcupacion(tenantId, result.mesaId, false);
+            await Promise.all([
+                broadcastMesaEvent(result.sesionMesaId, 'pago_completado', {
+                    transactionId,
+                    sesionMesaId: result.sesionMesaId,
+                }),
+                broadcastMesaEvent(result.sesionMesaId, 'sesion_cerrada', {
+                    sesionMesaId: result.sesionMesaId,
+                }),
+                // Refresco silencioso de Cobros/Caja en otras pestañas (no es un
+                // pedido de cuenta: eso lo emite el comensal).
+                broadcastAdminEvent(tenantId, 'cobro_actualizado', {
+                    sesionMesaId: result.sesionMesaId,
+                    transactionId,
+                    estado: 'Aprobado',
+                }),
+            ]);
+        }
+        return { success: result.success, message: result.message };
     } catch (error) {
         console.error('[aprobarPagoPresencialAction]', error);
         return { success: false, message: error instanceof Error ? error.message : 'Error al aprobar el pago.' };
@@ -191,7 +196,7 @@ export async function rechazarPagoPresencialAction(transactionId: string) {
     }
     const tenantId = session.restauranteId;
     try {
-        return await withTenant(claimsFromSession(session), async (db) => {
+        const result = await withTenant(claimsFromSession(session), async (db) => {
             const tx = await db.query.transaccionesPago.findFirst({
                 where: and(
                     eq(transaccionesPago.id, transactionId),
@@ -208,8 +213,28 @@ export async function rechazarPagoPresencialAction(transactionId: string) {
                 .set({ estado: 'Rechazado' }) // O podríamos borrarla, pero mejor dejar registro
                 .where(eq(transaccionesPago.id, transactionId));
 
-            return { success: true, message: 'Pago rechazado. La mesa sigue abierta.' };
+            return {
+                success: true,
+                message: 'Pago rechazado. La mesa sigue abierta.',
+                sesionMesaId: tx.sesionMesaId,
+            };
         });
+
+        // El comensal está mirando el ticket "cuenta solicitada": avisarle.
+        if (result.success && result.sesionMesaId) {
+            await Promise.all([
+                broadcastMesaEvent(result.sesionMesaId, 'pago_actualizado', {
+                    transactionId,
+                    estado: 'Rechazado',
+                }),
+                broadcastAdminEvent(tenantId, 'cobro_actualizado', {
+                    sesionMesaId: result.sesionMesaId,
+                    transactionId,
+                    estado: 'Rechazado',
+                }),
+            ]);
+        }
+        return { success: result.success, message: result.message };
     } catch (error) {
         console.error('[rechazarPagoPresencialAction]', error);
         return { success: false, message: error instanceof Error ? error.message : 'Error al rechazar el pago.' };

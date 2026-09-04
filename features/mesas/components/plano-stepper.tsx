@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
@@ -40,8 +40,11 @@ export function Stepper({
   const display =
     Math.abs(value - Math.round(value)) < 1e-9 ? String(Math.round(value)) : String(round2(value));
   const [draft, setDraft] = useState(display);
-
-  useEffect(() => setDraft(display), [display]);
+  const [prevDisplay, setPrevDisplay] = useState(display);
+  if (display !== prevDisplay) {
+    setPrevDisplay(display);
+    setDraft(display);
+  }
 
   const commit = () => {
     const n = Number(draft.replace(',', '.'));

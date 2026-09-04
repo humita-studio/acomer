@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { cn } from '@/shared/lib/utils';
-import { ScrollArea } from '@/shared/ui/scroll-area';
 
 export interface ChatMessageListProps extends React.HTMLAttributes<HTMLDivElement> {
   smoothScroll?: boolean;

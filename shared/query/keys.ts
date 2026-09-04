@@ -15,6 +15,9 @@ export const queryKeys = {
   reportes: (tenantId: string, desde: string, hasta: string) =>
     ['reportes', tenantId, desde, hasta] as const,
   caja: (tenantId: string) => ['caja', tenantId] as const,
+  // Campana del staff (alertas + caja). Comparte prefijo con `caja` para que
+  // invalidar la caja también refresque la campana.
+  campana: (tenantId: string, conCaja: boolean) => ['caja', tenantId, 'campana', conCaja] as const,
   cajaHistorial: (tenantId: string) => ['caja', 'historial', tenantId] as const,
   cajaDetalle: (sesionCajaId: string) => ['caja', 'detalle', sesionCajaId] as const,
   // Adicionales: extras aditivos y opcionales de un plato (ex-"variantes").

@@ -49,6 +49,8 @@ type MenuViewProps = {
   /** Modal de pago inyectado por el caller (mantiene a carta desacoplado de pagos). */
   renderPagoModal?: (args: { open: boolean; onClose: () => void }) => ReactNode;
   confirmLabel: string;
+  /** Texto bajo el botón de confirmar del carrito (qué pasa después). */
+  confirmHint?: React.ReactNode;
   /**
    * Acción al confirmar el carrito.
    * `message` = error inline en el drawer.
@@ -160,6 +162,7 @@ export function MenuView({
   autoAbrirPago = false,
   renderPagoModal,
   confirmLabel,
+  confirmHint,
   onConfirm,
   confirming,
   drawerTitulo,
@@ -452,6 +455,7 @@ export function MenuView({
         cart={cart}
         pedidosConfirmados={pedidosConfirmados}
         confirmLabel={confirmLabel}
+        confirmHint={confirmHint}
         onConfirm={handleConfirm}
         confirming={confirming}
         titulo={drawerTitulo}

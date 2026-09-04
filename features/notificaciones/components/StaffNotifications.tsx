@@ -1,16 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { formatFecha, formatFechaLarga } from '@/shared/lib/format';
-import { getCajaActualAction } from '@/features/caja/cajaActions';
 import {
-  getAlertasStaffRecientesAction,
+  getEstadoCampanaAction,
   type StaffAlertDto,
 } from '@/features/notificaciones/staffAlertsActions';
 import { Button } from '@/shared/ui/button';
@@ -103,33 +103,38 @@ export function StaffNotifications({
   /** Roles con cobros/caja (owner, admin, cajero, mozo). */
   alertarCajaCerrada?: boolean;
 }) {
-  const [items, setItems] = useState<Notif[]>([]);
-  const [unread, setUnread] = useState(0);
-  const [cajaUnread, setCajaUnread] = useState(false);
+  /** Notificaciones que llegaron por Realtime en esta sesión (no persisten). */
+  const [pushed, setPushed] = useState<Notif[]>([]);
+  /** IDs marcados como leídos al abrir la campana (sólo afectan el badge). */
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
+  /** Sticky de caja que el usuario ya vio; se vuelve a contar si cambia la situación. */
+  const [cajaAckId, setCajaAckId] = useState<string | null>(null);
+  /**
+   * IDs descartados en sesiones anteriores (localStorage). Se lee una vez por
+   * montaje: el layout remonta la campana con `key={tenantId}`.
+   */
+  const [dismissed] = useState<Set<string>>(() => loadDismissed(tenantId));
   const toastedCaja = useRef(false);
   const toastedCajaVieja = useRef(false);
   /** IDs ya mostrados en esta sesión (dedupe realtime + poll). */
   const seenIds = useRef(new Set<string>());
-  /** IDs que el usuario ya abrió/cerró (persisten entre reloads). */
-  const dismissedIds = useRef<Set<string>>(new Set());
+  /** IDs descartados durante esta sesión (además de `dismissed`). */
+  const dismissedNow = useRef(new Set<string>());
   const alertsHydrated = useRef(false);
 
-  // Cargar dismisseds del tenant al montar / cambiar de local.
-  useEffect(() => {
-    dismissedIds.current = loadDismissed(tenantId);
-    alertsHydrated.current = false;
-    seenIds.current = new Set();
-    setItems([]);
-    setUnread(0);
-  }, [tenantId]);
+  const queryClient = useQueryClient();
 
-  const { data: caja, isPending: cajaPending } = useQuery({
-    queryKey: queryKeys.caja(tenantId),
-    queryFn: () => getCajaActualAction(),
-    enabled: alertarCajaCerrada,
-    refetchInterval: 20 * 1000,
-    staleTime: 10 * 1000,
+  // Un solo poll (alertas + caja) cada 30 s: Realtime trae los eventos en vivo,
+  // esto es el respaldo. Antes eran dos server actions cada 20 s por pantalla.
+  const { data: campana, isPending: campanaPending } = useQuery({
+    queryKey: queryKeys.campana(tenantId, alertarCajaCerrada),
+    queryFn: () => getEstadoCampanaAction({ conCaja: alertarCajaCerrada }),
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
   });
+  const caja = campana?.caja ?? null;
+  const cajaPending = alertarCajaCerrada && campanaPending;
+  const alertasDb = campana?.alertas;
 
   const cajaCerrada = alertarCajaCerrada && !cajaPending && caja == null;
   /** Quedó abierta de una jornada anterior (se abrió otro día y nadie la cerró). */
@@ -139,34 +144,41 @@ export function StaffNotifications({
     caja != null &&
     formatFecha(caja.abiertaAt) !== formatFecha(new Date());
 
-  const { data: alertasDb } = useQuery({
-    queryKey: queryKeys.staffAlerts(tenantId),
-    queryFn: () => getAlertasStaffRecientesAction(),
-    staleTime: 15 * 1000,
-    refetchInterval: 20 * 1000,
-  });
+  // Lista visible = alertas persistidas (no descartadas) + las que llegaron por
+  // Realtime. Es derivada, no se sincroniza en un efecto.
+  const items = useMemo(() => {
+    const byId = new Map<string, Notif>();
+    for (const a of alertasDb ?? []) {
+      if (!dismissed.has(a.id)) byId.set(a.id, alertToNotif(a));
+    }
+    for (const n of pushed) {
+      if (!dismissed.has(n.id) && !byId.has(n.id)) byId.set(n.id, n);
+    }
+    return Array.from(byId.values())
+      .sort((a, b) => b.at - a.at)
+      .slice(0, MAX);
+  }, [alertasDb, pushed, dismissed]);
 
+  const unread = items.reduce((n, it) => n + (readIds.has(it.id) ? 0 : 1), 0);
+
+  // Toast de las alertas nuevas que trae el poll (la primera carga sólo siembra).
   useEffect(() => {
     if (!alertasDb) return;
 
-    const visibles = alertasDb.filter((a) => !dismissedIds.current.has(a.id));
-
-    // Primera carga: sembrar sin toast; solo no-leídas cuentan badge.
     if (!alertsHydrated.current) {
       alertsHydrated.current = true;
       for (const a of alertasDb) seenIds.current.add(a.id);
-      setItems(visibles.map(alertToNotif).slice(0, MAX));
-      setUnread(visibles.length);
       return;
     }
 
-    // Refetch: solo nuevas no vistas y no dismissadas.
-    const nuevas = alertasDb.filter(
-      (a) => !seenIds.current.has(a.id) && !dismissedIds.current.has(a.id),
-    );
-    if (nuevas.length === 0) return;
-
-    for (const a of nuevas) {
+    for (const a of alertasDb) {
+      if (
+        seenIds.current.has(a.id) ||
+        dismissed.has(a.id) ||
+        dismissedNow.current.has(a.id)
+      ) {
+        continue;
+      }
       seenIds.current.add(a.id);
       if (a.tipo === 'llamar_mozo') {
         toast.warning(a.titulo, { description: a.cuerpo, duration: 12_000 });
@@ -174,21 +186,12 @@ export function StaffNotifications({
         toast.message(a.titulo, { description: a.cuerpo });
       }
     }
-    setItems((prev) => {
-      const byId = new Map(prev.map((n) => [n.id, n]));
-      for (const a of nuevas) byId.set(a.id, alertToNotif(a));
-      return Array.from(byId.values())
-        .sort((a, b) => b.at - a.at)
-        .slice(0, MAX);
-    });
-    setUnread((u) => u + nuevas.length);
-  }, [alertasDb]);
+  }, [alertasDb, dismissed]);
 
   useEffect(() => {
     if (!alertarCajaCerrada || cajaPending) return;
 
     if (caja == null) {
-      setCajaUnread(true);
       toastedCajaVieja.current = false;
       toast.dismiss(CAJA_ABIERTA_OTRO_DIA_ID);
       if (!toastedCaja.current) {
@@ -199,7 +202,6 @@ export function StaffNotifications({
         });
       }
     } else if (formatFecha(caja.abiertaAt) !== formatFecha(new Date())) {
-      setCajaUnread(true);
       toastedCaja.current = false;
       toast.dismiss(CAJA_CERRADA_ID);
       if (!toastedCajaVieja.current) {
@@ -210,7 +212,6 @@ export function StaffNotifications({
         });
       }
     } else {
-      setCajaUnread(false);
       toastedCaja.current = false;
       toastedCajaVieja.current = false;
       toast.dismiss(CAJA_CERRADA_ID);
@@ -226,7 +227,7 @@ export function StaffNotifications({
       opts?: { important?: boolean; id?: string },
     ) => {
       const id = opts?.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      if (seenIds.current.has(id) || dismissedIds.current.has(id)) return;
+      if (seenIds.current.has(id) || dismissed.has(id) || dismissedNow.current.has(id)) return;
       seenIds.current.add(id);
 
       const n: Notif = {
@@ -236,15 +237,14 @@ export function StaffNotifications({
         href,
         at: Date.now(),
       };
-      setItems((prev) => [n, ...prev.filter((x) => x.id !== id)].slice(0, MAX));
-      setUnread((u) => u + 1);
+      setPushed((prev) => [n, ...prev.filter((x) => x.id !== id)].slice(0, MAX));
       if (opts?.important) {
         toast.warning(title, { description: body, duration: 12_000 });
       } else {
         toast.message(title, { description: body });
       }
     },
-    [],
+    [dismissed],
   );
 
   useEffect(() => {
@@ -274,7 +274,7 @@ export function StaffNotifications({
           : `llamar_mozo:${mesa || 'x'}:${Math.floor(Date.now() / 5000)}`;
       push(
         typeof p.titulo === 'string' ? p.titulo : 'Llaman al mozo',
-        typeof p.cuerpo === 'string' ? p.cuerpo : mesa ? `Mesa ${mesa}` : 'Una mesa necesita atención',
+        typeof p.cuerpo === 'string' ? p.cuerpo : mesa ? etiquetaMesa(mesa) : 'Una mesa necesita atención',
         typeof p.href === 'string' ? p.href : '/admin/mesas',
         { important: true, id },
       );
@@ -322,6 +322,10 @@ export function StaffNotifications({
         push('Cuenta solicitada', 'Una mesa pidió la cuenta', '/admin/cobros');
       })
       .on('broadcast', { event: 'llamar_mozo' }, onLlamarMozo)
+      // La caja cambió en otra pestaña/caja: refrescar el sticky sin esperar el poll.
+      .on('broadcast', { event: 'caja_actualizada' }, () => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
+      })
       .on('broadcast', { event: 'mesa_pagada' }, () => {
         push('Mesa pagada', 'Se completó un cobro', '/admin/cobros');
       })
@@ -343,24 +347,7 @@ export function StaffNotifications({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [tenantId, push]);
-
-  const openChange = (open: boolean) => {
-    if (!open) return;
-    // Al abrir: badge a 0 y se recuerdan como leídas (no reaparecen al recargar).
-    // No vaciamos la lista acá: si no, el dropdown se abre vacío y parece un bug.
-    setUnread(0);
-    setCajaUnread(false);
-    const ids = new Set(
-      items
-        .map((n) => n.id)
-        .filter((id) => id !== CAJA_CERRADA_ID && id !== CAJA_ABIERTA_OTRO_DIA_ID),
-    );
-    if (ids.size > 0) {
-      for (const id of ids) dismissedIds.current.add(id);
-      saveDismissed(tenantId, ids);
-    }
-  };
+  }, [tenantId, push, queryClient]);
 
   const stickyCaja: Notif | null = cajaCerrada
     ? {
@@ -382,9 +369,26 @@ export function StaffNotifications({
         }
       : null;
 
+  const openChange = (open: boolean) => {
+    if (!open) return;
+    // Al abrir: badge a 0 y se recuerdan como leídas (no reaparecen al recargar).
+    // No vaciamos la lista acá: si no, el dropdown se abre vacío y parece un bug.
+    setReadIds(new Set(items.map((n) => n.id)));
+    setCajaAckId(stickyCaja?.id ?? null);
+    const ids = new Set(
+      items
+        .map((n) => n.id)
+        .filter((id) => id !== CAJA_CERRADA_ID && id !== CAJA_ABIERTA_OTRO_DIA_ID),
+    );
+    if (ids.size > 0) {
+      for (const id of ids) dismissedNow.current.add(id);
+      saveDismissed(tenantId, ids);
+    }
+  };
+
   // Si hay sticky de caja y el usuario abre, no la borramos (es estado, no evento).
   const visible = stickyCaja ? [stickyCaja, ...items] : items;
-  const badgeCount = unread + (cajaUnread && (cajaCerrada || cajaAbiertaOtroDia) ? 1 : 0);
+  const badgeCount = unread + (stickyCaja && cajaAckId !== stickyCaja.id ? 1 : 0);
 
   return (
     <DropdownMenu onOpenChange={openChange}>

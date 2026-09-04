@@ -23,6 +23,8 @@ type FloatingCartProps = {
   pedidosConfirmados?: PedidoConfirmadoResumen[];
   /** Texto del botón de confirmación (ej: "Confirmar Pedido" | "Finalizar pedido"). */
   confirmLabel: string;
+  /** Texto bajo el botón de confirmar (qué pasa después). */
+  confirmHint?: React.ReactNode;
   /** Acción al confirmar. Devolver { success:false } muestra el error y deja el cart abierto. */
   onConfirm: () => Promise<
     | { success: boolean; message?: string; notice?: { title: string; description?: string } }
@@ -39,6 +41,7 @@ export function FloatingCart({
   cart,
   pedidosConfirmados = [],
   confirmLabel,
+  confirmHint,
   onConfirm,
   confirming,
   titulo = 'Resumen de tu Mesa',
@@ -281,7 +284,12 @@ export function FloatingCart({
                 {confirming ? 'Enviando…' : confirmLabel}
               </Button>
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                Esto manda a cocina. Para la cuenta, usá <span className="font-medium text-foreground">Pagar</span> arriba.
+                {confirmHint ?? (
+                  <>
+                    Esto manda a cocina. Para la cuenta, usá{' '}
+                    <span className="font-medium text-foreground">Pagar</span> arriba.
+                  </>
+                )}
               </p>
             </div>
           )}

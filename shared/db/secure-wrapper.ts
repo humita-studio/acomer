@@ -33,17 +33,13 @@ async function runWithClaims<T>(
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
   return db.transaction(async (tx) => {
-    // El nombre del rol no puede ir parametrizado (es un identificador). Se
-    // ramifica sobre literales controlados, nunca sobre entrada del usuario.
-    if (role === 'anon') {
-      await tx.execute(sql`SET LOCAL ROLE anon`);
-    } else {
-      await tx.execute(sql`SET LOCAL ROLE authenticated`);
-    }
-
+    // Un solo statement (un round-trip menos por llamada): set_config('role', …)
+    // equivale a SET LOCAL ROLE y, con `true`, ambos settings son
+    // transaction-local. El rol sale de un literal controlado, nunca del usuario.
+    const roleName = role === 'anon' ? 'anon' : 'authenticated';
     const claimsJson = JSON.stringify({ role, ...claims });
     await tx.execute(
-      sql`SELECT set_config('request.jwt.claims', ${claimsJson}, true)`,
+      sql`SELECT set_config('role', ${roleName}, true), set_config('request.jwt.claims', ${claimsJson}, true)`,
     );
 
     return fn(tx);

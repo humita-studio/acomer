@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { Users } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -138,12 +139,12 @@ export function PlanoAsignacion({
               }}
               title={
                 estado === 'libre'
-                  ? `Mesa ${mesa.identificador} · ${mesa.capacidad} lugares · disponible`
+                  ? `${etiquetaMesa(mesa.identificador)} · ${mesa.capacidad} lugares · disponible`
                   : estado === 'actual'
-                    ? `Mesa ${mesa.identificador} · asignada a esta reserva`
+                    ? `${etiquetaMesa(mesa.identificador)} · asignada a esta reserva`
                     : estado === 'chica'
-                      ? `Mesa ${mesa.identificador} · solo ${mesa.capacidad} lugares (grupo más grande)`
-                      : `Mesa ${mesa.identificador} · ocupada en este horario`
+                      ? `${etiquetaMesa(mesa.identificador)} · solo ${mesa.capacidad} lugares (grupo más grande)`
+                      : `${etiquetaMesa(mesa.identificador)} · ocupada en este horario`
               }
             >
               <span className="max-w-full truncate px-1 text-center text-sm font-semibold leading-tight">

@@ -109,7 +109,9 @@ export async function getPlanoData(restauranteId: string): Promise<PlanoData> {
  *   (el de menor orden), de modo que las mesas creadas desde /admin/mesas
  *   aparezcan automáticamente en el plano.
  */
-export async function ensureAmbientePorDefecto(restauranteId: string): Promise<string> {
+export async function ensureAmbientePorDefecto(
+  restauranteId: string,
+): Promise<{ id: string; cambio: boolean }> {
   const existentes = await db
     .select({ id: ambientes.id })
     .from(ambientes)
@@ -117,18 +119,20 @@ export async function ensureAmbientePorDefecto(restauranteId: string): Promise<s
     .orderBy(asc(ambientes.orden), asc(ambientes.createdAt));
 
   let defaultId: string;
+  let cambio = false;
   if (existentes.length === 0) {
     const [creado] = await db
       .insert(ambientes)
       .values({ restauranteId, nombre: 'Salón', orden: 0 })
       .returning({ id: ambientes.id });
     defaultId = creado.id;
+    cambio = true;
   } else {
     defaultId = existentes[0].id;
   }
 
   // Reubicar mesas sin ambiente al ambiente por defecto
-  await db
+  const reubicadas = await db
     .update(mesas)
     .set({ ambienteId: defaultId })
     .where(
@@ -137,7 +141,8 @@ export async function ensureAmbientePorDefecto(restauranteId: string): Promise<s
         isNull(mesas.ambienteId),
         isNull(mesas.deletedAt)
       )
-    );
+    )
+    .returning({ id: mesas.id });
 
-  return defaultId;
+  return { id: defaultId, cambio: cambio || reubicadas.length > 0 };
 }

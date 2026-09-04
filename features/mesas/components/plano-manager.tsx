@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Pencil, Plus, Printer, QrCode, Table2, X } from 'lucide-react';
@@ -88,7 +89,12 @@ export function PlanoManager({
   const [pedidoLocalId, setPedidoLocalId] = useState<string | null>(null);
   const pedidoMesaId = pedidoLocalId ?? pedidoFromUrl;
   // Mozos ven por defecto solo sus mesas; admin/owner ven todas.
-  const [filtroMozo, setFiltroMozo] = useState<FiltroMozo>(esMozo ? 'mias' : 'todas');
+  // Mozos arrancan viendo sus mesas, pero sólo si tienen alguna asignada: si
+  // no, verían el salón vacío como si no existiera.
+  const tieneMesasPropias = initialMesas.some((m) => m.mozoUserId === currentUserId);
+  const [filtroMozo, setFiltroMozo] = useState<FiltroMozo>(
+    esMozo && tieneMesasPropias ? 'mias' : 'todas',
+  );
 
   const {
     modo,
@@ -193,7 +199,7 @@ export function PlanoManager({
       .on('broadcast', { event: 'llamar_mozo' }, ({ payload }) => {
         const p = (payload ?? {}) as { mesaIdentificador?: string };
         const mesa = p.mesaIdentificador?.trim();
-        pushAviso(mesa ? `Mesa ${mesa} llama al mozo` : 'Una mesa llama al mozo');
+        pushAviso(mesa ? `${etiquetaMesa(mesa)} llama al mozo` : 'Una mesa llama al mozo');
       })
       .on('broadcast', { event: 'cuenta_solicitada' }, () => {
         pushAviso('Una mesa pidió la cuenta — revisá Cobros');
@@ -226,6 +232,13 @@ export function PlanoManager({
     () => elementos.filter((e) => e.ambienteId === activeId),
     [elementos, activeId],
   );
+
+  // El ambiente tiene mesas pero el filtro por mozo las oculta todas.
+  const filtroSinMesas =
+    !editando &&
+    filtroMozo !== 'todas' &&
+    mesasAmbiente.length === 0 &&
+    mesas.some((m) => m.ambienteId === activeId);
 
   const stats = useMemo(() => {
     const base = editando ? mesas : mesasFiltradas;
@@ -483,15 +496,29 @@ export function PlanoManager({
                       </span>
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-foreground">
-                          {ambienteActivo?.nombre ?? 'Este ambiente'} todavía no tiene mesas
+                          {filtroSinMesas
+                            ? 'No hay mesas con este filtro'
+                            : `${ambienteActivo?.nombre ?? 'Este ambiente'} todavía no tiene mesas`}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {canManage
-                            ? 'Agregá la primera para poder tomar pedidos acá.'
-                            : 'Pedile a un administrador que arme el salón.'}
+                          {filtroSinMesas
+                            ? 'Cambiá el filtro para ver el resto del salón.'
+                            : canManage
+                              ? 'Agregá la primera para poder tomar pedidos acá.'
+                              : 'Pedile a un administrador que arme el salón.'}
                         </p>
                       </div>
-                      {canManage && (
+                      {filtroSinMesas && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setFiltroMozo('todas')}
+                        >
+                          Ver todas las mesas
+                        </Button>
+                      )}
+                      {!filtroSinMesas && canManage && (
                         <Button
                           type="button"
                           size="sm"
@@ -691,7 +718,7 @@ export function PlanoManager({
                       className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-3 print:break-inside-avoid print:border-border"
                     >
                       <span className="text-sm font-semibold text-foreground">
-                        Mesa {m.identificador}
+                        {etiquetaMesa(m.identificador)}
                       </span>
                       <QRCodeSVG value={url} size={120} level="H" />
                       <button

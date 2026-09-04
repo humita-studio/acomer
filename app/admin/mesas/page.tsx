@@ -1,7 +1,4 @@
 import { Suspense } from 'react';
-import { db } from '@/shared/db';
-import { restaurantes } from '@/shared/db/schema';
-import { eq } from 'drizzle-orm';
 import { getCurrentSession } from '@/features/auth/session';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -34,18 +31,18 @@ async function PlanoContent() {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
 
-  await ensureAmbientePorDefecto(session.restauranteId);
+  // El ambiente por defecto (self-healing) y el plano se piden en paralelo: en
+  // el caso normal el primero no escribe nada. Si tuvo que crear o reasignar,
+  // releemos el plano ya consistente.
+  const [ambiente, planoInicial, headersList] = await Promise.all([
+    ensureAmbientePorDefecto(session.restauranteId),
+    getPlanoData(session.restauranteId),
+    headers(),
+  ]);
+  const planoData = ambiente.cambio ? await getPlanoData(session.restauranteId) : planoInicial;
 
-  const planoData = await getPlanoData(session.restauranteId);
-
-  const headersList = await headers();
   const host = headersList.get('host') || 'localhost:3000';
-  const [tenant] = await db
-    .select({ slug: restaurantes.slug })
-    .from(restaurantes)
-    .where(eq(restaurantes.id, session.restauranteId))
-    .limit(1);
-  const tenantSlug = tenant?.slug || 'demo';
+  const tenantSlug = session.slugRestaurante || 'demo';
   const origin = host.includes('localhost')
     ? `http://${tenantSlug}.localhost:3000`
     : `https://${tenantSlug}.${host.replace('app.', '')}`;

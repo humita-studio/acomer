@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { formatPeso } from '@/shared/lib/format';
 import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -230,7 +231,7 @@ function OrdenCardBody({
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">Total</span>
           <span className="font-display text-[15px] font-semibold tabular-nums">
-            ${orden.total.toFixed(2)}
+            {formatPeso(orden.total)}
           </span>
         </div>
       </div>
@@ -312,7 +313,7 @@ function EntregadoCardBody({ orden }: { orden: Orden }) {
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">Total</span>
         <span className="font-display text-[15px] font-semibold tabular-nums">
-          ${orden.total.toFixed(2)}
+          {formatPeso(orden.total)}
         </span>
       </div>
     </div>
@@ -741,7 +742,7 @@ export function PedidosOnlineManager({
                         </p>
                       </div>
                       <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                        ${o.total.toFixed(2)}
+                        {formatPeso(o.total)}
                       </span>
                     </div>
                   ))}

@@ -153,15 +153,23 @@ function ZonaMapaDialog({
   // Snapshot de si había zona al abrir (para autoStartDraw, sin races con draft).
   const [startEmpty, setStartEmpty] = useState(!value);
 
-  useEffect(() => {
-    if (!open) {
+  // Al abrir: sincronizar borrador con la config actual y remontar el mapa.
+  // Al cerrar: desmontar el mapa. (Ajuste de estado durante el render.)
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setDraft(value);
+      setStartEmpty(!value);
+      setOpenKey((k) => k + 1);
       setMapMounted(false);
-      return;
+    } else {
+      setMapMounted(false);
     }
-    // Sincronizar borrador con la config actual al abrir.
-    setDraft(value);
-    setStartEmpty(!value);
-    setOpenKey((k) => k + 1);
+  }
+
+  useEffect(() => {
+    if (!open) return;
     // Montar el mapa un frame después: el dialog ya midió altura/ancho.
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
@@ -174,8 +182,6 @@ function ZonaMapaDialog({
       cancelAnimationFrame(raf2);
       window.clearTimeout(t);
     };
-    // Solo al abrir el modal; no re-sync si `value` cambia estando abierto.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   return (

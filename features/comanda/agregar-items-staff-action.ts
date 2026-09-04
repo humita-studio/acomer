@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent, broadcastMesaEvent } from '@/shared/supabase/broadcast';
 import {
   crearPedidoConItemsStaff,
   esItemLibre,
@@ -73,21 +73,13 @@ export async function agregarItemsStaffAction(
     });
 
     // Avisar al comensal (ticket) y al panel (cocina / campana).
-    try {
-      const supabase = await createSupabaseServerClient();
-      await supabase.channel(`mesa_${sesionMesaId}`).send({
-        type: 'broadcast',
-        event: 'ticket_actualizado',
-        payload: { sesionMesaId },
-      });
-      await supabase.channel(`admin_restaurant_${session.restauranteId}`).send({
-        type: 'broadcast',
-        event: 'nuevo_pedido',
-        payload: { sesionMesaId, pedidoId: resultado.pedidoId },
-      });
-    } catch (realtimeError) {
-      console.warn('[agregarItemsStaffAction] Error notificando realtime:', realtimeError);
-    }
+    await Promise.all([
+      broadcastMesaEvent(sesionMesaId, 'ticket_actualizado', { sesionMesaId }),
+      broadcastAdminEvent(session.restauranteId, 'nuevo_pedido', {
+        sesionMesaId,
+        pedidoId: resultado.pedidoId,
+      }),
+    ]);
 
     return { success: true, ...resultado };
   } catch (error) {

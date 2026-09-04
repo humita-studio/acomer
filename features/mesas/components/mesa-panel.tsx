@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Circle, Copy, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -42,9 +42,14 @@ export function MesaPanel({
 }) {
   const [nombre, setNombre] = useState(mesa.identificador);
 
-  useEffect(() => {
+  // Si cambia la mesa seleccionada (o su nombre desde afuera), resincronizar el
+  // input durante el render.
+  const nombreKey = `${mesa.id}:${mesa.identificador}`;
+  const [prevNombreKey, setPrevNombreKey] = useState(nombreKey);
+  if (nombreKey !== prevNombreKey) {
+    setPrevNombreKey(nombreKey);
     setNombre(mesa.identificador);
-  }, [mesa.id, mesa.identificador]);
+  }
 
   const commitNombre = () => {
     const limpio = nombre.trim();

@@ -77,7 +77,7 @@ function AprobarCobroForm({
       <DialogHeader className="px-6 py-5">
         <DialogTitle>Aprobar cobro</DialogTitle>
         <DialogDescription>
-          Mesa {tx.mesaIdentificador} · {formatHora(tx.fecha)} hs
+          {tx.mesaIdentificador} · {formatHora(tx.fecha)} hs
         </DialogDescription>
       </DialogHeader>
 

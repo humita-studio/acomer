@@ -1,7 +1,7 @@
 import { db } from '@/shared/db';
 import { sesionesMesa } from '@/shared/db/schema';
 import { and, eq } from 'drizzle-orm';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent } from '@/shared/supabase/broadcast';
 
 /**
  * Helpers de sesión de mesa compartidos entre el flujo público (QR del comensal)
@@ -11,16 +11,7 @@ import { createSupabaseServerClient } from '@/shared/supabase/server';
 
 /** Avisa al plano del local (admin) que cambió la ocupación de una mesa. */
 export async function broadcastOcupacion(tenantId: string, mesaId: string, ocupada: boolean) {
-  try {
-    const supabase = await createSupabaseServerClient();
-    await supabase.channel(`admin_restaurant_${tenantId}`).send({
-      type: 'broadcast',
-      event: 'ocupacion_cambiada',
-      payload: { mesaId, ocupada },
-    });
-  } catch (e) {
-    console.error('[broadcastOcupacion]', e);
-  }
+  await broadcastAdminEvent(tenantId, 'ocupacion_cambiada', { mesaId, ocupada });
 }
 
 /**

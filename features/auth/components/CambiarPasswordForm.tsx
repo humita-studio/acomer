@@ -52,6 +52,11 @@ export function CambiarPasswordForm({ forzado = false }: { forzado?: boolean }) 
         return;
       }
 
+      // El panel lee `must_change_password` de los claims del JWT (verificación
+      // local, sin ir a Auth): hay que emitir un token nuevo con la metadata
+      // actualizada, si no el proxy sigue mandando a /cambiar-password.
+      await supabase.auth.refreshSession();
+
       router.push('/admin');
       router.refresh();
     } catch (err) {

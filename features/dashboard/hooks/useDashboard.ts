@@ -31,6 +31,8 @@ export function useDashboardRealtime(tenantId: string) {
     channel
       .on('broadcast', { event: 'ocupacion_cambiada' }, invalidar)
       .on('broadcast', { event: 'cuenta_solicitada' }, invalidar)
+      .on('broadcast', { event: 'cobro_actualizado' }, invalidar)
+      .on('broadcast', { event: 'mesa_pagada' }, invalidar)
       .subscribe();
 
     return () => {

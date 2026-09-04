@@ -58,6 +58,7 @@ export function useCajaRealtime(tenantId: string) {
     const channel = supabase
       .channel(`admin_restaurant_${tenantId}`)
       .on('broadcast', { event: 'cuenta_solicitada' }, invalidar)
+      .on('broadcast', { event: 'cobro_actualizado' }, invalidar)
       .on('broadcast', { event: 'mesa_pagada' }, invalidar)
       .on('broadcast', { event: 'pago_parcial' }, invalidar)
       .on('broadcast', { event: 'caja_actualizada' }, invalidar)

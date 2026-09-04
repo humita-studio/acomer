@@ -18,7 +18,7 @@ import { calcularPromosStaff } from '@/features/promociones/cobroPromosActions';
 import type { PromoMetodoPago } from '@/features/promociones/promociones';
 import { obtenerCarta } from '@/features/carta/obtenerCarta';
 import type { ProductoMenu, CategoriaMenu } from '@/features/carta/types';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent } from '@/shared/supabase/broadcast';
 import {
   getSesionCajaAbiertaId,
   requireSesionCajaAbierta,
@@ -137,30 +137,18 @@ async function notificarNuevoPedidoMostrador(
   tenantId: string,
   payload: { sesionId: string; pedidoId: string; nombreReferencia?: string | null },
 ) {
-  try {
-    const supabase = await createSupabaseServerClient();
-    const etiqueta = payload.nombreReferencia?.trim()
-      ? `Mostrador · ${payload.nombreReferencia.trim()}`
-      : 'Mostrador';
-    const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-    await channel.send({
-      type: 'broadcast',
-      event: 'nuevo_pedido',
-      payload: {
-        sesionMesaId: payload.sesionId,
-        pedidoId: payload.pedidoId,
-        etiqueta,
-      },
-    });
+  const etiqueta = payload.nombreReferencia?.trim()
+    ? `Mostrador · ${payload.nombreReferencia.trim()}`
+    : 'Mostrador';
+  await Promise.all([
+    broadcastAdminEvent(tenantId, 'nuevo_pedido', {
+      sesionMesaId: payload.sesionId,
+      pedidoId: payload.pedidoId,
+      etiqueta,
+    }),
     // Refresca el efectivo esperado en otras pestañas del panel de caja.
-    await channel.send({
-      type: 'broadcast',
-      event: 'caja_actualizada',
-      payload: { t: Date.now() },
-    });
-  } catch (e) {
-    console.warn('[ventaMostrador] realtime nuevo_pedido:', e);
-  }
+    broadcastAdminEvent(tenantId, 'caja_actualizada', { t: Date.now() }),
+  ]);
 }
 
 // ---------------------------------------------------------------------------

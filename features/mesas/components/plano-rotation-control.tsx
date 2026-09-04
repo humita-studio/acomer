@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { cn } from '@/shared/lib/utils';
 
 const ANGLE_PRESETS = [0, 45, 90, 135, 180, 225, 270, 315] as const;
@@ -22,8 +22,11 @@ export function RotationControl({
 }) {
   const id = useId();
   const [draft, setDraft] = useState(String(value));
-
-  useEffect(() => setDraft(String(value)), [value]);
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setDraft(String(value));
+  }
 
   const commit = () => {
     const n = Number(draft);

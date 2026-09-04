@@ -26,7 +26,7 @@ export function CobroPendienteCard({
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
           <span className="inline-flex w-fit rounded-full bg-neutral-subtle px-2 py-0.5 text-xs font-semibold text-text-secondary">
-            Mesa {tx.mesaIdentificador}
+            {tx.mesaIdentificador}
           </span>
           <span className="text-xs text-muted-foreground">{formatHora(tx.fecha)} hs</span>
         </div>
@@ -106,7 +106,7 @@ export function CobroResueltoCard({ tx }: { tx: TransaccionCobro }) {
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
           <span className="inline-flex w-fit rounded-full bg-neutral-subtle px-2 py-0.5 text-xs font-semibold text-text-secondary">
-            Mesa {tx.mesaIdentificador}
+            {tx.mesaIdentificador}
           </span>
           <span className="text-xs text-muted-foreground">{formatHora(tx.fecha)} hs</span>
         </div>

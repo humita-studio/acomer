@@ -1,6 +1,6 @@
 'use client';
 
-import { Star, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { ResenasMetrics } from './ResenasMetrics';
 import { ResenasConfigCard } from './ResenasConfigCard';
 import { ResenasFeed } from './ResenasFeed';

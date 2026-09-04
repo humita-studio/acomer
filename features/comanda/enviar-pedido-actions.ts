@@ -1,9 +1,8 @@
 'use server';
 
-import { db } from '@/shared/db';
 import { itemsBorradorMesa, sesionesMesa, transaccionesPago } from '@/shared/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent, broadcastMesaEvent } from '@/shared/supabase/broadcast';
 import { withPublicTenant } from '@/shared/db/secure-wrapper';
 import { crearPedidoConItems } from '@/features/pedidos/crearPedidoCore';
 
@@ -100,35 +99,17 @@ export async function enviarPedidoAction(
       return { pedidoId, totalPedido, updatedPendingTx };
     });
 
-    // Siempre avisamos al panel (cocina + campana). Si además se tocó un cobro
-    // pendiente, reutilizamos el evento de cuenta para refrescar cobros.
-    try {
-      const supabase = await createSupabaseServerClient();
-      const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-      await channel.send({
-        type: 'broadcast',
-        event: 'nuevo_pedido',
-        payload: { sesionMesaId, pedidoId: resultado.pedidoId },
-      });
-
-      // Notificar a todos los comensales de la mesa para que vean sus pedidos confirmados
-      const mesaChannel = supabase.channel(`mesa_${sesionMesaId}`);
-      await mesaChannel.send({
-        type: 'broadcast',
-        event: 'pedido_confirmado',
-        payload: { pedidoId: resultado.pedidoId },
-      });
-
-      if (resultado.updatedPendingTx) {
-        await channel.send({
-          type: 'broadcast',
-          event: 'cuenta_solicitada',
-          payload: { sesionMesaId },
-        });
-      }
-    } catch (realtimeError) {
-      console.warn('[enviarPedidoAction] Error enviando notificación realtime:', realtimeError);
+    // Siempre avisamos al panel (cocina + campana) y a los demás comensales de
+    // la mesa. Si además se tocó un cobro pendiente, reutilizamos el evento de
+    // cuenta para refrescar cobros.
+    const avisos = [
+      broadcastAdminEvent(tenantId, 'nuevo_pedido', { sesionMesaId, pedidoId: resultado.pedidoId }),
+      broadcastMesaEvent(sesionMesaId, 'pedido_confirmado', { pedidoId: resultado.pedidoId }),
+    ];
+    if (resultado.updatedPendingTx) {
+      avisos.push(broadcastAdminEvent(tenantId, 'cobro_actualizado', { sesionMesaId }));
     }
+    await Promise.all(avisos);
 
     return { success: true, ...resultado };
   } catch (error) {

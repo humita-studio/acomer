@@ -15,7 +15,6 @@ import {
   Percent,
   Sparkles,
   Star,
-  Tag,
   TrendingUp,
   Users,
   UtensilsCrossed,
@@ -28,7 +27,6 @@ import { Button } from '@/shared/ui/button';
 export function ToolInvocationRenderer({
   toolName,
   state,
-  args,
   result,
 }: {
   toolName: string;

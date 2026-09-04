@@ -17,7 +17,7 @@ import {
   type MesaCandidata,
   type ReservaOcupacion,
 } from '@/features/reservas/disponibilidadMesas';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent } from '@/shared/supabase/broadcast';
 import { revalidatePath } from 'next/cache';
 
 // Estados que "ocupan" una mesa para el cálculo de disponibilidad.
@@ -306,16 +306,7 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
         .returning({ id: reservas.id })
     );
 
-    try {
-      const supabase = await createSupabaseServerClient();
-      await supabase.channel(`admin_restaurant_${tenantId}`).send({
-        type: 'broadcast',
-        event: 'reserva_nueva',
-        payload: { reservaId: reserva.id },
-      });
-    } catch (e) {
-      console.warn('[crearReservaAction] realtime', e);
-    }
+    await broadcastAdminEvent(tenantId, 'reserva_nueva', { reservaId: reserva.id });
 
     return { success: true, reservaId: reserva.id };
   } catch (error) {
@@ -408,16 +399,7 @@ export async function crearReservaAdminAction(datos: DatosReservaAdmin) {
         .returning({ id: reservas.id })
     );
 
-    try {
-      const supabase = await createSupabaseServerClient();
-      await supabase.channel(`admin_restaurant_${tenantId}`).send({
-        type: 'broadcast',
-        event: 'reserva_nueva',
-        payload: { reservaId: reserva.id },
-      });
-    } catch (e) {
-      console.warn('[crearReservaAdminAction] realtime', e);
-    }
+    await broadcastAdminEvent(tenantId, 'reserva_nueva', { reservaId: reserva.id });
 
     revalidatePath('/admin/reservas');
     return { success: true, reservaId: reserva.id };

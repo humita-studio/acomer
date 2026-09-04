@@ -3,10 +3,8 @@
 import { useState, useTransition } from 'react';
 import {
   Star,
-  ExternalLink,
   MessageCircle,
   Phone,
-  CheckCircle2,
   Clock,
   User,
   Filter,

@@ -91,6 +91,14 @@ function minutosDesde(iso: string): number {
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 }
 
+/** "12 min" hasta la hora; después "1 h 05" (un "666 min" no le dice nada a cocina). */
+function esperaLabel(mins: number): string {
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, '0')}`;
+}
+
 function nextEstado(estado: EstadoPedidoCocina): EstadoPedidoCocina | null {
   if (estado === 'Pendiente') return 'En Preparación';
   if (estado === 'En Preparación') return 'Listo';
@@ -177,7 +185,7 @@ function PedidoCardContent({
                     urgente && 'bg-destructive/10 text-destructive',
                   )}
                 >
-                  {mins} min
+                  {esperaLabel(mins)}
                 </Badge>
                 {pedido.pagado && (
                   <Badge
@@ -503,19 +511,14 @@ export function CocinaManager({
     }
   }, [tab, refreshActivos, refreshHistorial]);
 
-  // Sync inicial del server component (solo si no hay mutaciones en vuelo).
-  useEffect(() => {
-    if (inflightRef.current.size === 0) {
-      setPedidos(initialPedidos);
-    }
-  }, [initialPedidos]);
-
-  // Historial bajo demanda al abrir la pestaña.
-  useEffect(() => {
-    if (tab === 'historial' && !historialCargado) {
-      void refreshHistorial();
-    }
-  }, [tab, historialCargado, refreshHistorial]);
+  // Sync con el server component (router.refresh / navegación): adoptar la
+  // lista nueva salvo que haya mutaciones optimistas en vuelo (`pendingIds`
+  // refleja `inflightRef` en estado, así se puede leer durante el render).
+  const [prevInitialPedidos, setPrevInitialPedidos] = useState(initialPedidos);
+  if (initialPedidos !== prevInitialPedidos) {
+    setPrevInitialPedidos(initialPedidos);
+    if (pendingIds.size === 0) setPedidos(initialPedidos);
+  }
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -672,7 +675,12 @@ export function CocinaManager({
 
       <Tabs
         value={tab}
-        onValueChange={(v) => setTab(v === 'historial' ? 'historial' : 'activos')}
+        onValueChange={(v) => {
+          const next = v === 'historial' ? 'historial' : 'activos';
+          setTab(next);
+          // Historial bajo demanda: se carga la primera vez que se abre la pestaña.
+          if (next === 'historial' && !historialCargado) void refreshHistorial();
+        }}
         className="flex min-h-0 flex-1 flex-col gap-3"
       >
         <TabsList className="shrink-0">

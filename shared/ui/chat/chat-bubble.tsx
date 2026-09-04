@@ -24,6 +24,7 @@ export function ChatBubble({
     <div
       data-slot="chat-bubble"
       data-variant={variant}
+      data-layout={layout}
       className={cn(
         'group relative flex w-full gap-2.5 items-start',
         variant === 'sent' ? 'flex-row-reverse justify-start' : 'flex-row justify-start',

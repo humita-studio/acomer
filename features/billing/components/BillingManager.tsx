@@ -31,7 +31,7 @@ export function BillingManager({
   pagoState?: string;
 }) {
   const router = useRouter();
-  const [view, setView] = useState(initial);
+  const [view] = useState(initial);
   const [planSel, setPlanSel] = useState<PlanId>(
     view.plan === 'a_medida' ? 'pro' : view.plan,
   );

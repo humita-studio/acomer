@@ -6,7 +6,7 @@ import { getTenantBySlug } from '@/features/tenant/get-tenant';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant, withPublicTenant } from '@/shared/db/secure-wrapper';
-import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { broadcastAdminEvent, broadcastMesaEvent } from '@/shared/supabase/broadcast';
 import { revalidatePath } from 'next/cache';
 import {
   resolverLineasBulk,
@@ -59,12 +59,7 @@ async function broadcastOrdenExterna(
   event: 'orden_externa_nueva' | 'orden_externa_actualizada' | 'nuevo_pedido',
   payload: Record<string, unknown>,
 ) {
-  try {
-    const supabase = await createSupabaseServerClient();
-    await supabase.channel(`admin_restaurant_${tenantId}`).send({ type: 'broadcast', event, payload });
-  } catch (e) {
-    console.warn('[broadcastOrdenExterna]', e);
-  }
+  await broadcastAdminEvent(tenantId, event, payload);
 }
 
 /**
@@ -433,16 +428,9 @@ export async function cambiarEstadoEntregaAction(sesionMesaId: string, nuevoEsta
 
     // Avisar al cliente que está siguiendo su pedido (canal de su sesión), para
     // que la pantalla de seguimiento avance el estado sin recargar.
-    try {
-      const supabase = await createSupabaseServerClient();
-      await supabase.channel(`mesa_${sesionMesaId}`).send({
-        type: 'broadcast',
-        event: 'estado_entrega_actualizado',
-        payload: { estadoEntrega: nuevoEstado },
-      });
-    } catch (e) {
-      console.warn('[cambiarEstadoEntregaAction] realtime seguimiento', e);
-    }
+    await broadcastMesaEvent(sesionMesaId, 'estado_entrega_actualizado', {
+      estadoEntrega: nuevoEstado,
+    });
 
     revalidatePath('/admin/pedidos-online');
     return { success: true, message: 'Estado actualizado' };

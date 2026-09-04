@@ -1,9 +1,24 @@
 import { cache } from 'react';
 import { createSupabaseServerClient } from '@/shared/supabase/server';
+import { getVerifiedUser } from '@/shared/supabase/claims';
 import { perfilesEmpleados, restaurantes } from '@/shared/db/schema';
 import { eq } from 'drizzle-orm';
 import { db } from '@/shared/db';
 import type { RoleType } from '@/features/authorization/roles';
+
+/**
+ * Next lanza este error cuando una ruta que intenta prerenderizarse usa
+ * `cookies()`. Hay que dejarlo pasar: así Next marca la ruta como dinámica en
+ * vez de que nosotros lo loguéemos como si fuera un fallo de sesión.
+ */
+function isDynamicUsageError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'digest' in error &&
+    (error as { digest?: unknown }).digest === 'DYNAMIC_SERVER_USAGE'
+  );
+}
 
 export interface AuthUser {
   id: string;
@@ -27,11 +42,10 @@ export interface AuthSession {
 export const getCurrentSession = cache(async (): Promise<AuthSession | null> => {
   try {
     const supabase = await createSupabaseServerClient();
-    
-    // 1. Obtener el usuario autenticado
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError || !user) {
+
+    // 1. Usuario verificado por firma del JWT (sin HTTP a Supabase Auth).
+    const user = await getVerifiedUser(supabase);
+    if (!user) {
       return null;
     }
 
@@ -69,6 +83,7 @@ export const getCurrentSession = cache(async (): Promise<AuthSession | null> => 
       slugRestaurante: perfil_data.slug,
     };
   } catch (error) {
+    if (isDynamicUsageError(error)) throw error;
     console.error('[getCurrentSession] Error:', error);
     return null;
   }
@@ -94,18 +109,14 @@ export function claimsFromSession(session: AuthSession) {
 export async function getAuthUser(): Promise<AuthUser | null> {
   try {
     const supabase = await createSupabaseServerClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    
-    if (error || !user) {
+    const user = await getVerifiedUser(supabase);
+    if (!user) {
       return null;
     }
 
-    return {
-      id: user.id,
-      email: user.email || '',
-      aud: user.aud,
-    };
+    return { id: user.id, email: user.email, aud: user.aud };
   } catch (error) {
+    if (isDynamicUsageError(error)) throw error;
     console.error('[getAuthUser] Error:', error);
     return null;
   }
