@@ -114,12 +114,18 @@ Cada restaurante vincula **su** cuenta MP desde Configuración → Pagos.
    El callback exige que el **dueño/admin esté logueado en ese mismo navegador**
    y que el `state` coincida con su local: si vuelve con `?error=state_mismatch`
    es que el link se abrió con el id de otro restaurante.
-3. **Webhooks** de pagos del local (Checkout del comensal):
+3. **Webhooks** (Notificaciones → Webhooks → **Modo productivo**). Es OTRA
+   pantalla que la de Redirect URLs; no mezclar las dos direcciones:
    ```
-   https://acomer.com.ar/api/webhooks/pagos/mercado_pago?tenantId=<uuid>
+   https://acomer.com.ar/api/webhooks/pagos/mercado_pago
    ```
-   En la app, la `notification_url` se arma sola con el `tenantId` del local.  
-   En el panel MP a veces configurás una URL base; lo importante es que las notificaciones lleguen y que `MP_WEBHOOK_SECRET` coincida con el secret de firma.
+   Eventos: solo **Pagos**. Guardar y copiar la **Clave secreta** que muestra
+   esa pantalla → `MP_WEBHOOK_SECRET` en Vercel.
+
+   Cada pago del comensal ya lleva su propia `notification_url` con el
+   `tenantId` del local (`…/mercado_pago?tenantId=<uuid>`), así que la URL del
+   panel es un respaldo: sin `tenantId` la ruta responde 200 y la ignora, para
+   que Mercado Pago no la marque como fallida ni reintente.
 
 ### Mercado Pago — billing **SaaS** (el local te paga a vos)
 

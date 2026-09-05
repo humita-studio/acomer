@@ -24,11 +24,11 @@ export async function POST(
 
     const tenantId = searchParams.get('tenantId');
     if (!tenantId) {
-      console.warn('[webhook/pagos] missing tenantId');
-      return NextResponse.json(
-        { error: 'tenantId is required in webhook URL' },
-        { status: 400 },
-      );
+      // La URL genérica del panel de Mercado Pago (sin tenantId) es solo un
+      // respaldo: cada pago ya trae su notification_url con el local. Se
+      // responde 200 para que MP no la marque como fallida ni reintente.
+      console.warn('[webhook/pagos] sin tenantId: notificación del panel ignorada');
+      return NextResponse.json({ received: true, ignored: true, reason: 'sin tenantId' });
     }
 
     let paymentIdToVerify: string | null = null;
