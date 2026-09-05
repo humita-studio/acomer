@@ -45,7 +45,7 @@ export function ResenasConfigCard({
         <div className="flex items-center gap-2">
           <Settings className="size-5 text-muted-foreground" />
           <div>
-            <CardTitle>Configuración de Google Maps & Reputación</CardTitle>
+            <CardTitle>Google Maps y filtro</CardTitle>
             <CardDescription>
               Configurá el enlace directo a tu ficha de Google Maps y las reglas del filtro.
             </CardDescription>
@@ -58,7 +58,7 @@ export function ResenasConfigCard({
           <div className="space-y-0.5">
             <Label className="text-sm font-semibold">Solicitar opinión a los clientes</Label>
             <p className="text-xs text-muted-foreground">
-              Muestra el widget de calificación al pagar la mesa, pedir la cuenta o recibir delivery.
+              Pide una calificación al pagar, al pedir la cuenta o al recibir el pedido.
             </p>
           </div>
           <Switch checked={activas} onCheckedChange={setActivas} />
@@ -123,7 +123,7 @@ export function ResenasConfigCard({
             <div className="space-y-0.5 pr-2">
               <Label className="text-sm font-semibold">Alerta inmediata en el salón</Label>
               <p className="text-xs text-muted-foreground">
-                Hace sonar la campana de notificaciones del staff cuando entra una queja privada (1–3★).
+                Suena la campana del equipo cuando entra una queja privada (1–3★).
               </p>
             </div>
             <Switch checked={alertaNegativa} onCheckedChange={setAlertaNegativa} />

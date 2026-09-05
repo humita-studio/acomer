@@ -44,6 +44,28 @@ function dismissedKey(tenantId: string) {
   return `acomer:staff-alerts-dismissed:${tenantId}`;
 }
 
+// El toast "Caja cerrada" se muestra una vez por sesión de navegador; después
+// queda solo en la campana. Antes salía en cada carga completa del panel.
+function cajaCerradaKey(tenantId: string) {
+  return `acomer:caja-cerrada-avisada:${tenantId}`;
+}
+
+function cajaCerradaYaAvisada(tenantId: string): boolean {
+  try {
+    return sessionStorage.getItem(cajaCerradaKey(tenantId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function marcarCajaCerradaAvisada(tenantId: string) {
+  try {
+    sessionStorage.setItem(cajaCerradaKey(tenantId), '1');
+  } catch {
+    // sin storage: se avisa igual
+  }
+}
+
 function loadDismissed(tenantId: string): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
@@ -194,8 +216,9 @@ export function StaffNotifications({
     if (caja == null) {
       toastedCajaVieja.current = false;
       toast.dismiss(CAJA_ABIERTA_OTRO_DIA_ID);
-      if (!toastedCaja.current) {
+      if (!toastedCaja.current && !cajaCerradaYaAvisada(tenantId)) {
         toastedCaja.current = true;
+        marcarCajaCerradaAvisada(tenantId);
         toast.message('Caja cerrada', {
           id: CAJA_CERRADA_ID,
           description: 'Abrí la caja para registrar ventas y cobros en efectivo',
@@ -217,7 +240,7 @@ export function StaffNotifications({
       toast.dismiss(CAJA_CERRADA_ID);
       toast.dismiss(CAJA_ABIERTA_OTRO_DIA_ID);
     }
-  }, [alertarCajaCerrada, caja, cajaPending]);
+  }, [alertarCajaCerrada, caja, cajaPending, tenantId]);
 
   const push = useCallback(
     (

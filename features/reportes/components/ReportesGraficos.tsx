@@ -151,7 +151,7 @@ export function ReportesGraficos({
           <CardContent className="space-y-4">
             <div className="space-y-0.5">
               <h2 className="font-heading text-base font-medium">Ventas por método</h2>
-              <p className="text-xs text-muted-foreground">Distribución por canal</p>
+              <p className="text-xs text-muted-foreground">Distribución por medio de pago</p>
             </div>
             {metodos.length === 0 ? (
               <GraficoVacio>Sin ventas en el período</GraficoVacio>
@@ -198,7 +198,7 @@ export function ReportesGraficos({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardContent className="space-y-4">
-            <h2 className="font-heading text-base font-medium">Top productos</h2>
+            <h2 className="font-heading text-base font-medium">Más vendidos</h2>
             {top.length === 0 ? (
               <GraficoVacio alto={200}>Sin productos vendidos</GraficoVacio>
             ) : (

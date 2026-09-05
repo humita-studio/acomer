@@ -352,8 +352,7 @@ export function ImportarDialog({
                         Subí una foto o PDF de la carta del restaurante
                       </p>
                       <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                        Sacale una foto al menú en papel, pizarrón o subí el PDF. Gemini 3.8 Flash
-                        extraerá platos, categorías y precios automáticamente.
+                        Sacale una foto al menú en papel, pizarrón o subí el PDF. La IA lee platos, categorías y precios automáticamente.
                       </p>
                     </div>
                   )}
@@ -391,7 +390,7 @@ export function ImportarDialog({
                     {escaneandoIa ? (
                       <>
                         <Loader2 className="size-4 animate-spin" />
-                        Gemini 3.8 Flash digitalizando carta…
+                        Leyendo la carta…
                       </>
                     ) : (
                       <>

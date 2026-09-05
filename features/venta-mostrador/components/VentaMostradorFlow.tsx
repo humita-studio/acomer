@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
 import { queryKeys } from '@/shared/query/keys';
-import { Dialog, DialogContent } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import { getCajaActualAction } from '@/features/caja/cajaActions';
 import {
   cobrarVentaMostradorAction,
@@ -238,6 +238,7 @@ export function VentaMostradorFlow({
         showCloseButton={step !== 'cobrada' || cajaCerrada}
         className={cn('block p-0', dialogWide ? 'sm:max-w-4xl' : 'sm:max-w-md')}
       >
+        <DialogTitle className="sr-only">Nueva venta</DialogTitle>
         {cajaLoading && (
           <div className="flex flex-col items-center gap-3 p-10 text-center">
             <div className="size-8 animate-pulse rounded-full bg-muted" />

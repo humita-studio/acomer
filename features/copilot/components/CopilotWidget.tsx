@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import {
   Banknote,
@@ -154,6 +154,9 @@ function MarkdownRenderer({ contenido }: { contenido: string }) {
   );
 }
 
+/** Store vacío para useSyncExternalStore: el valor no cambia en vida de la página. */
+const suscribirNada = () => () => {};
+
 export function CopilotWidget() {
   const [abierto, setAbierto] = useState(false);
   const [expandido, setExpandido] = useState(false);
@@ -180,6 +183,16 @@ export function CopilotWidget() {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isGenerating]);
+
+  // El atajo se muestra según el sistema: ⌘J en Mac, Ctrl+J en el resto. Con
+  // useSyncExternalStore el servidor renderiza Ctrl+J y el cliente corrige sin
+  // desajuste de hidratación ni setState dentro de un efecto.
+  const esMac = useSyncExternalStore(
+    suscribirNada,
+    () => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent),
+    () => false,
+  );
+  const atajo = esMac ? '⌘J' : 'Ctrl+J';
 
   // Atajo de teclado: Cmd+J o Ctrl+J para abrir/cerrar
   useEffect(() => {
@@ -235,7 +248,7 @@ export function CopilotWidget() {
         </div>
         <span className="text-sm font-semibold hidden sm:inline tracking-tight">Copiloto IA</span>
         <span className="hidden sm:inline-block rounded bg-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-mono">
-          ⌘J
+          {atajo}
         </span>
       </button>
 

@@ -65,7 +65,7 @@ export const PROMO_CANAL_LABEL: Record<PromoCanal, string> = {
   mostrador: 'Mostrador',
   salon: 'Salón',
   delivery: 'Delivery',
-  takeaway: 'Takeaway',
+  takeaway: 'Retiro',
 };
 
 /** Días de la semana para los chips del formulario (0=Dom). */

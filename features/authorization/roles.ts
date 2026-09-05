@@ -5,6 +5,19 @@
 
 export type RoleType = 'owner' | 'admin' | 'cajero' | 'mozo' | 'cocina';
 
+/** Cómo se llama cada rol de cara al usuario (sidebar, Empleados). */
+export const ETIQUETA_ROL: Record<RoleType, string> = {
+  owner: 'Dueño',
+  admin: 'Administrador',
+  cajero: 'Cajero',
+  mozo: 'Mozo',
+  cocina: 'Cocina',
+};
+
+export function etiquetaRol(role: string): string {
+  return ETIQUETA_ROL[role as RoleType] ?? role;
+}
+
 export interface RolePermissions {
   canManageMenu: boolean;      // CRUD categorías y productos
   canManagePrices: boolean;    // Modificar precios

@@ -80,13 +80,13 @@ async function ConfigContent({ tab }: { tab: string | undefined }) {
                   Configuración
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Landing pública del local y medios de pago.
+                  Tu página pública y los medios de pago.
                 </p>
             </div>
 
             <Tabs defaultValue={tab === 'pagos' ? 'pagos' : 'landing'} className="space-y-4">
                 <TabsList>
-                    <TabsTrigger value="landing">Landing</TabsTrigger>
+                    <TabsTrigger value="landing">Página pública</TabsTrigger>
                     <TabsTrigger value="pagos">Pagos</TabsTrigger>
                 </TabsList>
 
@@ -124,10 +124,11 @@ async function ConfigContent({ tab }: { tab: string | undefined }) {
                                 </div>
                             )}
 
-                            <form action={guardarConfiguracionPagosAction} className="space-y-4">
+                            {allowMock ? (
+<form action={guardarConfiguracionPagosAction} className="space-y-4">
                                 <div className="space-y-2">
                                     <label htmlFor="proveedor" className="text-sm font-medium">
-                                      Proveedor activo
+                                      Medio de pago online
                                     </label>
                                     <select
                                         id="proveedor"
@@ -135,7 +136,7 @@ async function ConfigContent({ tab }: { tab: string | undefined }) {
                                         defaultValue={proveedorDefault}
                                         className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
                                     >
-                                        <option value="mercado_pago_oauth">Mercado Pago (OAuth)</option>
+                                        <option value="mercado_pago_oauth">Mercado Pago</option>
                                         {allowMock ? (
                                             <option value="mock">Simulador (solo desarrollo)</option>
                                         ) : null}
@@ -152,6 +153,7 @@ async function ConfigContent({ tab }: { tab: string | undefined }) {
                                     Guardar preferencia
                                 </SubmitButton>
                             </form>
+) : null}
 
                             <div className="mt-6 space-y-3 border-t pt-6">
                                 <h4 className="text-sm font-medium">Conexión con Mercado Pago</h4>

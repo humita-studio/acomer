@@ -442,6 +442,39 @@ de que cocina lo tenga sería mentir) y las altas que necesitan id del server
 (ya muestran pending). Riesgo conocido: un broadcast que llegue entre el
 `onMutate` y la respuesta puede mostrar el estado viejo unos ms.
 
+### Pasada de textos (2026-09-05)
+
+Inventario de todo el texto visible (panel, diálogos, páginas públicas) con
+Playwright, más rastreo de inglés y jerga en el código. Criterio: palabras del
+dueño de un restaurante, no del que programó. Cambios:
+
+- Inglés residual de los componentes compartidos: "Toggle Sidebar" y "Close"
+  (lectores de pantalla y tooltips) → "Abrir o cerrar el menú", "Cerrar".
+- Jerga fuera: "Landing" → "Página pública" (pestaña, descripciones), "hero" →
+  "portada", "Tagline" → "Descripción corta", "Mercado Pago (OAuth)" → "Mercado
+  Pago", "Gemini 3.8 Flash" → "la IA", Cloudinary/WebP/AVIF desaparecen de los
+  textos de carga de imágenes, "Autosave"/"Snap"/"handle" en el plano →
+  "Se guarda solo", "Grilla", "el punto de arriba rota". "click" → "clic".
+- Roles en español con una sola fuente (`ETIQUETA_ROL`): el sidebar decía
+  "Panel De Owner"; ahora "Panel de dueño" y "Dueño" (decisión: Dueño, no
+  Propietario). Sidebar: "Dashboard" → "Inicio" (decisión del usuario).
+- Atajo del Copiloto: "⌘J" solo en Mac; en Windows/Linux "Ctrl+J".
+- Reseñas: título "Gestión de Reseñas & Google Maps" con badge "Filtro
+  Inteligente Activo" y copy de folleto → "Reseñas", "Filtro activo" y una línea
+  que dice qué hace. Ídem la tarjeta de configuración y el feed.
+- Consistencia: "Takeaway" → "Retiro" en promociones y etiquetas de pedidos
+  (igual que Pedidos online); "Top productos" → "Más vendidos"; "Distribución
+  por canal" → "por medio de pago"; plurales ("1 mesa", no "1 mesas"); "Horario
+  de hoy: Hoy 12:00–00:00" ya no repite "hoy".
+- Flujo: la pestaña Pagos mostraba un selector "Proveedor activo" con una sola
+  opción y su botón "Guardar preferencia"; en producción se oculta (queda solo
+  en dev, donde existe el simulador).
+- Toast "Caja cerrada": una vez por sesión de navegador (decisión del usuario);
+  sigue fijo en la campana. El diálogo de Nueva venta no tenía título accesible.
+
+No tocado a conciencia: "Copiloto IA", "link" (uso corriente en Argentina),
+"Delivery" (idem), los textos legales.
+
 ## 6. Archivos tocados
 
 Seguridad: `app/api/webhooks/pagos/mp-oauth/route.ts`, `features/tenant/get-tenant.ts`,

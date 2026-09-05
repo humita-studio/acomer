@@ -358,7 +358,7 @@ function ConfigBody({
           <span>
             <span className="block text-sm font-medium">Pedidos online</span>
             <span className="block text-sm text-muted-foreground">
-              Si está apagado, /pedir no toma pedidos (sí se puede ver la carta).
+              Si está apagado, tu página no toma pedidos (la carta se sigue viendo).
             </span>
           </span>
           <Switch checked={activo} onCheckedChange={setActivo} />
@@ -493,7 +493,7 @@ function ConfigBody({
                 placeholder="Ej: 45 (opcional)"
               />
               <p className="text-xs text-muted-foreground">
-                Se usa como referencia de llegada/listo. Vacío = no se muestra.
+                Es una referencia de cuándo llega o está listo. Si lo dejás vacío, no se muestra.
               </p>
             </div>
           </div>

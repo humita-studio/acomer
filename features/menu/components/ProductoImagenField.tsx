@@ -73,7 +73,7 @@ export function ProductoImagenField({
           { method: 'POST', body: form },
         );
         if (!res.ok) {
-          toast.error('Falló la subida a Cloudinary');
+          toast.error('No se pudo subir la imagen');
           return;
         }
         const json = (await res.json()) as {
@@ -81,7 +81,7 @@ export function ProductoImagenField({
           version?: number;
         };
         if (!json.public_id) {
-          toast.error('Respuesta inválida de Cloudinary');
+          toast.error('No se pudo subir la imagen');
           return;
         }
 

@@ -33,7 +33,7 @@ export function NombreLocalForm({ nombreActual }: { nombreActual: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Nombre del Local</CardTitle>
+        <CardTitle>Nombre del local</CardTitle>
         <CardDescription>El nombre principal de tu restaurante.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -109,7 +109,7 @@ export default async function PedirPage({
     if (!config.activo || cerrado) {
       const msg = !config.activo
         ? undefined
-        : `En este momento el local se encuentra cerrado. Horario de hoy: ${horarioDeHoy(landing.horarios, ahoraLocal())}.`;
+        : `En este momento el local está cerrado. ${horarioDeHoy(landing.horarios, ahoraLocal())}.`;
       return (
         <PedidosEstadoBox
           variante="offline"

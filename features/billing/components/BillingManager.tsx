@@ -84,7 +84,7 @@ export function BillingManager({
 
       {view.freeMode && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="font-medium text-foreground">Producto free · sin límites de plan</p>
+          <p className="font-medium text-foreground">Gratis · sin límites</p>
           <p className="mt-1 text-muted-foreground">
             Tenés acceso a todo (mesas, reservas, pedidos online, Mercado Pago, promos).
             No hace falta pagar ni elegir plan hasta que activemos el cobro.

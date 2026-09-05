@@ -427,7 +427,7 @@ export function ProductoDialog({
                 <div className="space-y-0.5 pr-3">
                   <p className="text-sm font-medium">Este plato tiene variantes</p>
                   <p className="text-xs text-muted-foreground">
-                    Presentaciones de precio fijo y elección única (ej. Napolitana, A caballo)
+                    Opciones con precio propio; el cliente elige una (ej. Napolitana, A caballo)
                   </p>
                 </div>
                 <Switch
@@ -472,7 +472,7 @@ export function ProductoDialog({
               />
             ) : (
               <p className="text-xs text-muted-foreground">
-                La foto se puede subir después de crear el producto (editá el plato).
+                La foto se agrega después de crear el producto, desde Editar.
               </p>
             )}
 

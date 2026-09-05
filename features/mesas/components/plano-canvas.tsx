@@ -343,7 +343,7 @@ export function PlanoCanvas({
         ? 'Arrastrá de punta a punta para trazar una pared. Ángulos a 15° solos · Shift = libre.'
         : dibujandoBarra
           ? 'Arrastrá un rectángulo para la barra / mostrador.'
-          : 'Arrastrá para mover · handle superior para rotar · esquina para tamaño · Del borra'
+          : 'Arrastrá para mover · el punto de arriba rota · la esquina cambia el tamaño · Supr borra'
     : null;
 
   // Grilla suave: puntos en vez de rayas (menos “Excel”, más plano de salón).

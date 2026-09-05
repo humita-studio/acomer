@@ -408,7 +408,7 @@ export function PlanoManager({
           </h1>
           <p className="text-sm text-text-secondary">
             {editando ? (
-              'Autosave activo. Usá la herramienta Mesa y clickeá donde quieras colocarla.'
+              'Los cambios se guardan solos. Elegí Mesa y tocá el plano donde quieras ponerla.'
             ) : (
               <>
                 Plano de salón en vivo ·{' '}

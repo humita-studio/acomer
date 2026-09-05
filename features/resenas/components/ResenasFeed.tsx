@@ -56,7 +56,7 @@ export function ResenasFeed({ initialResenas }: { initialResenas: ResenaClienteD
           <div>
             <CardTitle>Historial de opiniones y feedback</CardTitle>
             <CardDescription>
-              Gestioná las quejas privadas de clientes antes de que se conviertan en malas reseñas públicas.
+              Quejas privadas para resolver antes de que lleguen a Google.
             </CardDescription>
           </div>
           {/* Filtros */}

@@ -114,13 +114,13 @@ export function PlanoToolbar({
               label="Libre"
               count={stats.libres}
             />
-            <span className="text-xs text-muted-foreground">{stats.total} mesas</span>
+            <span className="text-xs text-muted-foreground">{stats.total} {stats.total === 1 ? 'mesa' : 'mesas'}</span>
           </div>
         )}
 
         {editando && (
           <p className="text-xs text-muted-foreground">
-            Autosave · V mover · M mesa · P pared · R rotar · Del borrar
+            Se guarda solo · V mover · M mesa · P pared · R rotar · Supr borrar
           </p>
         )}
 
@@ -194,7 +194,7 @@ export function PlanoToolbar({
           <ToolButton
             active={herramienta === 'mesa'}
             onClick={() => onSetHerramienta('mesa')}
-            title="Click en el plano para colocar mesas (M)"
+            title="Clic en el plano para colocar mesas (M)"
           >
             <Table2 size={14} /> Mesa
           </ToolButton>
@@ -223,15 +223,15 @@ export function PlanoToolbar({
             title="Agrega una mesa en el primer hueco libre"
           >
             <Plus />
-            Auto
+            Mesa auto
           </Button>
 
           <ToolButton
             active={snapEnabled}
             onClick={onToggleSnap}
-            title={snapEnabled ? 'Snap a grilla activado' : 'Snap a grilla desactivado'}
+            title={snapEnabled ? 'Alinear a la grilla: activado' : 'Alinear a la grilla: desactivado'}
           >
-            <Magnet size={14} /> Snap
+            <Magnet size={14} /> Grilla
           </ToolButton>
 
           {ambienteActivo && ambientes.length > 1 && (

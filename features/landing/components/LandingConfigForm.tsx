@@ -40,7 +40,7 @@ import {
 
 const ACCIONES_META: { key: keyof AccionesLanding; titulo: string; sub: string }[] = [
   { key: 'verCarta', titulo: 'Ver la carta', sub: 'Botón para explorar el menú (solo lectura)' },
-  { key: 'pedirOnline', titulo: 'Pedir online', sub: 'Takeaway o delivery desde la web' },
+  { key: 'pedirOnline', titulo: 'Pedir online', sub: 'Retiro o envío desde la web' },
   { key: 'reservar', titulo: 'Reservar una mesa', sub: 'Reservas online' },
   { key: 'qr', titulo: 'Aviso de QR en el local', sub: 'Tarjeta para escanear el QR de la mesa' },
 ];
@@ -130,7 +130,7 @@ export function LandingConfigForm({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="landing-descripcion">Tagline</Label>
+                <Label htmlFor="landing-descripcion">Descripción corta</Label>
                 <Textarea
                   id="landing-descripcion"
                   value={descripcion}
@@ -169,7 +169,7 @@ export function LandingConfigForm({
           <Card>
             <CardHeader>
               <CardTitle>Acciones</CardTitle>
-              <CardDescription>Qué tarjetas se muestran en la landing.</CardDescription>
+              <CardDescription>Qué botones se muestran en tu página.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {ACCIONES_META.map(({ key, titulo, sub }) => (
@@ -192,7 +192,7 @@ export function LandingConfigForm({
           <Card>
             <CardHeader>
               <CardTitle>Apariencia</CardTitle>
-              <CardDescription>Color de marca del hero y los botones.</CardDescription>
+              <CardDescription>Color de la portada y los botones.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
@@ -237,7 +237,7 @@ export function LandingConfigForm({
             <CardHeader>
               <CardTitle>Horarios de atención</CardTitle>
               <CardDescription>
-                Definen el estado “Abierto/Cerrado” y el horario de hoy que muestra la landing.
+                Definen el estado “Abierto/Cerrado” y el horario de hoy que muestra tu página.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -312,7 +312,7 @@ export function LandingConfigForm({
           <Card>
             <CardHeader>
               <CardTitle>Contacto y redes</CardTitle>
-              <CardDescription>Se muestran como botones al pie de la landing. Opcional.</CardDescription>
+              <CardDescription>Se muestran como botones al pie de tu página. Opcional.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

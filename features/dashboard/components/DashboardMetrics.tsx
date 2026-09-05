@@ -249,7 +249,7 @@ function EstadoSalonCard({ salon }: { salon: DashboardMetrics['salon'] }) {
       <CardContent className="space-y-5">
         <div className="space-y-0.5">
           <h2 className="font-heading text-base font-medium">Estado del salón</h2>
-          <p className="text-xs text-muted-foreground">{salon.total} mesas en total</p>
+          <p className="text-xs text-muted-foreground">{salon.total} {salon.total === 1 ? 'mesa' : 'mesas'} en total</p>
         </div>
 
         <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">

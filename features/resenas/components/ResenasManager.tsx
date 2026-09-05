@@ -26,15 +26,15 @@ export function ResenasManager({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">
-              Gestión de Reseñas & Google Maps
+              Reseñas
             </h1>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
               <ShieldCheck className="size-3" />
-              Filtro Inteligente Activo
+              Filtro activo
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Multiplicá tus 5 estrellas en Google Maps y contené las malas experiencias en privado antes de que afecten tu puntaje público.
+            Las opiniones buenas van a Google Maps; las quejas te llegan en privado para resolverlas antes.
           </p>
         </div>
       </div>

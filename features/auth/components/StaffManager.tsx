@@ -24,7 +24,7 @@ import {
   type EmployeeListItem,
   type InviteMethod,
 } from '@/features/auth/invite-employee';
-import type { RoleType } from '@/features/authorization/roles';
+import { ETIQUETA_ROL, type RoleType } from '@/features/authorization/roles';
 import { queryKeys } from '@/shared/query/keys';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
@@ -63,13 +63,7 @@ const ROLES_INVITABLES: { value: AssignableRole; label: string; hint: string }[]
   { value: 'admin', label: 'Administrador', hint: 'Casi todo el panel (sin ser dueño)' },
 ];
 
-const ROL_LABELS: Record<string, string> = {
-  owner: 'Propietario',
-  admin: 'Administrador',
-  cajero: 'Cajero',
-  mozo: 'Mozo',
-  cocina: 'Cocina',
-};
+const ROL_LABELS: Record<string, string> = ETIQUETA_ROL;
 
 type Credenciales = { email: string; password: string; motivo: 'invite' | 'reset' };
 

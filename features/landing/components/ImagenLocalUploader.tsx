@@ -34,10 +34,10 @@ const COPY: Record<
   cover: {
     title: 'Foto del local',
     description:
-      'Portada de tu página pública. Arrastrá una imagen o hacé click. Se optimiza automáticamente (WebP/AVIF) para que pese poco.',
+      'Portada de tu página pública. Arrastrá una imagen o hacé clic. Se optimiza automáticamente para que pese poco.',
     alt: 'Portada del local',
     aspect: 'aspect-[16/10]',
-    hint: 'JPG, PNG o WebP. Recomendado horizontal (16:10). Se redimensiona a máx. 1600 px y se comprime antes de subir. Al quitar, se borra también en Cloudinary.',
+    hint: 'JPG, PNG o WebP. Recomendado horizontal (16:10). Se redimensiona a máx. 1600 px y se comprime antes de subir. Al quitarla se borra del todo.',
     compressMax: 1600,
   },
   logo: {
@@ -46,7 +46,7 @@ const COPY: Record<
       'Logo del local (cuadrado). Aparece en el hero de la landing. Fondo transparente o blanco funciona bien.',
     alt: 'Logo del local',
     aspect: 'aspect-square max-w-[200px]',
-    hint: 'JPG, PNG o WebP. Preferible cuadrado. Se recorta a 400×400. Al quitar, se borra también en Cloudinary.',
+    hint: 'JPG, PNG o WebP. Preferible cuadrado. Se recorta a 400×400. Al quitarla se borra del todo.',
     compressMax: 800,
   },
 };
@@ -151,7 +151,7 @@ export function ImagenLocalUploader({
             result.error && typeof result.error === 'object' && 'message' in result.error
               ? String((result.error as { message?: string }).message)
               : null;
-          throw new Error(errMsg || 'Cloudinary no devolvió public_id');
+          throw new Error(errMsg || 'No se pudo subir la imagen');
         }
         setProgress(90);
         setStatusText('Guardando…');
@@ -248,7 +248,7 @@ export function ImagenLocalUploader({
   const handleRemove = async () => {
     if (!preview || uploading) return;
     setUploading(true);
-    setStatusText('Eliminando de Cloudinary…');
+    setStatusText('Quitando…');
     try {
       const res = await eliminarImagenLocalAction(kind);
       if (!res.success) throw new Error(res.message ?? 'No se pudo eliminar');
@@ -257,8 +257,8 @@ export function ImagenLocalUploader({
       toast.success(
         res.deletedFromCloudinary
           ? kind === 'logo'
-            ? 'Logo eliminado de Cloudinary'
-            : 'Imagen eliminada de Cloudinary'
+            ? 'Logo eliminado'
+            : 'Imagen eliminada'
           : kind === 'logo'
             ? 'Logo quitado'
             : 'Imagen quitada',
@@ -326,7 +326,7 @@ export function ImagenLocalUploader({
               <p className="text-sm font-medium">
                 {kind === 'logo' ? 'Arrastrá el logo acá' : 'Arrastrá una foto acá'}
               </p>
-              <p className="text-xs">o hacé click para elegir un archivo</p>
+              <p className="text-xs">o hacé clic para elegir un archivo</p>
             </div>
           )}
 
@@ -408,7 +408,7 @@ function uploadWithProgress(
       try {
         body = JSON.parse(xhr.responseText) as Record<string, unknown>;
       } catch {
-        reject(new Error('Respuesta inválida de Cloudinary'));
+        reject(new Error('No se pudo subir la imagen'));
         return;
       }
       if (xhr.status >= 200 && xhr.status < 300) resolve(body);

@@ -22,7 +22,7 @@ import {
   Star,
   type LucideIcon,
 } from 'lucide-react';
-import { canAccessSection, type RoleType } from '@/features/authorization/roles';
+import { canAccessSection, etiquetaRol, type RoleType } from '@/features/authorization/roles';
 import {
   Sidebar,
   SidebarContent,
@@ -65,7 +65,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Principal',
     links: [
-      { href: '/admin', label: 'Dashboard', section: 'dashboard', icon: LayoutGrid },
+      { href: '/admin', label: 'Inicio', section: 'dashboard', icon: LayoutGrid },
       { href: '/admin/menu', label: 'Menú', section: 'menu', icon: UtensilsCrossed },
       { href: '/admin/mesas', label: 'Mesas', section: 'tables', icon: Armchair },
     ],
@@ -137,8 +137,8 @@ export function AppSidebar({
             <span className="truncate font-display text-lg font-semibold tracking-tight">
               {nombreRestaurante}
             </span>
-            <span className="truncate text-xs text-muted-foreground capitalize">
-              Panel de {role}
+            <span className="truncate text-xs text-muted-foreground">
+              Panel de {etiquetaRol(role).toLowerCase()}
             </span>
           </div>
         </div>
@@ -191,7 +191,7 @@ export function AppSidebar({
                     <AvatarFallback className="rounded-md">{inicial}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left leading-tight">
-                    <span className="truncate text-sm font-medium capitalize">{role}</span>
+                    <span className="truncate text-sm font-medium">{etiquetaRol(role)}</span>
                     <span className="truncate text-xs text-muted-foreground">{email}</span>
                   </div>
                   <ChevronsUpDown className="ml-auto size-4" />
@@ -205,7 +205,7 @@ export function AppSidebar({
               >
                 <DropdownMenuLabel className="font-normal">
                   <div className="grid leading-tight">
-                    <span className="truncate text-sm font-medium capitalize">{role}</span>
+                    <span className="truncate text-sm font-medium">{etiquetaRol(role)}</span>
                     <span className="truncate text-xs text-muted-foreground">{email}</span>
                   </div>
                 </DropdownMenuLabel>

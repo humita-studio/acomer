@@ -235,7 +235,7 @@ export function ReservasConfigDrawer({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">Aceptar reservas desde la web</p>
-                <p className="text-xs text-muted-foreground">Los clientes reservan desde tu carta.</p>
+                <p className="text-xs text-muted-foreground">Los clientes reservan desde tu página.</p>
               </div>
               <Switch checked={activo} onCheckedChange={setActivo} aria-label="Aceptar reservas web" />
             </div>
@@ -243,7 +243,7 @@ export function ReservasConfigDrawer({
               <div>
                 <p className="text-sm font-medium">Confirmar automáticamente</p>
                 <p className="text-xs text-muted-foreground">
-                  Si está off, las reservas online quedan pendientes de tu OK.
+                  Si está apagado, las reservas online quedan pendientes hasta que las confirmes.
                 </p>
               </div>
               <Switch

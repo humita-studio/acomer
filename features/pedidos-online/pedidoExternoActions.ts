@@ -240,7 +240,7 @@ export async function crearPedidoExternoAction(
     // Misma señal que el salón: cocina y campana del panel escuchan `nuevo_pedido`.
     void broadcastOrdenExterna(tenantId, 'nuevo_pedido', {
       sesionMesaId: sesionId,
-      etiqueta: tipo === 'delivery' ? 'Delivery' : 'Takeaway',
+      etiqueta: tipo === 'delivery' ? 'Delivery' : 'Retiro',
     });
 
     return { success: true, sesionId, tenantId };
