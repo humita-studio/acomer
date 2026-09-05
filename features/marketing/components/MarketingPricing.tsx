@@ -3,7 +3,7 @@ import { Check } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { cn } from '@/shared/lib/utils';
-import { PLANES } from '../marketingContent';
+import { PLANES, PRECIOS_ENCABEZADO } from '../marketingContent';
 
 /**
  * Precios de la landing: hoy gratis (todo incluido) + opcional A medida.
@@ -18,12 +18,9 @@ export function MarketingPricing() {
             Precios
           </p>
           <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Gratis mientras armamos el cobro
+            {PRECIOS_ENCABEZADO.titulo}
           </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
-            Sin tarjeta y con todo el producto incluido. Cuando habilitemos planes
-            pagos, el copy y el gate van a coincidir.
-          </p>
+          <p className="mt-4 text-lg text-muted-foreground">{PRECIOS_ENCABEZADO.subtitulo}</p>
         </div>
 
         <div className="mt-14 mx-auto grid max-w-3xl items-start gap-6 sm:grid-cols-2">

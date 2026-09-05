@@ -1,5 +1,6 @@
 'use server';
 
+import { SOPORTE_EMAIL } from '@/shared/lib/contacto';
 import { and, desc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/shared/db';
@@ -141,8 +142,7 @@ export async function iniciarPagoSuscripcionAction(planId?: string) {
   if (!token) {
     return {
       success: false as const,
-      message:
-        'El cobro online todavía no está configurado (falta MP_BILLING_ACCESS_TOKEN). Contactá a acomer.',
+      message: `El pago online no está disponible en este momento. Escribinos a ${SOPORTE_EMAIL} y lo resolvemos.`,
     };
   }
 

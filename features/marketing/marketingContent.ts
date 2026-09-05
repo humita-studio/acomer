@@ -1,3 +1,5 @@
+import { BILLING_COBRO_HABILITADO, PLANES_SAAS, TRIAL_DAYS } from '@/features/billing/plans';
+import { formatPeso } from '@/shared/lib/format';
 import { SOPORTE_EMAIL } from '@/shared/lib/contacto';
 
 import {
@@ -118,25 +120,27 @@ export type Plan = {
 };
 
 /**
- * Oferta de la landing. Hoy el producto es free hasta que habilitemos cobro
- * (`BILLING_COBRO_HABILITADO` en features/billing/plans.ts). Copy alineado a
- * lo que el código realmente da: todo el producto, sin límites de plan.
+ * Oferta de la landing. Sale del catálogo real (`features/billing/plans.ts`):
+ * con el cobro prendido, los planes con precio y la prueba gratis; apagado,
+ * "gratis por ahora". Así la landing nunca promete algo distinto al panel.
  */
-export const PLANES: Plan[] = [
+const FEATURES_GRATIS = [
+  'Carta digital con QR',
+  'Mesas ilimitadas',
+  'Cocina y cobros (efectivo / MP)',
+  'Reservas y pedidos online',
+  'Promociones y reportes',
+  'Roles de staff',
+];
+
+const PLANES_GRATIS: Plan[] = [
   {
     nombre: 'Gratis',
     precio: '$ 0',
     periodo: 'por ahora',
     descripcion:
       'Todo el producto sin tarjeta ni límites de plan. Cuando habilitemos cobro, te avisamos.',
-    features: [
-      'Carta digital con QR',
-      'Mesas ilimitadas',
-      'Cocina y cobros (efectivo / MP)',
-      'Reservas y pedidos online',
-      'Promociones y reportes',
-      'Roles de staff',
-    ],
+    features: FEATURES_GRATIS,
     cta: 'Crear mi local gratis',
     ctaHref: '/register',
     destacado: true,
@@ -145,16 +149,39 @@ export const PLANES: Plan[] = [
     nombre: 'A medida',
     precio: 'Consultar',
     descripcion: 'Setup asistido y acompañamiento para tu local.',
-    features: [
-      'Todo lo de Gratis',
-      'Onboarding dedicado',
-      'Soporte prioritario',
-      'Prioridad en el roadmap',
-    ],
+    features: ['Todo lo de Gratis', 'Onboarding dedicado', 'Soporte prioritario', 'Prioridad en el roadmap'],
     cta: 'Hablar con nosotros',
     ctaHref: '/register',
   },
 ];
+
+const PLANES_CON_COBRO: Plan[] = (['basico', 'pro', 'a_medida'] as const).map((id) => {
+  const def = PLANES_SAAS[id];
+  const pago = def.precioMensual != null;
+  return {
+    nombre: def.nombre,
+    precio: pago ? formatPeso(def.precioMensual as number) : 'Consultar',
+    periodo: pago ? 'por mes' : undefined,
+    descripcion: pago ? `${def.descripcion} ${TRIAL_DAYS} días gratis, sin tarjeta.` : def.descripcion,
+    features: def.features,
+    cta: pago ? `Probar ${TRIAL_DAYS} días gratis` : 'Hablar con nosotros',
+    ctaHref: pago ? '/register' : `mailto:${SOPORTE_EMAIL}`,
+    destacado: def.destacado,
+  };
+});
+
+export const PLANES: Plan[] = BILLING_COBRO_HABILITADO ? PLANES_CON_COBRO : PLANES_GRATIS;
+
+/** Encabezado de la sección de precios, coherente con la oferta. */
+export const PRECIOS_ENCABEZADO = BILLING_COBRO_HABILITADO
+  ? {
+      titulo: `Probá ${TRIAL_DAYS} días gratis y después elegí tu plan`,
+      subtitulo: 'Sin tarjeta para empezar. Todo el producto desde el primer día; el plan solo cambia el acompañamiento.',
+    }
+  : {
+      titulo: 'Gratis mientras armamos el cobro',
+      subtitulo: 'Sin tarjeta y con todo el producto incluido. Cuando habilitemos planes pagos, te avisamos.',
+    };
 
 /** Beneficios destacados de la experiencia del comensal. */
 export const SHOWCASE_BENEFICIOS = [

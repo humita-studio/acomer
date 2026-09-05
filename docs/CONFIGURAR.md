@@ -131,8 +131,21 @@ Cada restaurante vincula **su** cuenta MP desde Configuración → Pagos.
 
 | Variable | Para qué |
 | --- | --- |
-| `MP_BILLING_ACCESS_TOKEN` | Access token de la cuenta MP **de acomer** (recibe la suscripción) |
+| `NEXT_PUBLIC_BILLING_COBRO_HABILITADO` | `1` prende el cobro: prueba de 90 días, 3 de gracia, bloqueo del panel al vencer y botón "Pagar con Mercado Pago". Apagado (default) = producto gratis |
+| `MP_BILLING_ACCESS_TOKEN` | Access token de producción de la cuenta MP **de acomer** (Credenciales de producción → Access Token). Recibe las suscripciones. La Public Key no se usa |
 | `MP_PLATFORM_ACCESS_TOKEN` | Alias opcional del anterior |
+
+**Prender el cobro (orden):** cargar las dos variables en Vercel **en el mismo
+deploy** (si se prende sin token, el panel pide pagar y no se puede), redeploy,
+y en `/platform` marcar como **Exento** los locales que no pagan (el demo, los
+pilotos acompañados). El resto sigue su prueba de 90 días desde el registro; a
+los 3 días del vencimiento aparece el banner y al vencer + 3 días de gracia el
+dueño solo ve Plan y facturación hasta pagar (el staff, "Sin permiso"). Desde
+`/platform` se cambia plan, estado, se extiende la prueba o se exime.
+
+Los pagos de suscripción llegan a `https://acomer.com.ar/api/webhooks/billing/mp`
+(la preferencia lleva su propia `notification_url`) y se firman con la misma
+`MP_WEBHOOK_SECRET` de la app. Al aprobarse, el local queda **Activo** 30 días.
 
 **Webhook de suscripciones:**
 

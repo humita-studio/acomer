@@ -1,5 +1,6 @@
 'use client';
 
+import { SOPORTE_EMAIL } from '@/shared/lib/contacto';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, CreditCard, Loader2, Sparkles } from 'lucide-react';
@@ -219,8 +220,8 @@ export function BillingManager({
                   </p>
                   {!view.billingConfigured && (
                     <p className="mt-2 text-sm text-warning-foreground">
-                      Cobro online no configurado en este entorno. En producción hace falta
-                      MP_BILLING_ACCESS_TOKEN.
+                      El pago online no está disponible en este momento. Escribinos a{' '}
+                      {SOPORTE_EMAIL} y lo resolvemos.
                     </p>
                   )}
                 </div>

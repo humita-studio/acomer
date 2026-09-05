@@ -19,10 +19,13 @@ export type PlanDef = {
 };
 
 /**
- * Cobro de suscripción acomer deshabilitado: producto free para todos.
- * Cuando esté listo el cobro (MP billing + gate real), poner en true.
+ * Cobro de suscripción: `NEXT_PUBLIC_BILLING_COBRO_HABILITADO=1` lo prende
+ * (prueba de 90 días, gracia, bloqueo y pago con Mercado Pago). Apagado, el
+ * producto es gratis para todos. Va como variable de entorno para prenderlo en
+ * Vercel junto con `MP_BILLING_ACCESS_TOKEN`, sin ventana en la que el panel
+ * exija pagar y no se pueda.
  */
-export const BILLING_COBRO_HABILITADO = false;
+export const BILLING_COBRO_HABILITADO = process.env.NEXT_PUBLIC_BILLING_COBRO_HABILITADO === '1';
 
 /** Duración del trial al registrarse (3 meses). */
 export const TRIAL_DAYS = 90;
@@ -32,8 +35,8 @@ export const GRACE_DAYS = 3;
 export const PERIOD_DAYS = 30;
 
 /**
- * Features del producto completo. Hoy no hay gate por plan: todos usan todo.
- * Cuando se habilite cobro, acá se reintroduce la diferenciación real.
+ * Features del producto completo. No hay gate por plan: todos usan todo; los
+ * planes se diferencian por acompañamiento (A medida) y precio.
  */
 const FEATURES_TODO = [
   'Carta digital con QR',
@@ -51,7 +54,7 @@ export const PLANES_SAAS: Record<PlanId, PlanDef> = {
     // Precios de referencia para cuando se habilite cobro.
     precioMensual: 14_900,
     maxMesas: null,
-    descripcion: 'Mismo producto; precio de referencia futuro.',
+    descripcion: 'Todo el producto, para arrancar.',
     features: [...FEATURES_TODO],
   },
   pro: {
@@ -59,7 +62,7 @@ export const PLANES_SAAS: Record<PlanId, PlanDef> = {
     nombre: 'Pro',
     precioMensual: 29_900,
     maxMesas: null,
-    descripcion: 'Mismo producto; precio de referencia futuro.',
+    descripcion: 'Todo el producto, con prioridad de soporte.',
     features: [...FEATURES_TODO],
     destacado: true,
   },
