@@ -74,8 +74,14 @@ test.describe('Auth', () => {
 
   test('/forgot-password carga', async ({ page }) => {
     await page.goto('/forgot-password');
-    await expect(page.getByRole('heading', { name: /Recuperar contraseña/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Enviar link/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Recuperar (la )?contraseña/i })).toBeVisible();
+    // Con SMTP (NEXT_PUBLIC_AUTH_EMAIL_HABILITADO=1) hay formulario; sin SMTP, la
+    // página explica cómo recuperar la clave y vuelve al login.
+    await expect(
+      page
+        .getByRole('button', { name: /Enviar link/i })
+        .or(page.getByRole('link', { name: /Volver a ingresar/i })),
+    ).toBeVisible();
   });
 
   test('/register carga el wizard', async ({ page }) => {

@@ -9,7 +9,7 @@ import {
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { normalizarVisualCategoria } from './categoriaVisual';
 import type { FilaMenuCsv } from './importarCsv';
 
@@ -138,7 +138,7 @@ export async function importarMenuFilasAction(
     });
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
 
     const partes = [
       `${result.creados} producto${result.creados === 1 ? '' : 's'} importado${result.creados === 1 ? '' : 's'}`,

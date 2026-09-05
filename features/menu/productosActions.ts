@@ -13,7 +13,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 
 // El `db` de cada acción es el handle transaccional de withTenant: corre con RLS
 // activo, de modo que la base sólo deja ver/tocar filas del tenant en sesión.
@@ -163,7 +163,7 @@ export async function crearProducto(data: {
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Producto creado' };
   } catch (error) {
     console.error('[crearProducto]', error);
@@ -206,7 +206,7 @@ export async function editarProducto(
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Producto actualizado' };
   } catch (error) {
     console.error('[editarProducto]', error);
@@ -239,7 +239,7 @@ export async function cambiarDisponibilidadProducto(productoId: string, disponib
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: disponible ? 'Producto disponible' : 'Producto marcado agotado' };
   } catch (error) {
     console.error('[cambiarDisponibilidadProducto]', error);
@@ -362,7 +362,7 @@ export async function duplicarProducto(productoId: string) {
     }
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Producto duplicado' };
   } catch (error) {
     console.error('[duplicarProducto]', error);
@@ -402,7 +402,7 @@ export async function modificarPrecioProducto(productoId: string, nuevoPrecio: n
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Precio actualizado' };
   } catch (error) {
     console.error('[modificarPrecioProducto]', error);
@@ -431,7 +431,7 @@ export async function eliminarProducto(id: string) {
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Producto eliminado' };
   } catch (error) {
     console.error('[eliminarProducto]', error);

@@ -362,7 +362,7 @@ export function PlanoCanvas({
     <div className="space-y-2">
       <div
         ref={wrapperRef}
-        className="relative w-full overflow-hidden rounded-xl border border-border shadow-inner"
+        className="relative w-full overflow-x-auto overflow-y-hidden rounded-xl border border-border shadow-inner"
       >
         <DndContext id="plano-mesas" sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div
@@ -371,7 +371,7 @@ export function PlanoCanvas({
             onPointerDown={onSurfacePointerDown}
             onPointerMove={onSurfacePointerMove}
             onPointerLeave={onSurfacePointerLeave}
-            className={`relative touch-none ${cursorClass}`}
+            className={`relative ${editando ? 'touch-none' : ''} ${cursorClass}`}
             style={{
               width: COLS * cell,
               height: ROWS * cell,

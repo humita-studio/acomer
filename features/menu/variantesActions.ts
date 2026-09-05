@@ -5,7 +5,7 @@ import { eq, and, isNull, asc } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { revalidateTag } from 'next/cache';
+import { updateTag } from 'next/cache';
 import type { Variante } from './types';
 
 // El `db` de cada acción es el handle transaccional de withTenant: corre con RLS
@@ -122,7 +122,7 @@ export async function agregarVariante(
       return { success: true, message: 'Variante agregada' };
     });
 
-    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    if (res.success) updateTag(`carta-${session.restauranteId}`);
     return res;
   } catch (error) {
     console.error('[agregarVariante]', error);
@@ -176,7 +176,7 @@ export async function editarPrecioVariante(varianteId: string, nuevoPrecio: numb
       return { success: true, message: 'Precio actualizado' };
     });
 
-    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    if (res.success) updateTag(`carta-${session.restauranteId}`);
     return res;
   } catch (error) {
     console.error('[editarPrecioVariante]', error);
@@ -243,7 +243,7 @@ export async function eliminarVariante(productoId: string, varianteId: string) {
       return { success: true, message: 'Variante eliminada' };
     });
 
-    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    if (res.success) updateTag(`carta-${session.restauranteId}`);
     return res;
   } catch (error) {
     console.error('[eliminarVariante]', error);
@@ -286,7 +286,7 @@ export async function marcarVarianteDefault(productoId: string, varianteId: stri
       })
     );
 
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Variante por defecto actualizada' };
   } catch (error) {
     console.error('[marcarVarianteDefault]', error);

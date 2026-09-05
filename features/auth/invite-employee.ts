@@ -13,6 +13,7 @@ import {
   perfilIdSchema,
 } from './validation';
 import { META_MUST_CHANGE_PASSWORD } from './auth-errors';
+import { AUTH_EMAIL_HABILITADO } from './authEmail';
 import { findAuthUserByEmail, getEmailsByUserIds } from './authUsers';
 
 /** Roles que se pueden asignar al invitar (nunca owner). */
@@ -186,6 +187,14 @@ export async function inviteEmployee(
     }
 
     // --- Usuario nuevo ---
+    if (method === 'email' && !AUTH_EMAIL_HABILITADO) {
+      // Sin SMTP propio el invite por email nunca llega: la UI no lo ofrece,
+      // esto solo cubre a quien llame a la acción a mano.
+      return {
+        success: false,
+        message: 'El invite por email no está habilitado. Usá contraseña temporal.',
+      };
+    }
     if (method === 'email') {
       const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
         email,

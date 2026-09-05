@@ -41,6 +41,21 @@ Demo comercial: [VENTA-PILOTO.md](./VENTA-PILOTO.md)
 Auth: el registro y el invite de staff usan Admin API (`email_confirm: true`).  
 No hace falta forzar confirmación de email para el flujo actual.
 
+**Emails de Auth (apagados por defecto).** Dos flujos mandan email desde Supabase
+Auth: "¿Olvidaste tu contraseña?" (`/forgot-password`) y el invite de staff "Link
+por email". El SMTP de cortesía de Supabase solo entrega a los miembros del
+proyecto (y 2 por hora), así que mientras no haya SMTP propio esos flujos quedan
+escondidos: `/forgot-password` explica cómo recuperar la clave (staff → el dueño
+genera una temporal en Empleados; dueño → escribe a `hola@acomer.com.ar`) y el
+invite solo ofrece contraseña temporal.
+
+Para prenderlos: (1) SMTP propio en Supabase → Authentication → SMTP Settings
+(Resend gratis alcanza: dominio `acomer.com.ar` verificado con SPF/DKIM en
+Cloudflare, host `smtp.resend.com`, puerto 465, usuario `resend`, clave = API key,
+remitente `no-reply@acomer.com.ar`); (2) en Authentication → URL Configuration
+agregar `https://acomer.com.ar/auth/callback` a las Redirect URLs; (3)
+`NEXT_PUBLIC_AUTH_EMAIL_HABILITADO=1` en Vercel y `.env`, y redeploy.
+
 ---
 
 ## 2. Variables de entorno
@@ -58,6 +73,7 @@ Cargalas en **Vercel → Settings → Environment Variables** (Production + Prev
 | `NEXT_PUBLIC_APP_URL` | Callbacks de pago, preferencias MP | `https://acomer.com.ar` |
 | `NEXT_PUBLIC_ROOT_DOMAIN` | Multi-tenant (`proxy.ts`) | `acomer.com.ar` |
 | `PLATFORM_ADMIN_EMAILS` | Panel de plataforma (`/platform`): dueños de acomer | `vos@mail.com,ops@mail.com` |
+| `NEXT_PUBLIC_AUTH_EMAIL_HABILITADO` | `1` recién con SMTP propio: muestra "olvidé mi contraseña" e invite por email | apagado por defecto |
 | `SENTRY_DSN` | (Opcional) Errores a Sentry si el SDK inyecta `globalThis.Sentry` | `https://…@….ingest.sentry.io/…` |
 | `NEXT_PUBLIC_CLOUDINARY_*` / `CLOUDINARY_*` | Fotos de local y **productos** | ver sección Cloudinary |
 

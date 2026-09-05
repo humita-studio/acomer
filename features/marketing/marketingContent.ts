@@ -1,3 +1,5 @@
+import { SOPORTE_EMAIL } from '@/shared/lib/contacto';
+
 import {
   QrCode,
   LayoutGrid,
@@ -24,7 +26,7 @@ export const NAV_LINKS = [
  * WhatsApp sin + ni espacios; email de ventas.
  */
 export const CONTACTO = {
-  email: 'hola@acomer.com.ar',
+  email: SOPORTE_EMAIL,
   /** Solo dígitos con código país, ej. 54911… — vacío = no mostrar WhatsApp */
   whatsapp: '',
   label: 'Escribinos',

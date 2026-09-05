@@ -21,6 +21,7 @@ import {
   resetEmployeePassword,
   updateEmployeeRole,
   type AssignableRole,
+  type EmployeeListItem,
   type InviteMethod,
 } from '@/features/auth/invite-employee';
 import type { RoleType } from '@/features/authorization/roles';
@@ -53,6 +54,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import { cn } from '@/shared/lib/utils';
+import { AUTH_EMAIL_HABILITADO } from '../authEmail';
 
 const ROLES_INVITABLES: { value: AssignableRole; label: string; hint: string }[] = [
   { value: 'mozo', label: 'Mozo', hint: 'Mesas, pedidos y cobros en salón' },
@@ -178,6 +180,27 @@ export function StaffManager({
   const invalidateStaff = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.empleados() });
 
+  /**
+   * Update optimista: la fila cambia al toque y se revierte si el server falla.
+   * Sin esto, activar/desactivar o cambiar el rol tardaba una ida y vuelta
+   * completa (~3-4 s desde Argentina) en reflejarse.
+   */
+  type StaffSnapshot = { previous?: EmployeeListItem[] };
+  const patchEmpleadoOptimista = async (
+    perfilId: string,
+    patch: Partial<EmployeeListItem>,
+  ): Promise<StaffSnapshot> => {
+    await queryClient.cancelQueries({ queryKey: queryKeys.empleados() });
+    const previous = queryClient.getQueryData<EmployeeListItem[]>(queryKeys.empleados());
+    queryClient.setQueryData<EmployeeListItem[]>(queryKeys.empleados(), (old = []) =>
+      old.map((e) => (e.id === perfilId ? { ...e, ...patch } : e)),
+    );
+    return { previous };
+  };
+  const revertirEmpleados = (ctx?: StaffSnapshot) => {
+    if (ctx?.previous) queryClient.setQueryData(queryKeys.empleados(), ctx.previous);
+  };
+
   const inviteMutation = useMutation({
     mutationFn: (vars: { email: string; rol: AssignableRole; method: InviteMethod }) =>
       inviteEmployee(vars),
@@ -207,36 +230,54 @@ export function StaffManager({
 
   const deactivateMutation = useMutation({
     mutationFn: (perfilId: string) => deactivateEmployee(perfilId),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success(result.message);
-        invalidateStaff();
-      } else toast.error(result.message);
+    onMutate: (perfilId) => patchEmpleadoOptimista(perfilId, { activo: false }),
+    onSuccess: (result, _perfilId, ctx) => {
+      if (result.success) toast.success(result.message);
+      else {
+        revertirEmpleados(ctx);
+        toast.error(result.message);
+      }
     },
-    onError: () => toast.error('No se pudo desactivar al empleado'),
+    onError: (_e, _perfilId, ctx) => {
+      revertirEmpleados(ctx);
+      toast.error('No se pudo desactivar al empleado');
+    },
+    onSettled: invalidateStaff,
   });
 
   const activateMutation = useMutation({
     mutationFn: (perfilId: string) => activateEmployee(perfilId),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success(result.message);
-        invalidateStaff();
-      } else toast.error(result.message);
+    onMutate: (perfilId) => patchEmpleadoOptimista(perfilId, { activo: true }),
+    onSuccess: (result, _perfilId, ctx) => {
+      if (result.success) toast.success(result.message);
+      else {
+        revertirEmpleados(ctx);
+        toast.error(result.message);
+      }
     },
-    onError: () => toast.error('No se pudo activar al empleado'),
+    onError: (_e, _perfilId, ctx) => {
+      revertirEmpleados(ctx);
+      toast.error('No se pudo activar al empleado');
+    },
+    onSettled: invalidateStaff,
   });
 
   const roleMutation = useMutation({
     mutationFn: (vars: { perfilId: string; rol: AssignableRole }) =>
       updateEmployeeRole(vars.perfilId, vars.rol),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success(result.message);
-        invalidateStaff();
-      } else toast.error(result.message);
+    onMutate: (vars) => patchEmpleadoOptimista(vars.perfilId, { rol: vars.rol }),
+    onSuccess: (result, _vars, ctx) => {
+      if (result.success) toast.success(result.message);
+      else {
+        revertirEmpleados(ctx);
+        toast.error(result.message);
+      }
     },
-    onError: () => toast.error('No se pudo cambiar el rol'),
+    onError: (_e, _vars, ctx) => {
+      revertirEmpleados(ctx);
+      toast.error('No se pudo cambiar el rol');
+    },
+    onSettled: invalidateStaff,
   });
 
   const resetMutation = useMutation({
@@ -284,8 +325,9 @@ export function StaffManager({
       <div className="space-y-1">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Empleados</h1>
         <p className="text-sm text-muted-foreground">
-          Invitá al equipo con contraseña temporal o por email. Podés regenerar el acceso
-          desde la lista cuando haga falta.
+          {AUTH_EMAIL_HABILITADO
+            ? 'Invitá al equipo con contraseña temporal o por email. Podés regenerar el acceso desde la lista cuando haga falta.'
+            : 'Invitá al equipo con una contraseña temporal. Si alguien la pierde, generale una nueva desde la lista.'}
         </p>
       </div>
 
@@ -297,8 +339,9 @@ export function StaffManager({
               Invitar empleado
             </CardTitle>
             <CardDescription>
-              Elegí cómo entregar el acceso. La contraseña temporal es la opción más
-              confiable en el día a día del local.
+              {AUTH_EMAIL_HABILITADO
+                ? 'Elegí cómo entregar el acceso. La contraseña temporal es la opción más confiable en el día a día del local.'
+                : 'El empleado entra con la contraseña temporal y elige la suya en el primer ingreso.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -335,7 +378,12 @@ export function StaffManager({
 
               <div className="space-y-2">
                 <Label>Cómo entregar el acceso</Label>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div
+                  className={cn(
+                    'grid grid-cols-1 gap-2',
+                    AUTH_EMAIL_HABILITADO && 'sm:grid-cols-2',
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => setMethod('temp')}
@@ -354,24 +402,26 @@ export function StaffManager({
                       </span>
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setMethod('email')}
-                    className={cn(
-                      'flex items-start gap-2 rounded-lg border p-3 text-left transition',
-                      method === 'email'
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                        : 'border-border hover:bg-muted/50',
-                    )}
-                  >
-                    <Mail className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span>
-                      <span className="block text-sm font-medium">Link por email</span>
-                      <span className="block text-xs text-muted-foreground">
-                        Supabase manda el invite (requiere SMTP)
+                  {AUTH_EMAIL_HABILITADO ? (
+                    <button
+                      type="button"
+                      onClick={() => setMethod('email')}
+                      className={cn(
+                        'flex items-start gap-2 rounded-lg border p-3 text-left transition',
+                        method === 'email'
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                          : 'border-border hover:bg-muted/50',
+                      )}
+                    >
+                      <Mail className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <span>
+                        <span className="block text-sm font-medium">Link por email</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Supabase manda el invite por email
+                        </span>
                       </span>
-                    </span>
-                  </button>
+                    </button>
+                  ) : null}
                 </div>
               </div>
 

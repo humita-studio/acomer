@@ -64,8 +64,10 @@ export const LANDING_CONFIG_DEFAULT: LandingConfig = {
   sobre: '',
   direccion: '',
   horarios: Array.from({ length: 7 }, () => ({ ...HORARIO_DIA_DEFAULT, turnos: [...HORARIO_DIA_DEFAULT.turnos] })),
-  // Pedir/reservar off por default; se prenden cuando el local activa esos canales.
-  acciones: { verCarta: true, pedirOnline: false, reservar: false, qr: true },
+  // Todas prendidas (igual que el default de la columna en la base). La landing
+  // además oculta "Pedir online" / "Reservar" mientras ese canal esté apagado,
+  // así el dueño no tiene que prender dos cosas para que aparezca la tarjeta.
+  acciones: { verCarta: true, pedirOnline: true, reservar: true, qr: true },
   colorMarca: 'terracota',
   redes: { whatsapp: '', instagram: '', telefono: '' },
   imagenUrl: '',

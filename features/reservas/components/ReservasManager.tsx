@@ -69,6 +69,8 @@ export function ReservasManager({
   const [diaSel, setDiaSel] = useState(fecha);
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  // "Activar online" abre la config con el switch ya prendido: solo falta guardar.
+  const [configPreactivar, setConfigPreactivar] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{ reserva: Reserva; accion: AccionConfirmable } | null>(null);
   const [asignarTarget, setAsignarTarget] = useState<Reserva | null>(null);
@@ -244,7 +246,14 @@ export function ReservasManager({
             Las reservas <strong>online están apagadas</strong>. El link público no toma
             pedidos; igual podés cargar reservas a mano.
           </p>
-          <Button size="sm" variant="outline" onClick={() => setConfigOpen(true)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setConfigPreactivar(true);
+              setConfigOpen(true);
+            }}
+          >
             Activar online
           </Button>
         </div>
@@ -397,7 +406,15 @@ export function ReservasManager({
         onCrear={crearReserva}
       />
 
-      <ReservasConfigDrawer open={configOpen} onOpenChange={setConfigOpen} config={config} />
+      <ReservasConfigDrawer
+        open={configOpen}
+        onOpenChange={(o) => {
+          setConfigOpen(o);
+          if (!o) setConfigPreactivar(false);
+        }}
+        config={config}
+        preactivar={configPreactivar}
+      />
 
       <CancelarReservaDialog
         target={confirmTarget}

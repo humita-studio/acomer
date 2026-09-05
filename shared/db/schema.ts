@@ -642,10 +642,12 @@ export const landingConfig = pgTable(
       { cerrado: false, desde: '12:00', hasta: '00:00' },
       { cerrado: false, desde: '12:00', hasta: '00:00' },
     ]),
-    // Qué tarjetas se muestran: { verCarta, pedirOnline, reservar, qr }.
+    // Qué tarjetas se muestran: { verCarta, pedirOnline, reservar, qr }. La landing
+    // oculta pedir/reservar mientras el canal esté apagado, por eso el default es todo true
+    // (coincide con el default real de la columna en la base).
     acciones: jsonb('acciones')
       .notNull()
-      .default({ verCarta: true, pedirOnline: false, reservar: false, qr: true }),
+      .default({ verCarta: true, pedirOnline: true, reservar: true, qr: true }),
     // terracota | ambar | verde | azul | bordo | negro | rosa | indigo
     colorMarca: text('color_marca').notNull().default('terracota'),
     // Contacto/redes: { whatsapp, instagram, telefono }.
@@ -1475,4 +1477,4 @@ export const reservasRelations = relations(reservas, ({ one }) => ({
     fields: [reservas.sesionMesaId],
     references: [sesionesMesa.id],
   }),
-}))
+}))

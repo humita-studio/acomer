@@ -355,6 +355,93 @@ la reserva pasa sola a **Cumplida**. Corregido en el camino:
 - Cuentas de prueba `auditoria-{mozo,cocina,cajero}@acomer.test` desactivadas
   al terminar.
 
+## 9. Fase 4 — alta autónoma (2026-09-05)
+
+Objetivo: que un dueño se registre y opere sin que nadie de acomer lo acompañe.
+Recorrido real con Playwright como usuario nuevo (local de prueba
+`parrilla-auditoria`, borrable): registro en 3 pasos → dashboard con checklist →
+categoría y producto → mesa en el plano → QR → caja → invitar mozo → el comensal
+escanea el QR (subdominio), pide y el pedido cae en Cocina. Todo funcionó; lo que
+no cerraba:
+
+- **La carta pública mostraba vacío después de cargar el primer producto.** Las
+  server actions del menú invalidaban con `revalidateTag(tag, 'default')`, que en
+  Next 16 es stale-while-revalidate: la primera visita sirve la versión vieja.
+  Ahora usan `updateTag` (expira al instante, pensado para "ver mi propio
+  cambio"). El Copiloto sigue con `revalidateTag` porque corre en un route
+  handler. Verificado: producto nuevo → visible en la primera visita.
+- **La landing ofrecía "Pedir online" y "Reservar" con esos canales apagados**
+  (dos callejones sin salida para el cliente). La landing ahora muestra cada
+  tarjeta solo si su canal está prendido, además del toggle propio. Verificado:
+  al activar pedidos online y reservas, las tarjetas aparecen solas.
+  El default de `acciones` en el código no coincidía con el de la base (la base
+  ya tenía todo `true`); se alineó el código.
+- **Mercado Pago era paso obligatorio del checklist**: un local que cobra solo en
+  caja nunca llegaba a "listo". Pasa a opcional (sigue tercero, con copy que
+  aclara que efectivo y tarjeta funcionan sin MP). Con lo obligatorio completo,
+  el checklist pasa a una tarjeta chica con lo opcional pendiente (cerrable) en
+  lugar de desaparecer del todo. `/admin/configuracion?tab=pagos` abre directo
+  la pestaña de pagos.
+- **Reservas → "Activar online"** abría la configuración con el switch apagado;
+  ahora abre con "Aceptar reservas web" prendido, solo falta guardar.
+- **Recuperar contraseña e invitar por email dependían de un SMTP que no hay**
+  (el de Supabase solo entrega al equipo del proyecto): el form decía "Revisá tu
+  email" y no llegaba nada. Decisión del usuario: dejarlo afuera por ahora. Los
+  dos flujos quedan detrás de `NEXT_PUBLIC_AUTH_EMAIL_HABILITADO` (apagado):
+  `/forgot-password` explica cómo recuperar la clave (staff → el dueño genera
+  una temporal; dueño → soporte) y el invite solo ofrece contraseña temporal.
+  Cómo prenderlo con Resend, en `CONFIGURAR.md`.
+
+Lo que está bien y no toqué: wizard de registro claro, estados vacíos con CTA
+en todas las secciones, import de menú por foto/PDF con IA o CSV, QR con
+"Copiar link", contraseña temporal para el staff, `*.localhost` resuelve en el
+navegador para probar subdominios en dev.
+
+Pendiente de esta fase: el toast "Caja cerrada" aparece en cada carga completa
+aunque el local esté en setup (ruido menor); limpiar el tenant de prueba
+`parrilla-auditoria` cuando termine la auditoría.
+
+### Responsive (misma fecha, en paralelo)
+
+Recorrido en 1920, 1440, 1280, 1024, 820 y 390 px de 14 rutas del panel, las
+públicas y los diálogos principales, midiendo scroll horizontal, elementos fuera
+del viewport y targets táctiles chicos. Ningún body con scroll horizontal; las
+públicas y la comanda del comensal bien en 390. Arreglado:
+
+- **Menú en 390: tabla rota** (columnas fijas sumaban más que el ancho; el
+  nombre del producto quedaba en 0 px). Categoría se oculta bajo `md` y pasa a
+  subtítulo del nombre; Precio/Disp. más angostas en mobile.
+- **Plano de mesas ilegible bajo 1280** (se encogía hasta celdas de 8 px). La
+  celda mínima sube a 14 px y el lienzo panea en horizontal en vez de encogerse;
+  el panel "Avisos en vivo" pasa a la derecha recién en `xl`.
+- **Plano bloqueaba el scroll táctil** (`touch-none` siempre): ahora solo en
+  modo editar, que es donde dnd-kit lo necesita.
+- Targets chicos en 390: botones de categoría y "Copiar link" del QR.
+
+No tocado: tamaño del `Switch` compartido en mobile (decisión de design
+system), sidebar expandido en tablet 820 (mejora: `collapsible="icon"` entre
+768 y 1024).
+
+### Optimistic updates (misma fecha, en paralelo)
+
+Inventario de mutaciones del panel y la comanda. Ya eran optimistas con
+rollback: cocina, cobros, pedidos online, menú, comanda del comensal, ticket del
+mozo y plano. Pasaron a optimistas ahora (ms desde el click hasta que la UI lo
+refleja, en dev contra us-east-2):
+
+| Mutación | Antes | Después |
+| --- | --- | --- |
+| Staff: desactivar / activar | 3.9 s / 3.4 s | 79 / 59 ms |
+| Mesas: asignar mozo | 3.8 s | 32 ms |
+| Reservas: sentar / confirmar | 5.7 s / ~3.5 s | 35 / 74 ms |
+| Promociones: pausar / eliminar | (server) | optimista, no medido |
+
+Siguen server-bound a conciencia: abrir/cerrar caja (la acción no devuelve la
+sesión creada), "Confirmar pedido" del comensal (avisar "enviado a cocina" antes
+de que cocina lo tenga sería mentir) y las altas que necesitan id del server
+(ya muestran pending). Riesgo conocido: un broadcast que llegue entre el
+`onMutate` y la respuesta puede mostrar el estado viejo unos ms.
+
 ## 6. Archivos tocados
 
 Seguridad: `app/api/webhooks/pagos/mp-oauth/route.ts`, `features/tenant/get-tenant.ts`,

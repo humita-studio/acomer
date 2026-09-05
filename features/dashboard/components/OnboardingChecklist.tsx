@@ -37,6 +37,7 @@ const ICONS: Record<OnboardingStepId, LucideIcon> = {
 };
 
 const COLLAPSE_KEY = 'acomer-onboarding-collapsed';
+const DONE_KEY = 'acomer-onboarding-done-dismissed';
 
 function wasCollapsed(tenantId: string): boolean {
   if (typeof window === 'undefined') return false;
@@ -57,10 +58,20 @@ function setCollapsed(tenantId: string, value: boolean) {
   }
 }
 
+function wasDoneDismissed(tenantId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return sessionStorage.getItem(`${DONE_KEY}:${tenantId}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Checklist de primer día: menú → mesas → MP → caja (+ staff/landing opcionales).
+ * Checklist de primer día: menú → mesas → caja (+ MP/staff/landing opcionales).
  * La X solo lo **minimiza** (queda una barra para reabrir).
- * Se oculta del todo solo cuando lo obligatorio está completo.
+ * Con lo obligatorio completo pasa a una tarjeta chica con lo opcional que falte
+ * (cerrable); desaparece del todo cuando no queda nada pendiente.
  */
 export function OnboardingChecklist({
   status,
@@ -75,13 +86,65 @@ export function OnboardingChecklist({
   dominioPublico?: string;
 }) {
   const [minimizado, setMinimizado] = useState(() => wasCollapsed(tenantId));
+  const [listoCerrado, setListoCerrado] = useState(() => wasDoneDismissed(tenantId));
 
   const byId = useMemo(() => {
     const m = new Map(status.steps.map((s) => [s.id, s]));
     return m;
   }, [status.steps]);
 
-  if (status.listo) return null;
+  if (status.listo) {
+    const opcionalesPendientes = ONBOARDING_STEPS.filter((def) => {
+      const st = byId.get(def.id);
+      return !def.required && st && !st.done;
+    });
+    if (opcionalesPendientes.length === 0 || listoCerrado) return null;
+    return (
+      <Card className="border-success/25 bg-success-subtle/40 shadow-sm">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-success text-success-foreground">
+              <Check className="size-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-snug">
+                {nombreRestaurante} ya puede operar
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Cuando quieras:{' '}
+                {opcionalesPendientes.map((def, i) => (
+                  <span key={def.id}>
+                    {i > 0 ? ' · ' : ''}
+                    <Link href={def.href} className="underline underline-offset-2 hover:text-foreground">
+                      {def.titulo}
+                    </Link>
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-muted-foreground"
+            aria-label="Ocultar"
+            title="Ocultar"
+            onClick={() => {
+              try {
+                sessionStorage.setItem(`${DONE_KEY}:${tenantId}`, '1');
+              } catch {
+                // ignore
+              }
+              setListoCerrado(true);
+            }}
+          >
+            <X className="size-4" />
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const pct = status.total > 0 ? Math.round((status.hechos / status.total) * 100) : 0;
   const proximo = ONBOARDING_STEPS.find((def) => {

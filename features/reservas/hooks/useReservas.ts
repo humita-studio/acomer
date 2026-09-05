@@ -1,9 +1,10 @@
 'use client';
 
 import { useBroadcast } from '@/shared/supabase/realtime';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@/shared/query/keys';
+import type { PlanoData } from '@/features/mesas/plano-data';
 import {
   cambiarEstadoReservaAction,
   sentarReservaAction,
@@ -79,13 +80,62 @@ export function useReservasRealtime(tenantId: string, mesKey: string) {
   });
 }
 
+type ReservasSnapshot = { previous?: Reserva[] };
+
+/**
+ * Update optimista de una reserva en la lista del mes: la tarjeta cambia al
+ * toque (confirmar, sentar, asignar mesa) y se revierte si el server falla.
+ * `cancelQueries` evita que un refetch en vuelo (realtime, poll) pise el estado
+ * optimista con datos viejos.
+ */
+async function patchReservaOptimista(
+  queryClient: QueryClient,
+  key: readonly unknown[],
+  id: string,
+  patch: Partial<Reserva>,
+): Promise<ReservasSnapshot> {
+  await queryClient.cancelQueries({ queryKey: key });
+  const previous = queryClient.getQueryData<Reserva[]>(key);
+  queryClient.setQueryData<Reserva[]>(key, (old = []) =>
+    old.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+  );
+  return { previous };
+}
+
+function revertirReservas(
+  queryClient: QueryClient,
+  key: readonly unknown[],
+  ctx?: ReservasSnapshot,
+) {
+  if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
+}
+
+/** Etiqueta de la mesa desde el plano ya cacheado (si está), para el optimista. */
+function etiquetaMesaCacheada(
+  queryClient: QueryClient,
+  tenantId: string,
+  mesaId: string | null | undefined,
+): Partial<Reserva> {
+  if (mesaId === undefined) return {};
+  if (mesaId === null) return { mesaId: null, mesaIdentificador: null, mesaCapacidad: null };
+  const mesa = queryClient
+    .getQueryData<PlanoData>(queryKeys.plano(tenantId))
+    ?.mesas.find((m) => m.id === mesaId);
+  return mesa
+    ? { mesaId, mesaIdentificador: mesa.identificador, mesaCapacidad: mesa.capacidad }
+    : { mesaId };
+}
+
 export function useCambiarEstadoReserva(tenantId: string, mesKey: string) {
   const queryClient = useQueryClient();
+  const key = queryKeys.reservasMes(tenantId, mesKey);
   return useMutation({
     mutationFn: ({ id, estado }: { id: string; estado: string }) =>
       cambiarEstadoReservaAction(id, estado as never),
-    onSuccess: (res, vars) => {
+    onMutate: ({ id, estado }) => patchReservaOptimista(queryClient, key, id, { estado }),
+    onSuccess: (res, vars, ctx) => {
       if (!res.success) {
+        revertirReservas(queryClient, key, ctx);
         toast.error(res.message ?? 'No se pudo actualizar la reserva');
       } else {
         const msg: Record<string, string> = {
@@ -96,46 +146,79 @@ export function useCambiarEstadoReserva(tenantId: string, mesKey: string) {
         };
         toast.success(msg[vars.estado] ?? 'Reserva actualizada');
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) });
     },
-    onError: () => toast.error('No se pudo actualizar la reserva'),
+    onError: (_e, _vars, ctx) => {
+      revertirReservas(queryClient, key, ctx);
+      toast.error('No se pudo actualizar la reserva');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: key });
+    },
   });
 }
 
 export function useSentarReserva(tenantId: string, mesKey: string) {
   const queryClient = useQueryClient();
+  const key = queryKeys.reservasMes(tenantId, mesKey);
   return useMutation({
     mutationFn: ({ id, mesaId }: { id: string; mesaId?: string | null }) =>
       sentarReservaAction(id, mesaId),
-    onSuccess: (res) => {
+    onMutate: ({ id, mesaId }) =>
+      patchReservaOptimista(queryClient, key, id, {
+        estado: 'Sentada',
+        ...etiquetaMesaCacheada(queryClient, tenantId, mesaId ?? undefined),
+      }),
+    onSuccess: (res, _vars, ctx) => {
       if (res.success) {
         toast.success('Mesa sentada', {
           description: 'La mesa quedó abierta en el salón. Podés cargar el pedido desde Mesas.',
         });
-      } else toast.error(res.message ?? 'No se pudo sentar la reserva');
-      queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) });
+      } else {
+        revertirReservas(queryClient, key, ctx);
+        toast.error(res.message ?? 'No se pudo sentar la reserva');
+      }
+    },
+    onError: (_e, _vars, ctx) => {
+      revertirReservas(queryClient, key, ctx);
+      toast.error('No se pudo sentar la reserva');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: key });
       // El plano de mesas también cambia al sentar.
       queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     },
-    onError: () => toast.error('No se pudo sentar la reserva'),
   });
 }
 
 export function useAsignarMesaReserva(tenantId: string, mesKey: string) {
   const queryClient = useQueryClient();
+  const key = queryKeys.reservasMes(tenantId, mesKey);
   return useMutation({
     mutationFn: ({ id, mesaId }: { id: string; mesaId: string | null }) =>
       asignarMesaReservaAction(id, mesaId),
-    onSuccess: (res) => {
+    onMutate: ({ id, mesaId }) =>
+      patchReservaOptimista(
+        queryClient,
+        key,
+        id,
+        etiquetaMesaCacheada(queryClient, tenantId, mesaId),
+      ),
+    onSuccess: (res, _vars, ctx) => {
       if (res.success) {
         toast.success(res.message ?? 'Mesa actualizada');
       } else {
+        revertirReservas(queryClient, key, ctx);
         toast.error(res.message ?? 'No se pudo asignar la mesa');
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) });
+    },
+    onError: (_e, _vars, ctx) => {
+      revertirReservas(queryClient, key, ctx);
+      toast.error('No se pudo asignar la mesa');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: key });
       queryClient.invalidateQueries({ queryKey: ['mesas-disponibles'] });
     },
-    onError: () => toast.error('No se pudo asignar la mesa'),
   });
 }
 

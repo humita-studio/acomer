@@ -68,6 +68,15 @@ export function PromocionesManager({
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['promociones'] });
 
+  /** Snapshot para revertir un update optimista de la lista. */
+  const snapshotPromos = async (): Promise<{ previous?: Promocion[] }> => {
+    await qc.cancelQueries({ queryKey: ['promociones'] });
+    return { previous: qc.getQueryData<Promocion[]>(['promociones']) };
+  };
+  const revertirPromos = (ctx?: { previous?: Promocion[] }) => {
+    if (ctx?.previous) qc.setQueryData(['promociones'], ctx.previous);
+  };
+
   const guardar = useMutation({
     mutationFn: async () => {
       const res = editingId
@@ -84,17 +93,26 @@ export function PromocionesManager({
     onError: (e) => setFormError(e instanceof Error ? e.message : 'No se pudo guardar'),
   });
 
+  // Pausar/activar: el chip cambia al instante; si el server falla, vuelve.
   const cambiarEstado = useMutation({
     mutationFn: async (p: Promocion) => {
       const res = await togglePromocionAction(p.id, !p.activa);
       if (!res.success) throw new Error(res.message);
       return res;
     },
-    onSuccess: (res) => {
-      toast.success(res.message ?? 'Listo');
-      invalidate();
+    onMutate: async (p) => {
+      const ctx = await snapshotPromos();
+      qc.setQueryData<Promocion[]>(['promociones'], (old = []) =>
+        old.map((x) => (x.id === p.id ? { ...x, activa: !p.activa } : x)),
+      );
+      return ctx;
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Error'),
+    onSuccess: (res) => toast.success(res.message ?? 'Listo'),
+    onError: (e, _p, ctx) => {
+      revertirPromos(ctx);
+      toast.error(e instanceof Error ? e.message : 'Error');
+    },
+    onSettled: invalidate,
   });
 
   const eliminar = useMutation({
@@ -103,12 +121,18 @@ export function PromocionesManager({
       if (!res.success) throw new Error(res.message);
       return res;
     },
-    onSuccess: (res) => {
-      toast.success(res.message ?? 'Eliminada');
+    onMutate: async (id) => {
+      const ctx = await snapshotPromos();
+      qc.setQueryData<Promocion[]>(['promociones'], (old = []) => old.filter((x) => x.id !== id));
       setDeleteTarget(null);
-      invalidate();
+      return ctx;
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Error'),
+    onSuccess: (res) => toast.success(res.message ?? 'Eliminada'),
+    onError: (e, _id, ctx) => {
+      revertirPromos(ctx);
+      toast.error(e instanceof Error ? e.message : 'Error');
+    },
+    onSettled: invalidate,
   });
 
   const promosFiltradas = useMemo(

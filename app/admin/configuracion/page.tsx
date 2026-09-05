@@ -31,7 +31,7 @@ function ConfigSkeleton() {
     );
 }
 
-async function ConfigContent() {
+async function ConfigContent({ tab }: { tab: string | undefined }) {
     const session = await getCurrentSession();
 
     if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
@@ -84,7 +84,7 @@ async function ConfigContent() {
                 </p>
             </div>
 
-            <Tabs defaultValue="landing" className="space-y-4">
+            <Tabs defaultValue={tab === 'pagos' ? 'pagos' : 'landing'} className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="landing">Landing</TabsTrigger>
                     <TabsTrigger value="pagos">Pagos</TabsTrigger>
@@ -182,10 +182,17 @@ async function ConfigContent() {
     );
 }
 
-export default function ConfiguracionPage() {
+export default async function ConfiguracionPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ tab?: string | string[] }>;
+}) {
+    // `?tab=pagos` abre directo la pestaña de pagos (link del checklist de setup).
+    const sp = await searchParams;
+    const tab = typeof sp.tab === 'string' ? sp.tab : undefined;
     return (
         <Suspense fallback={<ConfigSkeleton />}>
-            <ConfigContent />
+            <ConfigContent tab={tab} />
         </Suspense>
     );
 }

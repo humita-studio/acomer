@@ -60,10 +60,13 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
   {
     id: 'pagos',
     titulo: 'Vinculá Mercado Pago',
-    descripcion: 'Para cobrar desde el celular del comensal o en mostrador.',
-    href: '/admin/configuracion',
+    descripcion:
+      'Para que el comensal pague desde su celular. Efectivo y tarjeta en caja funcionan sin esto.',
+    href: '/admin/configuracion?tab=pagos',
     cta: 'Configurar pagos',
-    required: true,
+    // Opcional: un local que cobra solo en caja no tiene por qué cargar con un
+    // checklist eterno. Sigue en el puesto 3 porque es lo más recomendable.
+    required: false,
   },
   {
     id: 'caja',

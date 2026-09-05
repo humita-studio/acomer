@@ -5,7 +5,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { normalizarVisualCategoria } from './categoriaVisual';
 
 // El `db` de cada acción es el handle transaccional de withTenant: corre con RLS
@@ -69,7 +69,7 @@ export async function crearCategoria(input: CategoriaInput): Promise<CrearCatego
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Categoría creada', id: fila.id };
   } catch (error) {
     console.error('[crearCategoria]', error);
@@ -104,7 +104,7 @@ export async function editarCategoria(id: string, input: CategoriaInput) {
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Categoría actualizada' };
   } catch (error) {
     console.error('[editarCategoria]', error);
@@ -133,7 +133,7 @@ export async function eliminarCategoria(id: string) {
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true, message: 'Categoría eliminada' };
   } catch (error) {
     console.error('[eliminarCategoria]', error);

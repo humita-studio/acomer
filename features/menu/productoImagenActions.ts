@@ -1,7 +1,7 @@
 'use server';
 
 import { and, eq, isNull } from 'drizzle-orm';
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
@@ -125,7 +125,7 @@ export async function guardarImagenProductoAction(input: {
     }
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true as const, imagenUrl, imagenPublicId: publicId };
   } catch (error) {
     console.error('[guardarImagenProductoAction]', error);
@@ -178,7 +178,7 @@ export async function eliminarImagenProductoAction(productoId: string) {
     );
 
     revalidatePath('/admin/menu');
-    revalidateTag(`carta-${session.restauranteId}`, 'default');
+    updateTag(`carta-${session.restauranteId}`);
     return { success: true as const };
   } catch (error) {
     console.error('[eliminarImagenProductoAction]', error);

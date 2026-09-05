@@ -1,7 +1,7 @@
 // Constantes y tipos compartidos del editor de plano
 
 export const GRID_PX = 24; // px por celda a tamaño completo (tope superior)
-export const MIN_CELL = 8; // px mínimos por celda al achicar en pantallas chicas
+export const MIN_CELL = 14; // px mínimos por celda: más chico el plano es ilegible; el contenedor scrollea en horizontal
 export const COLS = 40; // ancho lógico del lienzo (celdas)
 export const ROWS = 30; // alto lógico del lienzo (celdas)
 

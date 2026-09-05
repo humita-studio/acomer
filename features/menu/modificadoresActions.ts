@@ -10,7 +10,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
 import { withTenant } from '@/shared/db/secure-wrapper';
-import { revalidateTag } from 'next/cache';
+import { updateTag } from 'next/cache';
 
 // El `db` de cada acción es el handle transaccional de withTenant: corre con RLS
 // activo, de modo que la base sólo deja ver/tocar filas del tenant en sesión.
@@ -113,7 +113,7 @@ export async function agregarAdicionalAPlato(
       return { success: true, message: 'Adicional agregado' };
     });
 
-    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    if (res.success) updateTag(`carta-${session.restauranteId}`);
     return res;
   } catch (error) {
     console.error('[agregarAdicionalAPlato]', error);
@@ -167,7 +167,7 @@ export async function editarPrecioAdicional(modificadorId: string, nuevoPrecio: 
       return { success: true, message: 'Precio actualizado' };
     });
 
-    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    if (res.success) updateTag(`carta-${session.restauranteId}`);
     return res;
   } catch (error) {
     console.error('[editarPrecioAdicional]', error);
@@ -230,7 +230,7 @@ export async function eliminarAdicionalDePlato(productoId: string, modificadorId
       return { success: true, message: 'Adicional eliminado' };
     });
 
-    if (res.success) revalidateTag(`carta-${session.restauranteId}`, 'default');
+    if (res.success) updateTag(`carta-${session.restauranteId}`);
     return res;
   } catch (error) {
     console.error('[eliminarAdicionalDePlato]', error);

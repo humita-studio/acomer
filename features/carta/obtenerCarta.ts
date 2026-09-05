@@ -152,7 +152,10 @@ const CARTA_CACHE_TTL_S = 10 * 60;
 
 /**
  * Carta activa de un restaurante cacheada.
- * Se invalida cuando el admin actualiza la carta (revalidateTag(`carta-${tenantId}`)).
+ * Se invalida cuando el admin actualiza la carta: las server actions usan
+ * `updateTag` (expira al instante: el dueño ve su cambio en la primera visita).
+ * `revalidateTag(tag, perfil)` es stale-while-revalidate y servía la carta vieja
+ * una vez más; queda solo para el Copiloto (route handler, donde updateTag no corre).
  * El TTL es la red de seguridad: una mutación que olvide invalidar (pasó con el
  * Copiloto) no puede dejar precios viejos a la vista para siempre, porque el
  * pedido siempre snapshotea el precio vigente de la base.

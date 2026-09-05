@@ -41,10 +41,13 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export function ReservasConfigDrawer({
   open,
   onOpenChange,
+  preactivar = false,
   config,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** Abrir con "Aceptar reservas web" ya prendido (botón "Activar online"). */
+  preactivar?: boolean;
   config: ReservasConfig;
 }) {
   const router = useRouter();
@@ -60,7 +63,7 @@ export function ReservasConfigDrawer({
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setActivo(config.activo);
+      setActivo(preactivar || config.activo);
       setTurnos(config.turnos);
       setDuracion(config.duracionMinDefault);
       setAnticipacion(config.anticipacionMinMin);

@@ -253,18 +253,18 @@ export function MenuManager({
                     <button
                       type="button"
                       onClick={() => abrirEditarCategoria(c)}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground sm:p-1"
                       aria-label={`Editar ${c.nombre}`}
                     >
-                      <Pencil className="size-3.5" />
+                      <Pencil className="size-4 sm:size-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => handleEliminarCategoria(c)}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                      className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-destructive sm:p-1"
                       aria-label={`Eliminar ${c.nombre}`}
                     >
-                      <Trash2 className="size-3.5" />
+                      <Trash2 className="size-4 sm:size-3.5" />
                     </button>
                   </div>
                 )}
@@ -341,15 +341,16 @@ export function MenuManager({
               <table className="w-full table-fixed text-sm">
                 <colgroup>
                   <col className="w-auto" />
-                  <col className="w-[8.5rem]" />
-                  <col className="w-[6.5rem]" />
-                  <col className="w-[5.5rem]" />
+                  {/* Con table-fixed la <col> también tiene que desaparecer en mobile, si no corre las demás columnas. */}
+                  <col className="hidden md:table-column md:w-[8.5rem]" />
+                  <col className="w-[5.5rem] md:w-[6.5rem]" />
+                  <col className="w-14 md:w-[5.5rem]" />
                   <col className="w-11" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
                     <th className="px-3 py-2.5 font-medium sm:px-4">Producto</th>
-                    <th className="px-2 py-2.5 font-medium sm:px-4">Categoría</th>
+                    <th className="hidden px-2 py-2.5 font-medium sm:px-4 md:table-cell">Categoría</th>
                     <th className="px-2 py-2.5 font-medium sm:px-4">Precio</th>
                     <th className="px-2 py-2.5 font-medium sm:px-4">Disp.</th>
                     <th className="px-1 py-2.5 sm:px-2" aria-label="Acciones" />
@@ -534,10 +535,12 @@ function ProductoRow({
                 {producto.descripcion}
               </p>
             )}
+            {/* En pantallas chicas la columna Categoría se oculta: va acá. */}
+            <p className="truncate text-xs text-muted-foreground md:hidden">{categoriaNombre}</p>
           </div>
         </div>
       </td>
-      <td className="min-w-0 overflow-hidden px-2 py-3 sm:px-4">
+      <td className="hidden min-w-0 overflow-hidden px-2 py-3 sm:px-4 md:table-cell">
         <Badge
           variant="secondary"
           className="max-w-full min-w-0 gap-1 font-medium sm:gap-1.5"

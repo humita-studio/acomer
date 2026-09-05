@@ -5,6 +5,7 @@ import { LandingHero } from '@/features/landing/components/LandingHero';
 import { LandingAcciones } from '@/features/landing/components/LandingAcciones';
 import { obtenerDeliveryConfig } from '@/features/pedidos-online/deliveryConfigActions';
 import { ofreceDelivery } from '@/features/pedidos-online/deliveryConfig';
+import { obtenerReservasConfig } from '@/features/reservas/reservasConfigActions';
 
 // El badge "Abierto/Cerrado" depende de la hora actual: renderizamos siempre
 // fresco en vez de servir una versión cacheada.
@@ -26,10 +27,18 @@ export default async function TenantPage({ params }: { params: Promise<{ tenant:
   const rest = await getTenantDetails(tenant);
   if (!rest || rest.deletedAt) return <NoEncontrado />;
 
-  const [config, delivery] = await Promise.all([
+  const [config, delivery, reservas] = await Promise.all([
     obtenerLandingConfig(rest.id),
     obtenerDeliveryConfig(rest.id),
+    obtenerReservasConfig(rest.id),
   ]);
+  // Una tarjeta solo se muestra si el local además tiene ese canal prendido:
+  // ofrecer "Pedir online" con los pedidos apagados era un callejón sin salida.
+  const acciones = {
+    ...config.acciones,
+    pedirOnline: config.acciones.pedirOnline && delivery.activo,
+    reservar: config.acciones.reservar && reservas.activo,
+  };
   const ahora = ahoraLocal();
   const abierto = estaAbierto(config.horarios, ahora);
 
@@ -58,7 +67,7 @@ export default async function TenantPage({ params }: { params: Promise<{ tenant:
           logoUrl={config.logoUrl}
         />
         <LandingAcciones
-          acciones={config.acciones}
+          acciones={acciones}
           colorMarca={config.colorMarca}
           redes={config.redes}
           sobre={config.sobre}

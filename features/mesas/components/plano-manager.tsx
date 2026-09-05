@@ -156,18 +156,39 @@ export function PlanoManager({
       userId ? (map.get(userId) ?? 'Mozo') : null;
   }, [mozos]);
 
+  // Optimista: el <select> del panel es controlado por `mesa.mozoUserId`; sin
+  // esto volvía a "Sin asignar" hasta que llegaba el refetch (~3-4 s).
   const asignarMozoMutation = useMutation({
     mutationFn: async (vars: { mesaId: string; mozoUserId: string | null }) => {
       const res = await asignarMozoMesaAction(vars.mesaId, vars.mozoUserId);
       if (!res.success) throw new Error(res.message ?? 'No se pudo asignar');
       return res;
     },
+    onMutate: async (vars) => {
+      const key = queryKeys.plano(tenantId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<PlanoData>(key);
+      queryClient.setQueryData<PlanoData>(key, (old) =>
+        old
+          ? {
+              ...old,
+              mesas: old.mesas.map((m) =>
+                m.id === vars.mesaId ? { ...m, mozoUserId: vars.mozoUserId } : m,
+              ),
+            }
+          : old,
+      );
+      return { previous };
+    },
     onSuccess: (res) => {
       toast.success(res.message ?? 'Mozo actualizado');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     },
-    onError: (e) => {
+    onError: (e, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.plano(tenantId), ctx.previous);
       toast.error(e instanceof Error ? e.message : 'No se pudo asignar el mozo');
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
     },
   });
 
@@ -434,7 +455,7 @@ export function PlanoManager({
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         {/* Canvas */}
         <Card className="min-w-0 flex-1 gap-0 overflow-hidden py-0 shadow-sm">
           <PlanoToolbar
@@ -540,7 +561,7 @@ export function PlanoManager({
         </Card>
 
         {/* Side column: avisos (siempre) + panel de edición (solo modo editar) */}
-        <div className="flex w-full shrink-0 flex-col gap-4 lg:w-[300px]">
+        <div className="flex w-full shrink-0 flex-col gap-4 xl:w-[300px]">
           <Card className={cn(avisos.length > 0 ? 'border-primary/30 shadow-sm' : 'shadow-none')}>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
@@ -714,7 +735,7 @@ export function PlanoManager({
                       <QRCodeSVG value={url} size={120} level="H" />
                       <button
                         type="button"
-                        className="w-full truncate text-[10px] text-muted-foreground hover:text-primary print:hidden"
+                        className="w-full truncate py-1.5 text-xs text-muted-foreground hover:text-primary print:hidden"
                         title="Copiar URL"
                         onClick={() => navigator.clipboard?.writeText(url)}
                       >
