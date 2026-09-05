@@ -28,6 +28,32 @@ export type PlatformLocalDetalle = PlatformLocalListItem & {
   } | null;
 };
 
+export type PlatformPagoReciente = {
+  id: string;
+  fecha: string;
+  localId: string;
+  localNombre: string;
+  localSlug: string;
+  plan: PlanId;
+  monto: number;
+  estado: string;
+};
+
+export type PlatformAtencionMotivo =
+  | 'trial_por_vencer'
+  | 'trial_vencido'
+  | 'periodo_por_vencer'
+  | 'vencido'
+  | 'sin_actividad';
+
+export type PlatformAtencion = {
+  id: string;
+  nombre: string;
+  slug: string;
+  motivo: PlatformAtencionMotivo;
+  detalle: string;
+};
+
 export type PlatformStats = {
   total: number;
   activos: number;
@@ -35,6 +61,26 @@ export type PlatformStats = {
   exempt: number;
   pastDue: number;
   inactive: number;
+  /** billing_status = active (pagando). */
+  activosPago: number;
+  nuevosMes: number;
+  ingresos: {
+    mesActual: number;
+    mesAnterior: number;
+    total: number;
+    pagosMesActual: number;
+  };
+  /** Suma del precio mensual de los locales activos (pagando). */
+  mrr: number;
+  porVencer: { trial7: number; periodo7: number };
+  uso: {
+    pedidos30d: number;
+    volumen30d: number;
+    pedidosHoy: number;
+    localesConActividad7d: number;
+  };
+  pagosRecientes: PlatformPagoReciente[];
+  atencion: PlatformAtencion[];
 };
 
 export type PlatformListFilters = {
