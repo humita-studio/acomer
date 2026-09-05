@@ -1,9 +1,9 @@
 /**
  * Catálogo de planes SaaS (source of truth del producto).
  * Precios en ARS enteros. "a_medida" no se cobra online.
- *
- * Mientras `BILLING_COBRO_HABILITADO` sea false, no se enforcean límites ni
- * hard-gates de acceso (ver access.ts). Flip a true cuando el cobro SaaS esté listo.
+ * El cobro está siempre activo: prueba de TRIAL_DAYS, gracia de GRACE_DAYS y
+ * bloqueo del panel al vencer (ver access.ts). Los locales que no pagan se
+ * marcan "exempt" desde /platform.
  */
 
 export type PlanId = 'basico' | 'pro' | 'a_medida';
@@ -17,15 +17,6 @@ export type PlanDef = {
   features: string[];
   destacado?: boolean;
 };
-
-/**
- * Cobro de suscripción: `NEXT_PUBLIC_BILLING_COBRO_HABILITADO=1` lo prende
- * (prueba de 90 días, gracia, bloqueo y pago con Mercado Pago). Apagado, el
- * producto es gratis para todos. Va como variable de entorno para prenderlo en
- * Vercel junto con `MP_BILLING_ACCESS_TOKEN`, sin ventana en la que el panel
- * exija pagar y no se pueda.
- */
-export const BILLING_COBRO_HABILITADO = process.env.NEXT_PUBLIC_BILLING_COBRO_HABILITADO === '1';
 
 /** Duración del trial al registrarse (3 meses). */
 export const TRIAL_DAYS = 90;

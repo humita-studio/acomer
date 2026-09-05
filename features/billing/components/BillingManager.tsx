@@ -77,21 +77,10 @@ export function BillingManager({
       <div className="space-y-1">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Plan y facturación</h1>
         <p className="text-sm text-muted-foreground">
-          {view.freeMode
-            ? 'acomer es gratis por ahora. Cuando habilitemos el cobro, vas a poder elegir plan acá.'
-            : `Gestioná la suscripción de acomer para ${view.planNombre.toLowerCase() === view.plan ? 'tu local' : `el plan ${view.planNombre}`}.`}
+          Gestioná la suscripción de acomer para{' '}
+          {view.planNombre.toLowerCase() === view.plan ? 'tu local' : `el plan ${view.planNombre}`}.
         </p>
       </div>
-
-      {view.freeMode && (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="font-medium text-foreground">Gratis · sin límites</p>
-          <p className="mt-1 text-muted-foreground">
-            Tenés acceso a todo (mesas, reservas, pedidos online, Mercado Pago, promos).
-            No hace falta pagar ni elegir plan hasta que activemos el cobro.
-          </p>
-        </div>
-      )}
 
       {pagoState === 'exito' && (
         <div className="rounded-xl border border-success/30 bg-success-subtle p-4 text-sm text-success-foreground">
@@ -117,12 +106,11 @@ export function BillingManager({
             <p className="mt-1 text-sm text-muted-foreground">{view.label}</p>
           </div>
           <Badge variant={view.accessOk ? 'secondary' : 'destructive'}>
-            {view.freeMode ? 'Gratis' : view.planNombre}
+            {view.planNombre}
           </Badge>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {!view.freeMode && (
-            <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">Prueba hasta</p>
                 <p className="font-medium">
@@ -135,16 +123,10 @@ export function BillingManager({
                   {view.periodEndsAt ? formatFecha(view.periodEndsAt) : '—'}
                 </p>
               </div>
-            </div>
-          )}
+          </div>
           {view.maxMesas != null && (
             <p className="text-muted-foreground">
               Límite del plan: hasta <strong>{view.maxMesas} mesas</strong>.
-            </p>
-          )}
-          {view.freeMode && (
-            <p className="text-muted-foreground">
-              Sin límite de mesas ni de funciones. Todo el producto incluido.
             </p>
           )}
           {!view.accessOk && (
@@ -155,8 +137,6 @@ export function BillingManager({
         </CardContent>
       </Card>
 
-      {!view.freeMode && (
-        <>
           <div className="space-y-3">
             <h2 className="font-heading text-base font-semibold">Elegí tu plan</h2>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -240,8 +220,6 @@ export function BillingManager({
               </CardContent>
             </Card>
           )}
-        </>
-      )}
 
       <Card>
         <CardHeader>

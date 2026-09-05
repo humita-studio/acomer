@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BrandMark } from '@/features/marketing/components/BrandMark';
 import { CONTACTO } from '@/features/marketing/marketingContent';
-import { BILLING_COBRO_HABILITADO, TRIAL_DAYS } from '@/features/billing/plans';
+import { TRIAL_DAYS } from '@/features/billing/plans';
 
 export const metadata: Metadata = {
   title: 'Términos y condiciones',
@@ -72,24 +72,13 @@ export default function TerminosPage() {
 
           <section className="space-y-2">
             <h2 className="font-heading text-base font-semibold">4. Acceso al Servicio y precios</h2>
-            {BILLING_COBRO_HABILITADO ? (
-              <p>
-                Al registrarte podés usar el Servicio durante un período de prueba de{' '}
-                {TRIAL_DAYS} días. Luego podés suscribirte a un plan de pago desde el panel
-                (Plan y facturación) con Mercado Pago. Los precios publicados en la web son
-                de referencia y pueden actualizarse con aviso razonable. El plan “A medida”
-                se acuerda por separado.
-              </p>
-            ) : (
-              <p>
-                Hoy el Servicio se ofrece <strong>sin cargo</strong> para locales nuevos,
-                con acceso al producto completo y sin límites de plan. Los precios que
-                figuran en la web son de referencia para cuando habilitemos el cobro de la
-                suscripción. Te avisaremos con anticipación razonable antes de empezar a
-                cobrar; podrás elegir un plan o dejar de usar el Servicio. El plan “A
-                medida” (setup asistido) se acuerda por separado.
-              </p>
-            )}
+            <p>
+              Al registrarte podés usar el Servicio durante un período de prueba de{' '}
+              {TRIAL_DAYS} días. Luego podés suscribirte a un plan de pago desde el panel
+              (Plan y facturación) con Mercado Pago. Los precios publicados en la web son
+              de referencia y pueden actualizarse con aviso razonable. El plan “A medida”
+              se acuerda por separado.
+            </p>
           </section>
 
           <section className="space-y-2">

@@ -9,7 +9,6 @@ import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { withTenant } from '@/shared/db/secure-wrapper';
 import { evaluateBilling, type BillingSnapshot } from './access';
 import {
-  BILLING_COBRO_HABILITADO,
   PERIOD_DAYS,
   isPlanId,
   planDef,
@@ -128,14 +127,6 @@ export async function iniciarPagoSuscripcionAction(planId?: string) {
   const session = await getCurrentSession();
   if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
     return { success: false as const, message: 'Solo el dueño o admin pueden pagar el plan.' };
-  }
-
-  if (!BILLING_COBRO_HABILITADO) {
-    return {
-      success: false as const,
-      message:
-        'acomer es gratis por ahora. El cobro de suscripción todavía no está habilitado.',
-    };
   }
 
   const token = getBillingAccessToken();

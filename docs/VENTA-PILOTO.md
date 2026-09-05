@@ -17,9 +17,9 @@ Usalo en demos, onboarding y handoff al dueño.
 **No digas (por ahora):** multi-sucursal, API pública, facturación AFIP automática;
 tampoco digas que Pro “incluye” cosas que Básico no (hoy no hay gate por plan).
 
-**Flag de producto:** `BILLING_COBRO_HABILITADO = false` en
-`features/billing/plans.ts` → sin hard-gate, sin límite de mesas, sin banner de pago.
-Cuando cobremos, ponerlo en `true` y reintroducir features/límites reales.
+**Cobro:** siempre activo. 90 días de prueba desde el registro, después plan
+pago (Básico 14.900 / Pro 29.900 / A medida) o **Exento** desde `/platform`
+para los pilotos acompañados.
 
 ---
 
@@ -95,7 +95,7 @@ Webhook MP: URL pública + `MP_WEBHOOK_SECRET` en Vercel (ver `DEPLOY.md`).
 ### Oferta piloto sugerida
 
 - Setup asistido (1 h remota o presencial)
-- **Gratis** hasta habilitar cobro (flag `BILLING_COBRO_HABILITADO`)
+- **90 días gratis** de prueba; los pilotos acompañados quedan exentos desde `/platform`
 - Precios de referencia (cuando se cobre): Básico $14.900 / Pro $29.900
 - Soporte por WhatsApp / email que **vos** atiendas
 

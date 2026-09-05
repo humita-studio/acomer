@@ -105,7 +105,7 @@ webhook de pago real. Ver sección 5 para probarlos a mano.
 - [ ] En Vercel: `MP_WEBHOOK_SECRET`, `NEXT_PUBLIC_ROOT_DOMAIN=acomer.com.ar`, `NEXT_PUBLIC_APP_URL=https://acomer.com.ar` (hoy `.env` local tiene `ROOT_DOMAIN` comentado; en dev está bien).
 - [ ] Sacar la credencial en texto plano que quedó comentada en `.env` (línea `# Email: … Contraseña: …`). El archivo no se commitea, pero no debería vivir ahí.
 - [ ] Redirect URI de la app de MP = `https://acomer.com.ar/api/webhooks/pagos/mp-oauth` (el callback ahora exige que el dueño esté logueado en ese navegador).
-- [ ] Si se habilita cobro SaaS: `MP_BILLING_ACCESS_TOKEN` + `BILLING_COBRO_HABILITADO = true`.
+- [x] Cobro SaaS activo sin flag (2026-09-05). Falta `MP_BILLING_ACCESS_TOKEN` en Vercel y marcar Exento al demo y pilotos en `/platform`.
 - [ ] Probar a mano lo de la sección 5.
 
 ---

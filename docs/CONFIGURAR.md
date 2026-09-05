@@ -131,17 +131,17 @@ Cada restaurante vincula **su** cuenta MP desde Configuración → Pagos.
 
 | Variable | Para qué |
 | --- | --- |
-| `NEXT_PUBLIC_BILLING_COBRO_HABILITADO` | `1` prende el cobro: prueba de 90 días, 3 de gracia, bloqueo del panel al vencer y botón "Pagar con Mercado Pago". Apagado (default) = producto gratis |
 | `MP_BILLING_ACCESS_TOKEN` | Access token de producción de la cuenta MP **de acomer** (Credenciales de producción → Access Token). Recibe las suscripciones. La Public Key no se usa |
 | `MP_PLATFORM_ACCESS_TOKEN` | Alias opcional del anterior |
 
-**Prender el cobro (orden):** cargar las dos variables en Vercel **en el mismo
-deploy** (si se prende sin token, el panel pide pagar y no se puede), redeploy,
-y en `/platform` marcar como **Exento** los locales que no pagan (el demo, los
-pilotos acompañados). El resto sigue su prueba de 90 días desde el registro; a
-los 3 días del vencimiento aparece el banner y al vencer + 3 días de gracia el
-dueño solo ve Plan y facturación hasta pagar (el staff, "Sin permiso"). Desde
-`/platform` se cambia plan, estado, se extiende la prueba o se exime.
+**El cobro está siempre activo** (decisión 2026-09-05): cada local nuevo tiene
+90 días de prueba desde el registro; a los 3 días del vencimiento aparece el
+banner y, vencida la prueba más 3 días de gracia, el dueño solo ve Plan y
+facturación hasta pagar (el staff, "Sin permiso"). Los locales que no pagan
+(demo, pilotos acompañados) se marcan **Exento** en `/platform`, donde también
+se cambia plan, estado o se extiende la prueba. Sin `MP_BILLING_ACCESS_TOKEN`
+el botón de pagar avisa "no disponible, escribinos"; cargarlo en Vercel para
+cobrar online.
 
 Los pagos de suscripción llegan a `https://acomer.com.ar/api/webhooks/billing/mp`
 (la preferencia lleva su propia `notification_url`) y se firman con la misma
@@ -241,21 +241,12 @@ O pegá el SQL en el SQL Editor de Supabase.
 **Locales ya existentes** tras la migración: quedan en trial según el backfill del SQL.  
 **Registros nuevos**: plan Pro + `billing_status = trial` (el trial se ignora mientras el cobro esté off).
 
-### Producto free (estado actual)
+### Cobro activo
 
-En `features/billing/plans.ts`:
-
-```ts
-export const BILLING_COBRO_HABILITADO = false;
-```
-
-Con eso en `false`:
-
-- `evaluateBilling` siempre da `accessOk`, sin banner de pago y sin `maxMesas`
-- Landing y `/admin/billing` hablan de gratis, no de Básico vs Pro
-- `iniciarPagoSuscripcionAction` rechaza cobros de suscripción
-
-Cuando el cobro SaaS esté listo: poner el flag en `true` y alinear features/límites reales (mesas, reservas, etc.) con el copy.
+No hay flag de producto: `features/billing/plans.ts` define planes, prueba
+(`TRIAL_DAYS`), gracia (`GRACE_DAYS`) y período (`PERIOD_DAYS`); `access.ts`
+decide acceso y banner. Todos los planes dan hoy el mismo producto; la
+diferencia es precio y acompañamiento.
 
 ### Pilotos sin cobro (cuando el flag esté en true)
 
