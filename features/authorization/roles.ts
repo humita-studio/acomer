@@ -132,24 +132,23 @@ export function hasPermission(role: RoleType, permission: keyof RolePermissions)
   return ROLE_PERMISSIONS[role][permission];
 }
 
+export type AdminSection =
+  | 'menu'
+  | 'staff'
+  | 'tables'
+  | 'reports'
+  | 'kitchen'
+  | 'cashier'
+  | 'cobros'
+  | 'settings'
+  | 'reservas'
+  | 'delivery'
+  | 'resenas';
+
 /**
  * Verifica si un rol tiene acceso a una sección específica.
  */
-export function canAccessSection(
-  role: RoleType,
-  section:
-    | 'menu'
-    | 'staff'
-    | 'tables'
-    | 'reports'
-    | 'kitchen'
-    | 'cashier'
-    | 'cobros'
-    | 'settings'
-    | 'reservas'
-    | 'delivery'
-    | 'resenas'
-): boolean {
+export function canAccessSection(role: RoleType, section: AdminSection): boolean {
   const permissions = getRolePermissions(role);
 
   switch (section) {
@@ -178,5 +177,44 @@ export function canAccessSection(
       return permissions.canManageDelivery;
     default:
       return false;
+  }
+}
+
+/** Ruta del panel (o prefijo) → sección que la protege. Orden: el primer prefijo que matchea gana. */
+const SECCION_POR_RUTA: ReadonlyArray<readonly [prefijo: string, seccion: AdminSection]> = [
+  ['/admin/menu', 'menu'],
+  ['/admin/promociones', 'menu'],
+  ['/admin/staff', 'staff'],
+  ['/admin/mesas', 'tables'],
+  ['/admin/reportes', 'reports'],
+  ['/admin/resenas', 'resenas'],
+  ['/admin/cocina', 'kitchen'],
+  ['/admin/caja', 'cashier'],
+  ['/admin/cobros', 'cobros'],
+  ['/admin/configuracion', 'settings'],
+  ['/admin/billing', 'settings'],
+  ['/admin/reservas', 'reservas'],
+  ['/admin/pedidos-online', 'delivery'],
+];
+
+/** Sección que protege una ruta del panel; null si la ruta no está mapeada (p. ej. /admin). */
+export function seccionDeRutaAdmin(pathname: string): AdminSection | null {
+  for (const [prefijo, seccion] of SECCION_POR_RUTA) {
+    if (pathname === prefijo || pathname.startsWith(`${prefijo}/`)) return seccion;
+  }
+  return null;
+}
+
+/** Pantalla de entrada al panel según el rol (el dashboard es de dueño/admin). */
+export function rutaInicialAdmin(role: RoleType): string {
+  switch (role) {
+    case 'cocina':
+      return '/admin/cocina';
+    case 'mozo':
+      return '/admin/mesas';
+    case 'cajero':
+      return '/admin/caja';
+    default:
+      return '/admin';
   }
 }

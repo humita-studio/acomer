@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/features/auth/session';
+import { rutaInicialAdmin, type RoleType } from '@/features/authorization/roles';
 import { getDashboardMetricsAction } from '@/features/dashboard/dashboardActions';
 import { getOnboardingStatusAction } from '@/features/dashboard/onboardingActions';
 import { DashboardMetrics } from '@/features/dashboard/components/DashboardMetrics';
@@ -53,9 +54,9 @@ async function DashboardContent() {
   const session = await getCurrentSession();
   if (!session) redirect('/login');
 
-  if (session.role === 'cocina') redirect('/admin/cocina');
-  if (session.role === 'mozo') redirect('/admin/mesas');
-  if (session.role === 'cajero') redirect('/admin/caja');
+  // El layout ya redirige antes de emitir HTML; esto queda como defensa.
+  const inicio = rutaInicialAdmin(session.role as RoleType);
+  if (inicio !== '/admin') redirect(inicio);
 
   const [metrics, onboarding, headersList] = await Promise.all([
     getDashboardMetricsAction(),

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, TriangleAlert } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { Button } from '@/shared/ui/button';
@@ -12,7 +12,6 @@ import { traducirErrorAuth, userMustChangePassword } from '../auth-errors';
 import { resolvePostLoginPathAction } from '@/features/platform/postLoginAction';
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,16 +39,18 @@ export function LoginForm() {
         return;
       }
 
+      // Navegación completa (no `router.push` + `router.refresh`): con las cookies
+      // recién creadas, el refresh pisaba el push y el usuario quedaba en /login
+      // con la sesión ya iniciada. Una carga completa toma las cookies nuevas y
+      // deja que el proxy y el layout resuelvan el destino.
       if (userMustChangePassword(data.user)) {
-        router.push('/cambiar-password');
-        router.refresh();
+        window.location.assign('/cambiar-password');
         return;
       }
 
       // Local staff → /admin; operador acomer sin perfil → /platform.
       const dest = await resolvePostLoginPathAction();
-      router.push(dest);
-      router.refresh();
+      window.location.assign(dest);
     } catch (err) {
       setError(traducirErrorAuth(err, 'No se pudo iniciar sesión.'));
     } finally {

@@ -27,7 +27,7 @@ import {
 } from '../hooks/useReservas';
 import type { Reserva } from '../types';
 import { turnoDeHora, horaAMin, type ReservasConfig } from '../reservasConfig';
-import { toYMD, ymdDeReserva, diaLegible, diaLegibleLargo, hhmm } from '../fechas';
+import { toYMD, hoyYMD, ymdDeReserva, diaLegible, diaLegibleLargo, hhmm } from '../fechas';
 import { ReservasCalendar } from './ReservasCalendar';
 import { ReservaCard, type AccionConfirmable } from './ReservaCard';
 import { NuevaReservaDialog, type NuevaReservaDatos } from './NuevaReservaDialog';
@@ -159,7 +159,7 @@ export function ReservasManager({
   });
   const proximoDiaOtroMes = proximaInicio ? ymdDeReserva(proximaInicio) : null;
 
-  const hoy = toYMD(new Date());
+  const hoy = hoyYMD();
   const cuposHoy = porDia.get(hoy) ?? { reservas: 0, cubiertos: 0 };
   const cuposDia = porDia.get(diaSel) ?? { reservas: 0, cubiertos: 0 };
 

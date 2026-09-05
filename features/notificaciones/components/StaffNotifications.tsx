@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { formatFecha, formatFechaLarga } from '@/shared/lib/format';
 import {
@@ -247,20 +247,35 @@ export function StaffNotifications({
     [dismissed],
   );
 
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-
-    const dataOf = (raw: unknown): Record<string, unknown> => {
-      if (!raw || typeof raw !== 'object') return {};
-      const r = raw as Record<string, unknown>;
-      if (r.payload && typeof r.payload === 'object' && !Array.isArray(r.payload)) {
-        return r.payload as Record<string, unknown>;
-      }
-      return r;
-    };
-
-    const onLlamarMozo = (raw: unknown) => {
-      const p = dataOf(raw);
+  useBroadcast(`admin_restaurant_${tenantId}`, {
+    nuevo_pedido: (p) => {
+      const etiqueta = typeof p.etiqueta === 'string' ? p.etiqueta : null;
+      push(
+        'Nuevo pedido',
+        etiqueta ? `Origen: ${etiqueta}` : 'Llegó un pedido a cocina',
+        '/admin/cocina',
+      );
+    },
+    orden_externa_nueva: (p) => {
+      push(
+        'Pedido online',
+        p.tipo === 'delivery' ? 'Nuevo delivery' : 'Nuevo takeaway / retiro',
+        '/admin/pedidos-online',
+        { important: true },
+      );
+    },
+    reserva_nueva: () => {
+      push(
+        'Nueva reserva',
+        'Entró una reserva online. Revisala en la agenda.',
+        '/admin/reservas',
+        { important: true },
+      );
+    },
+    cuenta_solicitada: () => {
+      push('Cuenta solicitada', 'Una mesa pidió la cuenta', '/admin/cobros');
+    },
+    llamar_mozo: (p) => {
       if (p.tipo != null && p.tipo !== 'llamar_mozo') return;
       const mesa =
         typeof p.mesaIdentificador === 'string'
@@ -278,76 +293,23 @@ export function StaffNotifications({
         typeof p.href === 'string' ? p.href : '/admin/mesas',
         { important: true, id },
       );
-    };
-
-    void (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data.session?.access_token) {
-          await supabase.realtime.setAuth(data.session.access_token);
-        }
-      } catch {
-        // canal público
+    },
+    // La caja cambió en otra pestaña/caja: refrescar el sticky sin esperar el poll.
+    caja_actualizada: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
+    },
+    mesa_pagada: () => {
+      push('Mesa pagada', 'Se completó un cobro', '/admin/cobros');
+    },
+    pago_parcial: () => {
+      push('Pago parcial', 'Hubo un pago que no cubre el total', '/admin/cobros');
+    },
+    pedido_estado: (p) => {
+      if (p.estado === 'Listo') {
+        push('Pedido listo', 'Hay un pedido para entregar', '/admin/cocina');
       }
-    })();
-
-    const channel = supabase
-      .channel(`admin_restaurant_${tenantId}`)
-      .on('broadcast', { event: 'nuevo_pedido' }, (payload) => {
-        const p = dataOf(payload) as { etiqueta?: string };
-        push(
-          'Nuevo pedido',
-          p.etiqueta ? `Origen: ${p.etiqueta}` : 'Llegó un pedido a cocina',
-          '/admin/cocina',
-        );
-      })
-      .on('broadcast', { event: 'orden_externa_nueva' }, (payload) => {
-        const p = dataOf(payload) as { tipo?: string };
-        push(
-          'Pedido online',
-          p.tipo === 'delivery' ? 'Nuevo delivery' : 'Nuevo takeaway / retiro',
-          '/admin/pedidos-online',
-          { important: true },
-        );
-      })
-      .on('broadcast', { event: 'reserva_nueva' }, () => {
-        push(
-          'Nueva reserva',
-          'Entró una reserva online. Revisala en la agenda.',
-          '/admin/reservas',
-          { important: true },
-        );
-      })
-      .on('broadcast', { event: 'cuenta_solicitada' }, () => {
-        push('Cuenta solicitada', 'Una mesa pidió la cuenta', '/admin/cobros');
-      })
-      .on('broadcast', { event: 'llamar_mozo' }, onLlamarMozo)
-      // La caja cambió en otra pestaña/caja: refrescar el sticky sin esperar el poll.
-      .on('broadcast', { event: 'caja_actualizada' }, () => {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
-      })
-      .on('broadcast', { event: 'mesa_pagada' }, () => {
-        push('Mesa pagada', 'Se completó un cobro', '/admin/cobros');
-      })
-      .on('broadcast', { event: 'pago_parcial' }, () => {
-        push('Pago parcial', 'Hubo un pago que no cubre el total', '/admin/cobros');
-      })
-      .on('broadcast', { event: 'pedido_estado' }, (payload) => {
-        const p = dataOf(payload) as { estado?: string };
-        if (p.estado === 'Listo') {
-          push('Pedido listo', 'Hay un pedido para entregar', '/admin/cocina');
-        }
-      })
-      .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[StaffNotifications] canal admin:', status, err);
-        }
-      });
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [tenantId, push, queryClient]);
+    },
+  });
 
   const stickyCaja: Notif | null = cajaCerrada
     ? {

@@ -1,6 +1,7 @@
 'use server';
 
 import { mesas, perfilesEmpleados } from '@/shared/db/schema';
+import { marcarReservasCumplidas } from '@/shared/reservas/reservasSesion';
 import { eq, and, isNull, ne } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
 import { hasPermission } from '@/features/authorization/roles';
@@ -134,13 +135,14 @@ export async function liberarMesaAction(mesaId: string, forzar = false) {
       }
     }
 
-    // Cerramos la sesión activa
-    await withTenant(claimsFromSession(session), (db) =>
-      db
+    // Cerramos la sesión activa (y damos por cumplida la reserva sentada, si había).
+    await withTenant(claimsFromSession(session), async (db) => {
+      await db
         .update(sesionesMesa)
         .set({ estado: 'Cerrada' })
-        .where(eq(sesionesMesa.id, sesion.id))
-    );
+        .where(eq(sesionesMesa.id, sesion.id));
+      await marcarReservasCumplidas(db, session.restauranteId, sesion.id);
+    });
 
     // Avisar al comensal en tiempo real para que refresque su pantalla
     await broadcastMesaEvent(sesion.id, 'sesion_cerrada', { mesaId, sesionId: sesion.id });

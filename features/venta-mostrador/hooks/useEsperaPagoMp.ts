@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
+import { subscribeBroadcast } from '@/shared/supabase/realtime';
 import { estadoVentaMostradorAction } from '../ventaMostradorActions';
 import type { MpData } from '../types';
 
@@ -28,9 +28,9 @@ export function useEsperaPagoMp(
     };
 
     // 1. Realtime: el webhook emite `pago_completado` al aprobarse.
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`mesa_${mp.sesionId}`);
-    channel.on('broadcast', { event: 'pago_completado' }, () => resolver(onAprobado)).subscribe();
+    const off = subscribeBroadcast(`mesa_${mp.sesionId}`, {
+      pago_completado: () => resolver(onAprobado),
+    });
 
     // 2. Polling de respaldo (en local el webhook puede no llegar).
     const interval = setInterval(async () => {
@@ -44,7 +44,7 @@ export function useEsperaPagoMp(
     return () => {
       activo = false;
       clearInterval(interval);
-      supabase.removeChannel(channel);
+      off();
     };
   }, [mp.sesionId, mp.transactionId, onAprobado, onError]);
 }

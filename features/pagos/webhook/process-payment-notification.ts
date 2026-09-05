@@ -1,4 +1,5 @@
 import { and, eq, ne } from 'drizzle-orm';
+import { marcarReservasCumplidas } from '@/shared/reservas/reservasSesion';
 import { db } from '@/shared/db';
 import { pedidos, sesionesMesa, transaccionesPago } from '@/shared/db/schema';
 import { getPaymentProvider } from '@/features/pagos/core/payment-factory';
@@ -218,6 +219,7 @@ export async function processPaymentNotification(opts: {
             eq(sesionesMesa.restauranteId, tenantId),
           ),
         );
+      await marcarReservasCumplidas(tx, tenantId, row.sesionMesaId);
     }
 
     return {

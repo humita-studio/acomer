@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { DoorOpen, Minus, Plus } from 'lucide-react';
@@ -8,7 +9,6 @@ import { toast } from 'sonner';
 import { liberarMesaAction } from '@/features/mesas/mesas-actions';
 import { useTicketMesa, useAgregarItemsStaff } from '@/features/comanda/use-ticket-mesa';
 import { queryKeys } from '@/shared/query/keys';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { useConfirm } from '@/shared/hooks/use-confirm';
 import { formatPeso, parseMontoInput } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
@@ -73,18 +73,11 @@ export function MesaPedidoManager({
   const { data: ticket = { items: [], total: 0 } } = useTicketMesa(sesionMesaId, ticketInicial);
   const agregar = useAgregarItemsStaff(sesionMesaId);
 
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`mesa_${sesionMesaId}`);
-    channel
-      .on('broadcast', { event: 'ticket_actualizado' }, () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.ticketMesa(sesionMesaId) });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [sesionMesaId, queryClient]);
+  useBroadcast(`mesa_${sesionMesaId}`, {
+    ticket_actualizado: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.ticketMesa(sesionMesaId) });
+    },
+  });
 
   const activeProducts = productos.filter((p) => p.categoriaId === activeCategory);
 

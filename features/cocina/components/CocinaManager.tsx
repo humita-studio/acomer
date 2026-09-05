@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import {
   DndContext,
   DragOverlay,
@@ -15,7 +16,6 @@ import {
 } from '@dnd-kit/core';
 import { ChefHat, Clock, GripVertical, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { formatHora, formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -520,31 +520,27 @@ export function CocinaManager({
     if (pendingIds.size === 0) setPedidos(initialPedidos);
   }
 
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`admin_restaurant_${tenantId}`)
-      .on('broadcast', { event: 'nuevo_pedido' }, () => {
-        beepNuevoPedido();
-        void refreshActivos();
-        if (historialCargado) void refreshHistorial();
-      })
-      .on('broadcast', { event: 'pedido_estado' }, () => {
-        // Si hay mutaciones nuestras en vuelo, el merge las respeta.
-        void refreshActivos();
-        if (historialCargado) void refreshHistorial();
-      })
-      .subscribe();
+  useBroadcast(`admin_restaurant_${tenantId}`, {
+    nuevo_pedido: () => {
+      beepNuevoPedido();
+      void refreshActivos();
+      if (historialCargado) void refreshHistorial();
+    },
+    // Si hay mutaciones nuestras en vuelo, el merge las respeta.
+    pedido_estado: () => {
+      void refreshActivos();
+      if (historialCargado) void refreshHistorial();
+    },
+  });
 
+  // Respaldo por si se pierde algún evento.
+  useEffect(() => {
     const poll = setInterval(() => {
       void refreshActivos();
       if (historialCargado) void refreshHistorial();
     }, 30_000);
-    return () => {
-      clearInterval(poll);
-      void supabase.removeChannel(channel);
-    };
-  }, [tenantId, refreshActivos, refreshHistorial, historialCargado]);
+    return () => clearInterval(poll);
+  }, [refreshActivos, refreshHistorial, historialCargado]);
 
   const porColumna = useMemo(() => {
     const map = new Map<EstadoPedidoCocina, PedidoCocina[]>();
@@ -697,6 +693,7 @@ export function CocinaManager({
 
         <TabsContent value="activos" className="mt-0 flex min-h-0 flex-1 flex-col outline-none">
           <DndContext
+            id="cocina-board"
             sensors={sensors}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}

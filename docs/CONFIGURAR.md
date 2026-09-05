@@ -143,6 +143,20 @@ Sin `MP_BILLING_ACCESS_TOKEN`:
 
 ---
 
+### Realtime privado
+
+Los canales `admin_restaurant_<id>` y `mesa_<sesion>` se abren siempre como
+privados (`shared/supabase/realtime.ts`), y Supabase los autoriza con las
+políticas de `drizzle/0032_realtime_private_channels.sql` (aplicada el
+2026-09-04): el staff activo del local lee/escribe su canal; los canales de
+mesa quedan abiertos porque el id de sesión es el secreto. Sin esa migración
+el panel se queda sin eventos en vivo, así que en una base nueva va antes del
+primer deploy.
+
+Último cierre, manual: Supabase → Realtime → Settings → "Private channels
+only". Hasta ese paso alguien todavía puede unirse a un topic como canal
+público (sin políticas), aunque la app ya no lo haga.
+
 ## 3. Dominio y deploy (producción)
 
 Ver paso a paso en [DEPLOY.md](../DEPLOY.md).
@@ -175,10 +189,16 @@ Billing (plan, trial, `pagos_suscripcion`):
 node scripts/apply-migration.mjs drizzle/0026_billing.sql
 ```
 
-Índices de rendimiento (auditoría 2026-09-04, idempotente):
+Índices de rendimiento (auditoría 2026-09-04, idempotente). **Aplicada en la base real el 2026-09-04.**
 
 ```bash
 node scripts/apply-migration.mjs drizzle/0031_indices_fk.sql
+```
+
+Canales privados de Realtime (políticas sobre `realtime.messages`). **Aplicada en la base real el 2026-09-04.** Obligatoria: la app abre todos los canales como privados.
+
+```bash
+node scripts/apply-migration.mjs drizzle/0032_realtime_private_channels.sql
 ```
 
 O pegá el SQL en el SQL Editor de Supabase.

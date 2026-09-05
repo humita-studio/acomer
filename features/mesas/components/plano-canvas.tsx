@@ -364,7 +364,7 @@ export function PlanoCanvas({
         ref={wrapperRef}
         className="relative w-full overflow-hidden rounded-xl border border-border shadow-inner"
       >
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <DndContext id="plano-mesas" sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div
             ref={surfaceRef}
             data-plano-surface="1"

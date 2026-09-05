@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { getDashboardMetricsAction } from '../dashboardActions';
 import type { DashboardMetrics, Periodo } from '../types';
@@ -21,22 +20,12 @@ export function useDashboardMetrics(tenantId: string, periodo: Periodo, initial:
 /** Invalida las métricas cuando cambia la ocupación o se solicita una cuenta. */
 export function useDashboardRealtime(tenantId: string) {
   const queryClient = useQueryClient();
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-
-    const invalidar = () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(tenantId) });
-
-    channel
-      .on('broadcast', { event: 'ocupacion_cambiada' }, invalidar)
-      .on('broadcast', { event: 'cuenta_solicitada' }, invalidar)
-      .on('broadcast', { event: 'cobro_actualizado' }, invalidar)
-      .on('broadcast', { event: 'mesa_pagada' }, invalidar)
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [tenantId, queryClient]);
+  const invalidar = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(tenantId) });
+  useBroadcast(`admin_restaurant_${tenantId}`, {
+    ocupacion_cambiada: invalidar,
+    cuenta_solicitada: invalidar,
+    cobro_actualizado: invalidar,
+    mesa_pagada: invalidar,
+  });
 }

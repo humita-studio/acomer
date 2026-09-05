@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { instanteEnZona } from '@/shared/lib/zonaHoraria';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -94,7 +95,7 @@ export function NuevaReservaDialog({
     if (!fecha) return setError('Elegí una fecha');
     if (!hora) return setError('Elegí un horario');
     if (!nombre.trim() || !telefono.trim()) return setError('Nombre y teléfono son obligatorios');
-    const inicio = new Date(`${fecha}T${hora}:00`);
+    const inicio = instanteEnZona(fecha, hora);
     if (Number.isNaN(inicio.getTime())) return setError('Fecha u horario inválidos');
 
     const result = await onCrear({

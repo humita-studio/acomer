@@ -14,7 +14,9 @@ const pesoFormatter = new Intl.NumberFormat('es-AR', {
 /** Formatea un monto como pesos argentinos. Acepta number o string numérico. */
 export function formatPeso(monto: number | string | null | undefined): string {
   const n = typeof monto === 'string' ? Number(monto) : monto ?? 0;
-  return pesoFormatter.format(Number.isFinite(n) ? (n as number) : 0);
+  const v = Number.isFinite(n) ? (n as number) : 0;
+  // Sin decimales a la vista, un -0.004 o un -0 se mostrarían como "-$ 0".
+  return pesoFormatter.format(Math.abs(v) < 0.5 ? 0 : v);
 }
 
 /** Miles con punto (es-AR): "1234567" → "1.234.567". */
@@ -168,12 +170,17 @@ export function formatFecha(fecha: Date | string | number): string {
   });
 }
 
-/** Formatea una hora (HH:mm) en es-AR. */
+/**
+ * Formatea una hora en reloj de 24 h ("22:13").
+ * `hourCycle: 'h23'` es determinista: con el reloj de 12 h el servidor (Node) y
+ * el navegador separaban "p. m." con espacios distintos y rompían la hidratación.
+ */
 export function formatHora(fecha: Date | string | number): string {
   return new Date(fecha).toLocaleTimeString('es-AR', {
     timeZone: TZ,
     hour: '2-digit',
     minute: '2-digit',
+    hourCycle: 'h23',
   });
 }
 

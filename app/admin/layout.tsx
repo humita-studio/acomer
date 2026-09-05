@@ -9,7 +9,13 @@ import { AppSidebar } from './app-sidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/shared/ui/sidebar';
 import { Separator } from '@/shared/ui/separator';
 import { ModeToggle } from '@/shared/ui/mode-toggle';
-import { hasPermission, type RoleType } from '@/features/authorization/roles';
+import {
+  canAccessSection,
+  hasPermission,
+  rutaInicialAdmin,
+  seccionDeRutaAdmin,
+  type RoleType,
+} from '@/features/authorization/roles';
 import { NuevaVentaButton } from '@/features/venta-mostrador/components/NuevaVentaButton';
 import { StaffNotifications } from '@/features/notificaciones/components/StaffNotifications';
 import { AdminSearch } from '@/features/busqueda/components/AdminSearch';
@@ -46,6 +52,20 @@ export default async function AdminLayout({
       redirect('/admin/billing');
     }
     redirect('/unauthorized');
+  }
+
+  // Autorización por ruta ACÁ, antes de emitir HTML. Cada página también chequea,
+  // pero un redirect() dentro de la página se transmite en streaming (por
+  // app/admin/loading.tsx) y en Next 16 eso daba 500 intermitentes en SSR
+  // ("Tooltip must be used within TooltipProvider") y errores de hooks al hidratar.
+  // Desde el layout es un 307 limpio.
+  const role = session.role as RoleType;
+  if (pathname === '/admin' || pathname === '/admin/') {
+    const inicio = rutaInicialAdmin(role);
+    if (inicio !== '/admin') redirect(inicio);
+  } else {
+    const seccion = seccionDeRutaAdmin(pathname);
+    if (seccion && !canAccessSection(role, seccion)) redirect('/unauthorized');
   }
 
   const showPlatformLink = isPlatformAdminEmail(session.user.email);

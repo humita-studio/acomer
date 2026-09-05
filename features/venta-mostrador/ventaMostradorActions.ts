@@ -130,6 +130,9 @@ async function cancelarVentaInterno(tenantId: string, sesionId: string) {
       .set({ estado: 'Cerrada' })
       .where(and(eq(sesionesMesa.id, sesionId), eq(sesionesMesa.restauranteId, tenantId)));
   });
+  // La comanda ya había entrado al KDS al generar el QR: sacarla en vivo, no
+  // esperar al poll de 30 s.
+  void broadcastAdminEvent(tenantId, 'pedido_estado', { sesionMesaId: sesionId, estado: 'Cancelado' });
 }
 
 /** Avisa al KDS + campana. Best-effort (el KDS también pollea cada 30s). */

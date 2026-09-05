@@ -176,6 +176,7 @@ export function CobrosManager({
         </div>
       ) : (
         <DndContext
+          id="cobros-board"
           sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}

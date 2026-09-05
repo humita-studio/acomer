@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { formatPeso } from '@/shared/lib/format';
 import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
@@ -30,7 +31,6 @@ import {
   Store,
   Truck,
 } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { Button } from '@/shared/ui/button';
 import {
@@ -495,11 +495,10 @@ export function PedidosOnlineManager({
   // Realtime: invalidar cuando entra/cambia un pedido externo o cuando se
   // confirma un pago (mesa_pagada / pago_parcial los emite el webhook de MP),
   // para refrescar el estado Pagado/No pagado del tablero al instante.
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const invalidar = () => queryClient.invalidateQueries({ queryKey: ordenesKey });
-    const onNueva = () => {
-      invalidar();
+  const invalidarOrdenes = () => queryClient.invalidateQueries({ queryKey: ordenesKey });
+  useBroadcast(`admin_restaurant_${tenantId}`, {
+    orden_externa_nueva: () => {
+      invalidarOrdenes();
       beepNuevoPedido();
       setFlashNuevo(true);
       window.setTimeout(() => setFlashNuevo(false), 4000);
@@ -507,18 +506,11 @@ export function PedidosOnlineManager({
         description: 'Revisá la columna Recibido',
         duration: 8000,
       });
-    };
-    const channel = supabase
-      .channel(`admin_restaurant_${tenantId}`)
-      .on('broadcast', { event: 'orden_externa_nueva' }, onNueva)
-      .on('broadcast', { event: 'orden_externa_actualizada' }, invalidar)
-      .on('broadcast', { event: 'mesa_pagada' }, invalidar)
-      .on('broadcast', { event: 'pago_parcial' }, invalidar)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [tenantId, queryClient, ordenesKey]);
+    },
+    orden_externa_actualizada: invalidarOrdenes,
+    mesa_pagada: invalidarOrdenes,
+    pago_parcial: invalidarOrdenes,
+  });
 
   const copiarLinkPublico = async () => {
     if (!publicPedirUrl) return;
@@ -759,6 +751,7 @@ export function PedidosOnlineManager({
 
       {/* Tablero kanban con arrastre entre columnas */}
       <DndContext
+        id="pedidos-online-board"
         sensors={sensors}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}

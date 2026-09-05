@@ -1,29 +1,39 @@
 // Helpers de fecha/hora compartidos por la agenda y el calendario de reservas.
+// Todo lo que sale de un instante (ISO) se calcula en la zona del local, no en la
+// del proceso: en Vercel el servidor corre en UTC y desfasaba las horas al hidratar.
+
+import { partesEnZona } from '@/shared/lib/zonaHoraria';
 
 export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const DIAS_LARGOS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 export const MESES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
 ];
 
-/** Date → 'YYYY-MM-DD' en hora local. */
+/** Date construida con componentes locales (calendario) → 'YYYY-MM-DD'. */
 export function toYMD(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Día ('YYYY-MM-DD') de una reserva en la zona del local. */
 export function ymdDeReserva(inicio: string | Date): string {
-  return toYMD(new Date(inicio));
+  return partesEnZona(new Date(inicio)).ymd;
 }
 
-/** 'HH:MM' local de una reserva. */
+/** 'HH:MM' de una reserva en la zona del local (reloj de 24 h). */
 export function horaDe(inicio: string | Date): string {
-  return new Date(inicio).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  return partesEnZona(new Date(inicio)).hhmm;
 }
 
-/** 'HH:MM' en reloj de pared local (para ubicar una reserva en su turno). */
+/** Alias de `horaDe` (para ubicar una reserva en su turno). */
 export function hhmm(inicio: string | Date): string {
-  const d = new Date(inicio);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return horaDe(inicio);
+}
+
+/** 'YYYY-MM-DD' de hoy en la zona del local. */
+export function hoyYMD(): string {
+  return partesEnZona(new Date()).ymd;
 }
 
 /** 'YYYY-MM-DD' → "18 de junio". */
@@ -35,7 +45,7 @@ export function diaLegible(ymd: string): string {
 /** 'YYYY-MM-DD' → "Jueves 18 de junio" (capitalizado). */
 export function diaLegibleLargo(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
-  const fecha = new Date(y, m - 1, d);
-  const txt = fecha.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const txt = `${DIAS_LARGOS[dow]} ${d} de ${MESES[m - 1]}`;
   return txt.charAt(0).toUpperCase() + txt.slice(1);
 }

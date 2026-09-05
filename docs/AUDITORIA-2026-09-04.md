@@ -86,7 +86,7 @@ webhook de pago real. Ver sección 5 para probarlos a mano.
 
 | Riesgo | Impacto | Recomendación |
 | --- | --- | --- |
-| **Canales Realtime públicos.** El panel escucha `admin_restaurant_<tenantId>` con la key pública; el `tenantId` viaja al cliente en las páginas públicas. Alguien podría escuchar eventos (montos, ids de sesión) o inyectar eventos falsos (`nuevo_pedido`) para molestar. | Medio (ruido / info menor; no toca datos) | Pasar a canales privados con RLS en `realtime.messages` cuando haya tiempo. |
+| ~~Canales Realtime públicos~~ **Resuelto en fase 3:** canales siempre privados + políticas (0032 aplicada). Queda un clic manual: Supabase → Realtime → Settings → "Private channels only". | — | Activar "Private channels only". |
 | **Rate limit en memoria** (`shared/lib/rateLimit.ts`). En Vercel cada instancia tiene su propio contador. | Bajo | Aceptable para pilotos; a escala, Upstash/Redis. |
 | **Webhook MP sin `MP_WEBHOOK_SECRET`** sigue procesando (con warning). Igual verifica el pago contra la API de MP con el token del local y compara montos. | Bajo | Setear el secret en prod (sección 4). |
 | **Un perfil por usuario.** `getCurrentSession` toma el primer `perfiles_empleados`; un mismo email en dos locales cae en uno arbitrario. | Bajo hoy | Documentado; multi-local es roadmap. |
@@ -99,7 +99,9 @@ webhook de pago real. Ver sección 5 para probarlos a mano.
 
 ## 4. Pendientes antes del primer cliente de pago
 
-- [ ] Aplicar la migración de índices: `node scripts/apply-migration.mjs drizzle/0031_indices_fk.sql`
+- [x] Migraciones 0031 (índices) y 0032 (Realtime privado) aplicadas el 2026-09-04.
+- [ ] Supabase → Realtime → Settings → "Private channels only".
+- [ ] **Commit + deploy de la fase 3.** El código en prod (HEAD) tiene el bug del login (el proxy redirige el POST de la server action y el formulario muestra "No se pudo iniciar sesión" aunque la sesión exista).
 - [ ] En Vercel: `MP_WEBHOOK_SECRET`, `NEXT_PUBLIC_ROOT_DOMAIN=acomer.com.ar`, `NEXT_PUBLIC_APP_URL=https://acomer.com.ar` (hoy `.env` local tiene `ROOT_DOMAIN` comentado; en dev está bien).
 - [ ] Sacar la credencial en texto plano que quedó comentada en `.env` (línea `# Email: … Contraseña: …`). El archivo no se commitea, pero no debería vivir ahí.
 - [ ] Redirect URI de la app de MP = `https://acomer.com.ar/api/webhooks/pagos/mp-oauth` (el callback ahora exige que el dueño esté logueado en ese navegador).
@@ -247,6 +249,112 @@ pedido" → checkout (Retiro en local, nombre, teléfono) → "Confirmar pedido"
 - Los pedidos online "en curso" del local demo tienen 50–70 días: limpiar antes
   de una demo.
 
+## 8. Fase 3 — reservas, mostrador/caja, Realtime y roles (misma fecha)
+
+### Reservas (probado de punta a punta en el local demo)
+
+Online → Pendiente → Confirmar → Sentar (abre la mesa) → liberar la mesa →
+la reserva pasa sola a **Cumplida**. Corregido en el camino:
+
+1. **Zona horaria (bug real en producción).** El servidor corre en UTC y el
+   cupo por día y el turno (Almuerzo/Cena) se calculaban con `getHours()` /
+   `setHours()`: una reserva a las 21:00 caía en el día siguiente y en el turno
+   equivocado. Además el formulario público construía el instante con la zona
+   del teléfono del comensal. Nuevo helper `shared/lib/zonaHoraria.ts`
+   (`instanteEnZona`, `partesEnZona`, `inicioDelDiaEnZona`) usado por el
+   formulario público, el alta manual del admin y el cálculo de cupo. Con tests.
+2. **Reservas sentadas para siempre.** Al pagar o liberar la mesa nadie las
+   cerraba: `shared/reservas/reservasSesion.ts` (`marcarReservasCumplidas`) se
+   llama al cerrar la sesión desde Cobros, el webhook de MP y "Liberar mesa".
+3. Horario ya pasado: se rechaza aunque el local no exija anticipación.
+4. La agenda se refresca en otras pestañas al confirmar/asignar/sentar
+   (evento `reserva_actualizada`).
+5. Pantalla final del comensal distingue "¡Reserva confirmada!" (auto-confirmar
+   activo) de "¡Reserva enviada!". Etiqueta "Mesa Mesa 12" en la tarjeta.
+
+### Venta de mostrador y caja (probado en vivo)
+
+- Efectivo con vuelto ($20.000 sobre $15.450 → vuelto $4.550), comanda al KDS.
+- Mercado Pago: QR y link reales generados; al cancelar, la venta y la comanda
+  quedan canceladas. **Nuevo:** el KDS se entera en vivo (antes esperaba el
+  poll de 30 s con una comanda fantasma).
+- Cierre de caja con arqueo sin diferencia y reapertura. La caja del demo quedó
+  abierta con $1.000.000 como estaba.
+- "−$ 0" en el historial de cierres (redondeo de centavos): `formatPeso` y la
+  diferencia tratan |x| < 0,5 como cero.
+
+### Realtime
+
+- **Bug encontrado:** supabase-js devuelve el mismo canal para el mismo topic.
+  La campana (layout), el plano, cocina, cobros, caja y dashboard compartían
+  `admin_restaurant_<id>` sin saberlo: al salir de una pantalla, su
+  `removeChannel` le cortaba la suscripción a la campana hasta recargar.
+  Ahora todo pasa por `shared/supabase/realtime.ts` (un canal por topic,
+  handlers por evento, refcount, `useBroadcast` / `subscribeBroadcast` /
+  `sendBroadcast`). Con tests. Verificado en vivo navegando Mesas → Cocina
+  por el cliente: el pedido nuevo llegó a cocina y a la campana.
+- **Canales privados:** migración `drizzle/0032_realtime_private_channels.sql`
+  (políticas en `realtime.messages`: staff activo lee/escribe su
+  `admin_restaurant_*`; `mesa_*` abierto a anon) + flag
+  que la app ahora usa siempre (los canales se abren `private: true`; el flag
+  de rollout se eliminó una vez aplicada la migración).
+  **Aplicada en la base real** (junto con 0031, que ya estaba) y verificada:
+  función `es_staff_del_canal` (security definer), 4 políticas, RLS activo en
+  `realtime.messages`. Probado en vivo con canales `private: true` desde Node:
+  el comensal anónimo entra a `mesa_*` y manda/recibe broadcast; un mozo
+  activo entra a `admin_restaurant_<demo>`, manda/recibe, y NO entra al canal
+  de otro local; nadie sin perfil activo entra (ni anónimo ni un mozo
+  desactivado: "Unauthorized"). El flag sigue apagado hasta terminar el rollout.
+
+### Roles
+
+- `/admin/menu` y `/admin/mesas` no tenían guard de sección: cualquier rol
+  entraba por URL (las acciones sí validaban). Ahora redirigen a
+  `/unauthorized` como el resto.
+- Recorrido automático con Playwright como mozo, cocina y cajero (login con
+  clave temporal → cambio de clave → 15 rutas del panel + `/platform`).
+  Resultado final: los tres roles entran, caen en su pantalla (cajero → Caja,
+  mozo → Mesas, cocina → Cocina), el sidebar muestra solo lo suyo y toda ruta
+  ajena termina en `/unauthorized`. Cero errores de consola. En el camino
+  aparecieron cuatro bugs reales:
+  - **Login del staff roto.** Tras `signInWithPassword`, el formulario llamaba a
+    la server action que resuelve el destino; el proxy veía un POST a `/login`
+    con usuario ya logueado y lo redirigía (307) → la acción fallaba → "No se
+    pudo iniciar sesión" con la sesión ya creada. Arreglo doble: el proxy no
+    redirige POSTs de server actions (`next-action`) y, tras el login o el
+    cambio de clave, se navega con carga completa (`window.location.assign`)
+    en lugar de `router.push` + `router.refresh` (el refresh pisaba el push y
+    el usuario quedaba en `/login`).
+  - **Redirects de autorización en streaming.** Cada página hacía
+    `redirect('/unauthorized')` dentro de su `Suspense` (y bajo
+    `app/admin/loading.tsx`), así que Next lo emitía en streaming. En Next 16
+    eso dio 500 intermitentes en SSR (`Tooltip must be used within
+    TooltipProvider`, ~1 de cada 3 pedidos) y "Rendered more hooks" al hidratar.
+    Ahora `app/admin/layout.tsx` autoriza por ruta antes de emitir HTML
+    (`seccionDeRutaAdmin` + `rutaInicialAdmin` en `features/authorization/roles.ts`,
+    con tests): 307 limpio. Los chequeos por página quedan como defensa.
+  - **Hidratación rota en Cocina, Cobros, Reservas y Pedidos online.** Dos
+    causas: `toLocaleTimeString` en 12 h ("10:13 p. m.") separa distinto en
+    Node y en Chrome → `formatHora` pasa a 24 h (`22:13`); y dnd-kit numera sus
+    ids de accesibilidad con un contador global → `id` fijo en los cuatro
+    `DndContext`. Además `features/reservas/fechas.ts` calculaba hora y día con
+    la zona del proceso: en Vercel (UTC) las reservas de la noche caían en el
+    día siguiente y con otra hora; ahora usa `partesEnZona`.
+  - **Hidratación en el seguimiento del pedido online** (misma causa de hora).
+- **Los 500 de SSR son solo de dev.** El mismo síntoma apareció después en
+  `/pedir` ("No QueryClient set") durante el e2e, justo tras recompilar. Para
+  descartarlo en producción levanté el build standalone (`next build` +
+  `node .next/standalone/server.js`, puerto 3001) y lo martillé: 8 rondas ×
+  14 rutas en paralelo como mozo y como comensal, 112 pedidos, cero errores y
+  ningún 500. Es Turbopack en dev duplicando módulos al recompilar (los
+  contextos de React dejan de coincidir). Igual la autorización desde el layout
+  queda: evita el redirect en streaming, que es lo que lo disparaba.
+- Falso positivo descartado: en dev, tipear antes de que hidrate el formulario
+  de login deja los inputs controlados vacíos y Supabase responde 400; en prod
+  hidrata en milisegundos. No se tocó.
+- Cuentas de prueba `auditoria-{mozo,cocina,cajero}@acomer.test` desactivadas
+  al terminar.
+
 ## 6. Archivos tocados
 
 Seguridad: `app/api/webhooks/pagos/mp-oauth/route.ts`, `features/tenant/get-tenant.ts`,
@@ -254,6 +362,12 @@ Seguridad: `app/api/webhooks/pagos/mp-oauth/route.ts`, `features/tenant/get-tena
 Robustez: `features/auth/authUsers.ts` (nuevo), `features/auth/invite-employee.ts`,
 `features/mesas/mesas-actions.ts`, `features/cobros/*`, `drizzle/0031_indices_fk.sql` (nuevo),
 `features/auth/session.ts`, `features/platform/session.ts`.
+Fase 3: `proxy.ts`, `features/auth/components/{LoginForm,CambiarPasswordForm}.tsx`,
+`app/admin/{layout,page}.tsx`, `app/admin/staff/page.tsx`, `features/authorization/roles.ts` (+ test),
+`shared/supabase/realtime.ts` (nuevo, + test) y los 12 consumidores de Realtime,
+`shared/lib/zonaHoraria.ts` (nuevo, + test), `shared/reservas/reservasSesion.ts` (nuevo),
+`features/reservas/{fechas,reservasActions}.ts`, `shared/lib/format.ts`,
+`drizzle/0032_realtime_private_channels.sql` (nuevo, sin aplicar).
 Lint/React: `features/notificaciones/components/StaffNotifications.tsx`,
 `features/pedidos-online/components/CheckoutExterno.tsx`, `features/cocina/components/CocinaManager.tsx`,
 `features/mesas/components/{mesa-panel,plano-stepper,plano-rotation-control}.tsx`,

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Loader2, TriangleAlert } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { Button } from '@/shared/ui/button';
@@ -17,7 +16,6 @@ const PASSWORD_MIN = 8;
  * - Link de recuperación de email.
  */
 export function CambiarPasswordForm({ forzado = false }: { forzado?: boolean }) {
-  const router = useRouter();
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,8 +55,8 @@ export function CambiarPasswordForm({ forzado = false }: { forzado?: boolean }) 
       // actualizada, si no el proxy sigue mandando a /cambiar-password.
       await supabase.auth.refreshSession();
 
-      router.push('/admin');
-      router.refresh();
+      // Carga completa: el proxy relee el JWT nuevo (sin must_change_password).
+      window.location.assign('/admin');
     } catch (err) {
       setError(traducirErrorAuth(err, 'No se pudo guardar la contraseña.'));
     } finally {

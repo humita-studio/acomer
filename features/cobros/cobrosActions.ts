@@ -1,6 +1,7 @@
 'use server';
 
 import { transaccionesPago, sesionesMesa } from '@/shared/db/schema';
+import { marcarReservasCumplidas } from '@/shared/reservas/reservasSesion';
 import { etiquetaOrigenSesion } from '@/shared/lib/mesaLabel';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { getCurrentSession, claimsFromSession } from '@/features/auth/session';
@@ -152,6 +153,8 @@ export async function aprobarPagoPresencialAction(
                 .set({ estado: 'Cerrada' })
                 .where(eq(sesionesMesa.id, tx.sesionMesaId))
                 .returning({ mesaId: sesionesMesa.mesaId });
+            // La reserva sentada en esta mesa queda cumplida.
+            await marcarReservasCumplidas(db, tenantId, tx.sesionMesaId);
 
             return {
                 success: true,

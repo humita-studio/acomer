@@ -1,6 +1,7 @@
 'use server';
 
 import { db } from '@/shared/db';
+import { inicioDelDiaEnZona, partesEnZona } from '@/shared/lib/zonaHoraria';
 import { reservas, mesas } from '@/shared/db/schema';
 import { and, eq, gte, lt, ne, desc, isNull, inArray } from 'drizzle-orm';
 import { getTenantBySlug } from '@/features/tenant/get-tenant';
@@ -28,9 +29,12 @@ type EstadoReserva = 'Pendiente' | 'Confirmada' | 'Sentada' | 'NoShow' | 'Cancel
 // Motivo por el que un horario no tiene disponibilidad (para mensajes claros).
 type MotivoSinLugar = 'inactivo' | 'anticipacion' | 'cupo_dia' | 'cupo_turno' | 'sin_mesa';
 
-/** 'HH:MM' (hora local) de una fecha, para ubicarla en un turno. */
+/**
+ * 'HH:MM' de reloj de pared DEL LOCAL, para ubicar una reserva en su turno.
+ * No usar `getHours()`: el servidor corre en UTC y daba el turno corrido 3 h.
+ */
 function hhmmDe(d: Date): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return partesEnZona(d).hhmm;
 }
 
 /** True si `inicio` es más temprano que la anticipación mínima configurada. */
@@ -52,9 +56,8 @@ async function evaluarCupo(
   const { maxReservasPorDia, cupoCubiertosPorTurno } = config;
   if (maxReservasPorDia == null && cupoCubiertosPorTurno == null) return { ok: true };
 
-  // Día local [00:00, +24h) del horario pedido.
-  const diaIni = new Date(inicio);
-  diaIni.setHours(0, 0, 0, 0);
+  // Día del local [00:00, +24h) del horario pedido (no el día UTC del servidor).
+  const diaIni = inicioDelDiaEnZona(inicio);
   const diaFin = new Date(diaIni.getTime() + 24 * 60 * 60 * 1000);
 
   const filas = await db
@@ -246,6 +249,10 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
     if (!datos.personas || datos.personas < 1) {
       return { success: false, message: 'Cantidad de personas inválida' };
     }
+    // Aunque el local no exija anticipación, un horario ya pasado no se reserva.
+    if (inicio.getTime() < Date.now() - 5 * 60_000) {
+      return { success: false, message: 'Ese horario ya pasó. Elegí uno más adelante.' };
+    }
 
     const config = await obtenerReservasConfig(tenantId);
     if (!config.activo) {
@@ -308,7 +315,7 @@ export async function crearReservaAction(tenantSlug: string, datos: DatosReserva
 
     await broadcastAdminEvent(tenantId, 'reserva_nueva', { reservaId: reserva.id });
 
-    return { success: true, reservaId: reserva.id };
+    return { success: true, reservaId: reserva.id, estado: estadoInicial };
   } catch (error) {
     console.error('[crearReservaAction]', error);
     return { success: false, message: 'No se pudo crear la reserva' };
@@ -583,6 +590,10 @@ export async function cambiarEstadoReservaAction(reservaId: string, nuevoEstado:
         .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId)))
     );
 
+    await broadcastAdminEvent(session.restauranteId, 'reserva_actualizada', {
+      reservaId,
+      estado: nuevoEstado,
+    });
     revalidatePath('/admin/reservas');
     return { success: true, message: 'Reserva actualizada' };
   } catch (error) {
@@ -670,6 +681,7 @@ export async function asignarMesaReservaAction(reservaId: string, mesaId: string
         .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId))),
     );
 
+    await broadcastAdminEvent(session.restauranteId, 'reserva_actualizada', { reservaId, mesaId });
     revalidatePath('/admin/reservas');
     return { success: true, message: mesaId ? 'Mesa asignada' : 'Mesa desasignada' };
   } catch (error) {
@@ -767,7 +779,13 @@ export async function sentarReservaAction(reservaId: string, mesaId?: string | n
         .where(and(eq(reservas.id, reservaId), eq(reservas.restauranteId, session.restauranteId))),
     );
 
-    await broadcastOcupacion(session.restauranteId, mesaElegida, true);
+    await Promise.all([
+      broadcastOcupacion(session.restauranteId, mesaElegida, true),
+      broadcastAdminEvent(session.restauranteId, 'reserva_actualizada', {
+        reservaId,
+        estado: 'Sentada',
+      }),
+    ]);
 
     revalidatePath('/admin/reservas');
     revalidatePath('/admin/mesas');

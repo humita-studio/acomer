@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,7 +9,6 @@ import { Bell, Pencil, Plus, Printer, QrCode, Table2, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { hasPermission, type RoleType } from '@/features/authorization/roles';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import { useConfirm } from '@/shared/hooks/use-confirm';
 import { cn } from '@/shared/lib/utils';
@@ -186,29 +186,20 @@ export function PlanoManager({
     clearPedidoUrl();
   };
 
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`admin_restaurant_${tenantId}`);
-
-    channel
-      .on('broadcast', { event: 'ocupacion_cambiada' }, () => {
-        if (usePlanoStore.getState().modo === 'ver') {
-          queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
-        }
-      })
-      .on('broadcast', { event: 'llamar_mozo' }, ({ payload }) => {
-        const p = (payload ?? {}) as { mesaIdentificador?: string };
-        const mesa = p.mesaIdentificador?.trim();
-        pushAviso(mesa ? `${etiquetaMesa(mesa)} llama al mozo` : 'Una mesa llama al mozo');
-      })
-      .on('broadcast', { event: 'cuenta_solicitada' }, () => {
-        pushAviso('Una mesa pidió la cuenta — revisá Cobros');
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [tenantId, queryClient, pushAviso]);
+  useBroadcast(`admin_restaurant_${tenantId}`, {
+    ocupacion_cambiada: () => {
+      if (usePlanoStore.getState().modo === 'ver') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.plano(tenantId) });
+      }
+    },
+    llamar_mozo: (p) => {
+      const mesa = typeof p.mesaIdentificador === 'string' ? p.mesaIdentificador.trim() : '';
+      pushAviso(mesa ? `${etiquetaMesa(mesa)} llama al mozo` : 'Una mesa llama al mozo');
+    },
+    cuenta_solicitada: () => {
+      pushAviso('Una mesa pidió la cuenta — revisá Cobros');
+    },
+  });
 
   const ambientes = editando && draft ? draft.ambientes : planoData.ambientes;
   const mesas = editando && draft ? draft.mesas : planoData.mesas;

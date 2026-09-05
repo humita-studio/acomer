@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/shared/ui/button';
+import { etiquetaMesa } from '@/shared/lib/mesaLabel';
 import { cn } from '@/shared/lib/utils';
 import { AsignarMesaTrigger } from './AsignarMesaPopover';
 import { estadoMeta } from '../estados';
@@ -61,7 +62,7 @@ export function ReservaCard({
         )}
         {reserva.mesaIdentificador ? (
           <p className="mt-0.5 text-xs font-medium text-foreground/80">
-            Mesa {reserva.mesaIdentificador}
+            {etiquetaMesa(reserva.mesaIdentificador)}
             {reserva.mesaCapacidad != null ? (
               <span className="font-normal text-muted-foreground">
                 {' '}

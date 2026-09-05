@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { instanteEnZona } from '@/shared/lib/zonaHoraria';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { format, startOfToday } from 'date-fns';
@@ -76,7 +77,8 @@ export function ReservarForm({
   const [error, setError] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
-  const inicioISO = new Date(`${toYMD(fecha)}T${hora}:00`).toISOString();
+  // El horario es reloj de pared DEL LOCAL, no del teléfono del comensal.
+  const inicioISO = instanteEnZona(toYMD(fecha), hora).toISOString();
 
   const disponibilidad = useQuery({
     queryKey: queryKeys.disponibilidad(inicioISO, personas),
@@ -125,6 +127,7 @@ export function ReservarForm({
   };
 
   if (crear.isSuccess && crear.data?.success) {
+    const confirmada = crear.data.estado === 'Confirmada';
     const resumen = [
       fechaLegible(fecha),
       `a las ${hora}`,
@@ -144,11 +147,12 @@ export function ReservarForm({
           </span>
           <div className="space-y-2">
             <h1 className="font-display text-2xl font-semibold tracking-tight">
-              ¡Reserva enviada!
+              {confirmada ? '¡Reserva confirmada!' : '¡Reserva enviada!'}
             </h1>
             <p className="text-sm text-muted-foreground">
-              El local ya la recibió. Te van a confirmar a la brevedad
-              {nombre.trim() ? `, ${nombre.trim()}` : ''}.
+              {confirmada
+                ? `Te esperamos${nombre.trim() ? `, ${nombre.trim()}` : ''}. Si no podés venir, avisale al local.`
+                : `El local ya la recibió. Te van a confirmar a la brevedad${nombre.trim() ? `, ${nombre.trim()}` : ''}.`}
             </p>
           </div>
 
@@ -176,7 +180,9 @@ export function ReservarForm({
           </dl>
 
           <p className="text-xs text-muted-foreground">
-            Guardá el detalle por si el local te llama para confirmar.
+            {confirmada
+              ? 'Guardá el detalle para mostrarlo al llegar.'
+              : 'Guardá el detalle por si el local te llama para confirmar.'}
           </p>
 
           <div className="flex flex-col gap-2">

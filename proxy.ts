@@ -75,6 +75,13 @@ export async function proxy(req: NextRequest) {
 
   const mustChangePassword = user?.mustChangePassword === true;
 
+  // Un POST de server action nunca se redirige: la action valida su propia
+  // sesión y devuelve un resultado. Redirigirlo rompía el login: apenas se
+  // crean las cookies, el POST de `resolvePostLoginPathAction` a /login era
+  // "usuario logueado en ruta de auth" → 307 a /admin → la action fallaba y
+  // el form mostraba "No se pudo iniciar sesión" con la sesión ya creada.
+  const esServerAction = req.method === 'POST' && req.headers.has('next-action');
+
 function withCookies(target: NextResponse, source: NextResponse): NextResponse {
   source.cookies.getAll().forEach((cookie) => {
     target.cookies.set(cookie);
@@ -82,23 +89,23 @@ function withCookies(target: NextResponse, source: NextResponse): NextResponse {
   return target;
 }
 
-  if (isProtectedRoute && !user) {
+  if (isProtectedRoute && !user && !esServerAction) {
     return withCookies(NextResponse.redirect(new URL('/login', req.url)), response);
   }
 
   // Staff con contraseña temporal: no entra al panel del local hasta cambiarla.
   // /platform no exige cambio (operadores de acomer no usan temp password de staff).
-  if (isProtectedRoute && user && mustChangePassword && !isPlatformRoute) {
+  if (isProtectedRoute && user && mustChangePassword && !isPlatformRoute && !esServerAction) {
     return withCookies(NextResponse.redirect(new URL('/cambiar-password', req.url)), response);
   }
 
-  if (isChangePasswordRoute && !user) {
+  if (isChangePasswordRoute && !user && !esServerAction) {
     return withCookies(NextResponse.redirect(new URL('/login', req.url)), response);
   }
 
   // --- 3. Redirigir usuarios autenticados lejos del login/registro ---
   // Destino fino (admin vs platform) lo resuelve LoginForm / layout admin.
-  if (isAuthRoute && user) {
+  if (isAuthRoute && user && !esServerAction) {
     const dest = mustChangePassword ? '/cambiar-password' : '/admin';
     return withCookies(NextResponse.redirect(new URL(dest, req.url)), response);
   }

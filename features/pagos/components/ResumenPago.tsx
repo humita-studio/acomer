@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Check,
@@ -8,7 +8,6 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -99,30 +98,20 @@ export function ResumenPago({ ticket, pagoState, tenantSlug }: ResumenPagoProps)
     ticket.transaccion.proveedor === 'efectivo' ||
     ticket.transaccion.proveedor === 'tarjeta_fisica';
 
-  useEffect(() => {
-    if (ticket.transaccion.estado !== 'Pendiente' && ticket.transaccion.estado !== 'Cancelado') {
-      return;
-    }
-
-    // Broadcast de la sesión: el cajero aprobó/rechazó, el webhook de MP
-    // confirmó, o el ticket cambió. Antes se escuchaba `postgres_changes` sobre
-    // transacciones_pago, que nunca llegaba (la tabla no está en la publicación
-    // de Realtime) y el comensal quedaba en "cuenta solicitada" hasta recargar.
-    const supabase = createSupabaseBrowserClient();
-    const refrescar = () => router.refresh();
-    const channel = supabase
-      .channel(`mesa_${ticket.sesionMesaId}`)
-      .on('broadcast', { event: 'pago_completado' }, refrescar)
-      .on('broadcast', { event: 'pago_actualizado' }, refrescar)
-      .on('broadcast', { event: 'sesion_cerrada' }, refrescar)
-      .on('broadcast', { event: 'pedido_confirmado' }, refrescar)
-      .on('broadcast', { event: 'ticket_actualizado' }, refrescar)
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [ticket.sesionMesaId, ticket.transaccion.estado, router]);
+  // Mientras el pago esté pendiente: el cajero aprobó/rechazó, el webhook de MP
+  // confirmó, o el ticket cambió. Antes se escuchaba `postgres_changes` sobre
+  // transacciones_pago, que nunca llegaba (la tabla no está en la publicación
+  // de Realtime) y el comensal quedaba en "cuenta solicitada" hasta recargar.
+  const escuchando =
+    ticket.transaccion.estado === 'Pendiente' || ticket.transaccion.estado === 'Cancelado';
+  const refrescar = () => router.refresh();
+  useBroadcast(escuchando ? `mesa_${ticket.sesionMesaId}` : null, {
+    pago_completado: refrescar,
+    pago_actualizado: refrescar,
+    sesion_cerrada: refrescar,
+    pedido_confirmado: refrescar,
+    ticket_actualizado: refrescar,
+  });
 
   const handleVolver = () => {
     // Pedidos online: volver al seguimiento del pedido (no a un /pedir vacío).

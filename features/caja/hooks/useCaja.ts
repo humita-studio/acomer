@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatPeso } from '@/shared/lib/format';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import {
   abrirCajaAction,
@@ -49,24 +48,17 @@ export function useDetalleCierre(sesionCajaId: string | null) {
  */
 export function useCajaRealtime(tenantId: string) {
   const queryClient = useQueryClient();
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const invalidar = () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cajaHistorial(tenantId) });
-    };
-    const channel = supabase
-      .channel(`admin_restaurant_${tenantId}`)
-      .on('broadcast', { event: 'cuenta_solicitada' }, invalidar)
-      .on('broadcast', { event: 'cobro_actualizado' }, invalidar)
-      .on('broadcast', { event: 'mesa_pagada' }, invalidar)
-      .on('broadcast', { event: 'pago_parcial' }, invalidar)
-      .on('broadcast', { event: 'caja_actualizada' }, invalidar)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [tenantId, queryClient]);
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.caja(tenantId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.cajaHistorial(tenantId) });
+  };
+  useBroadcast(`admin_restaurant_${tenantId}`, {
+    cuenta_solicitada: invalidar,
+    cobro_actualizado: invalidar,
+    mesa_pagada: invalidar,
+    pago_parcial: invalidar,
+    caja_actualizada: invalidar,
+  });
 }
 
 function useInvalidarCaja(tenantId: string) {

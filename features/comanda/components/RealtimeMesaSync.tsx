@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
+import { EVENTO_SUSCRIPTO, sendBroadcast, useBroadcast } from '@/shared/supabase/realtime';
 import { queryKeys } from '@/shared/query/keys';
 import { useComandaStore } from '../store';
 
@@ -12,63 +12,44 @@ type RealtimeMesaSyncProps = {
   tenantId: string;
 };
 
+/**
+ * Sincroniza la pantalla del comensal con los demás dispositivos de la mesa y
+ * con el panel: carrito compartido, ticket cargado por el mozo, pedido
+ * confirmado, mesa cerrada o pagada.
+ */
 export function RealtimeMesaSync({ sesionMesaId }: RealtimeMesaSyncProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const setBroadcastChange = useComandaStore((s) => s.setBroadcastChange);
+  const topic = `mesa_${sesionMesaId}`;
 
+  const invalidarBorrador = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.borrador(sesionMesaId) });
+
+  useBroadcast(topic, {
+    // Otro dispositivo cambió el carrito → refetchear el borrador.
+    cart_changed: invalidarBorrador,
+    // El mozo cargó productos al ticket desde el admin.
+    ticket_actualizado: () => router.refresh(),
+    // Otro dispositivo confirmó el pedido → vaciar borrador y actualizar pedidos.
+    pedido_confirmado: () => {
+      invalidarBorrador();
+      router.refresh();
+    },
+    // La mesa fue liberada, cerrada o pagada.
+    sesion_cerrada: () => router.refresh(),
+    pago_completado: () => router.refresh(),
+    // Tras (re)conectar (pestaña en background / red), sincronizar borrador.
+    [EVENTO_SUSCRIPTO]: invalidarBorrador,
+  });
+
+  // Registrar la función con la que las mutaciones avisan a los otros dispositivos.
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-
-    // Single channel for this mesa session — uses Broadcast for cart sync
-    const channel = supabase.channel(`mesa_${sesionMesaId}`, {
-      config: {
-        broadcast: { self: false }, // Don't receive our own broadcasts
-      },
+    setBroadcastChange(() => {
+      void sendBroadcast(topic, 'cart_changed', { t: Date.now() });
     });
-
-    channel
-      // Otro dispositivo cambió el carrito → invalidar para refetchear.
-      .on('broadcast', { event: 'cart_changed' }, () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.borrador(sesionMesaId) });
-      })
-      // El mozo cargó productos al ticket desde el admin → refrescar la vista del comensal
-      .on('broadcast', { event: 'ticket_actualizado' }, () => {
-        router.refresh();
-      })
-      // Otro dispositivo confirmó el pedido → vaciar borrador y actualizar vista de pedidos
-      .on('broadcast', { event: 'pedido_confirmado' }, () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.borrador(sesionMesaId) });
-        router.refresh();
-      })
-      // La mesa fue liberada o cerrada → refrescar vista del comensal
-      .on('broadcast', { event: 'sesion_cerrada' }, () => {
-        router.refresh();
-      })
-      // La mesa se pagó (webhook MP o cajero) → refrescar (la sesión se cierra).
-      .on('broadcast', { event: 'pago_completado' }, () => {
-        router.refresh();
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          // Registrar la función de broadcast para que las mutaciones avisen a otros dispositivos.
-          setBroadcastChange(() => {
-            channel.send({
-              type: 'broadcast',
-              event: 'cart_changed',
-              payload: { t: Date.now() },
-            });
-          });
-          // Tras reconectar (pestaña en background / red), sincronizar borrador.
-          queryClient.invalidateQueries({ queryKey: queryKeys.borrador(sesionMesaId) });
-        }
-      });
-
-    return () => {
-      setBroadcastChange(null);
-      supabase.removeChannel(channel);
-    };
-  }, [sesionMesaId, queryClient, router, setBroadcastChange]);
+    return () => setBroadcastChange(null);
+  }, [topic, setBroadcastChange]);
 
   return null;
 }

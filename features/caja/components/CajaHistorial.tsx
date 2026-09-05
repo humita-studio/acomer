@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import type { CajaCerrada } from '@/features/caja/types';
 
 function DiferenciaText({ valor }: { valor: number }) {
-  if (valor === 0) {
+  // Redondeo de centavos: un -0,004 no es un faltante.
+  if (Math.abs(valor) < 0.5) {
     return <span className="text-muted-foreground">0</span>;
   }
   return (

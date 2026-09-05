@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { canAccessSection } from '@/features/authorization/roles';
 import { getCurrentSession } from '@/features/auth/session';
 import { obtenerCategoriasMenu } from '@/features/menu/categoriasActions';
 import { obtenerProductosMenu } from '@/features/menu/productosActions';
@@ -39,6 +40,8 @@ function MenuSkeleton() {
 async function MenuContent() {
     const session = await getCurrentSession();
     if (!session) redirect('/login');
+    // El sidebar oculta el link, pero por URL entraba cualquier rol.
+    if (!canAccessSection(session.role, 'menu')) redirect('/unauthorized');
 
     // Estado de servidor que siembra la caché de TanStack Query en el cliente
     const [categoriasData, productosData, adicionalesData, variantesData] = await Promise.all([

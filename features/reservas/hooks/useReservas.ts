@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
 import { queryKeys } from '@/shared/query/keys';
 import {
   cambiarEstadoReservaAction,
@@ -69,21 +68,15 @@ export function useReservaAnterior(params: { tenantId: string; hastaISO: string;
   });
 }
 
-/** Invalida el mes cuando entra una reserva nueva. */
+/** Invalida el mes cuando entra una reserva nueva o alguien la cambia desde otra pestaña. */
 export function useReservasRealtime(tenantId: string, mesKey: string) {
   const queryClient = useQueryClient();
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`admin_restaurant_${tenantId}`)
-      .on('broadcast', { event: 'reserva_nueva' }, () =>
-        queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) })
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [tenantId, mesKey, queryClient]);
+  const invalidar = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.reservasMes(tenantId, mesKey) });
+  useBroadcast(`admin_restaurant_${tenantId}`, {
+    reserva_nueva: invalidar,
+    reserva_actualizada: invalidar,
+  });
 }
 
 export function useCambiarEstadoReserva(tenantId: string, mesKey: string) {

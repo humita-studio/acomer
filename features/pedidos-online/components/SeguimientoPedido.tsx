@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useBroadcast } from '@/shared/supabase/realtime';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -16,8 +17,7 @@ import {
   Copy,
   CheckCheck,
 } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/shared/supabase/browser';
-import { formatPeso } from '@/shared/lib/format';
+import { formatHora, formatPeso } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { PaymentMethodModal } from '@/features/pagos/components/PaymentMethodModal';
@@ -94,28 +94,16 @@ export function SeguimientoPedido({
   const [showPay, setShowPay] = useState(autoAbrirPago && pedido.saldoPendiente > 0);
   const [copiado, setCopiado] = useState(false);
 
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`mesa_${sesionMesaId}`)
-      .on('broadcast', { event: 'estado_entrega_actualizado' }, () => router.refresh())
-      .on('broadcast', { event: 'pago_completado' }, () => router.refresh())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [sesionMesaId, router]);
+  useBroadcast(`mesa_${sesionMesaId}`, {
+    estado_entrega_actualizado: () => router.refresh(),
+    pago_completado: () => router.refresh(),
+  });
 
   const cancelado = estadoEntrega === 'Cancelado';
   const pasos: readonly string[] = tipo === 'delivery' ? PASOS_DELIVERY : PASOS_TAKEAWAY;
   const actual = pasos.indexOf(estadoEntrega);
 
-  const hora = pedido.horaEstimada
-    ? new Date(pedido.horaEstimada).toLocaleTimeString('es-AR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : null;
+  const hora = pedido.horaEstimada ? formatHora(pedido.horaEstimada) : null;
 
   const basePath = tenantSlug ? `/${tenantSlug}/pedir` : '/pedir';
 
