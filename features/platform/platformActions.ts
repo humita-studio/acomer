@@ -117,6 +117,32 @@ function limitesDeCalendario(ahora: Date) {
 }
 
 const DIA_MS = 86_400_000;
+const TZ_SQL = "'America/Argentina/Buenos_Aires'";
+
+/** 'YYYY-MM' de los últimos `n` meses (incluido el actual), en la zona del local. */
+function ultimosMeses(ahora: Date, n: number): string[] {
+  const { ymd } = partesEnZona(ahora);
+  let [y, m] = ymd.split('-').map(Number);
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    out.unshift(`${y}-${pad2(m)}`);
+    m -= 1;
+    if (m === 0) {
+      m = 12;
+      y -= 1;
+    }
+  }
+  return out;
+}
+
+/** 'YYYY-MM-DD' de los últimos `n` días (incluido hoy), en la zona del local. */
+function ultimosDias(ahora: Date, n: number): string[] {
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    out.push(partesEnZona(new Date(ahora.getTime() - i * DIA_MS)).ymd);
+  }
+  return out;
+}
 // Las fechas viajan al SQL como ISO + cast: el driver sin prepared statements no serializa Date.
 
 export async function getPlatformStatsAction(): Promise<PlatformStats | null> {
@@ -130,8 +156,12 @@ export async function getPlatformStatsAction(): Promise<PlatformStats | null> {
     const hace14 = new Date(ahora.getTime() - 14 * DIA_MS);
     const hace30 = new Date(ahora.getTime() - 30 * DIA_MS);
     const en7 = new Date(ahora.getTime() + 7 * DIA_MS);
+    const meses = ultimosMeses(ahora, 6);
+    const dias = ultimosDias(ahora, 30);
+    const inicioSerieMeses = instanteEnZona(`${meses[0]}-01`, '00:00');
+    const inicioSerieDias = instanteEnZona(dias[0], '00:00');
 
-    const [[conteos], [ingresos], activosPagando, [uso], pagos, atencionRows] = await Promise.all([
+    const [[conteos], [ingresos], activosPagando, [uso], pagos, atencionRows, ingresosMesRows, pedidosDiaRows, volumenDiaRows, altasMesRows, topRows] = await Promise.all([
       db
         .select({
           total: count(),
@@ -197,6 +227,39 @@ export async function getPlatformStatsAction(): Promise<PlatformStats | null> {
         })
         .from(restaurantes)
         .where(and(isNull(restaurantes.deletedAt), eq(restaurantes.activo, true))),
+      db.execute<{ mes: string; monto: string; pagos: number }>(sql`
+        select to_char(${pagosSuscripcion.createdAt} at time zone ${sql.raw(TZ_SQL)}, 'YYYY-MM') as mes,
+               coalesce(sum(${pagosSuscripcion.monto}), 0) as monto,
+               count(*)::int as pagos
+        from ${pagosSuscripcion}
+        where ${pagosSuscripcion.estado} = 'approved' and ${pagosSuscripcion.createdAt} >= ${inicioSerieMeses.toISOString()}::timestamptz
+        group by 1`),
+      db.execute<{ dia: string; pedidos: number }>(sql`
+        select to_char(${pedidos.createdAt} at time zone ${sql.raw(TZ_SQL)}, 'YYYY-MM-DD') as dia, count(*)::int as pedidos
+        from ${pedidos}
+        where ${pedidos.createdAt} >= ${inicioSerieDias.toISOString()}::timestamptz and ${pedidos.estado} <> 'Cancelado'
+        group by 1`),
+      db.execute<{ dia: string; volumen: string }>(sql`
+        select to_char(${transaccionesPago.createdAt} at time zone ${sql.raw(TZ_SQL)}, 'YYYY-MM-DD') as dia,
+               coalesce(sum(${transaccionesPago.monto}), 0) as volumen
+        from ${transaccionesPago}
+        where ${transaccionesPago.estado} = 'Aprobado' and ${transaccionesPago.createdAt} >= ${inicioSerieDias.toISOString()}::timestamptz
+        group by 1`),
+      db.execute<{ mes: string; altas: number }>(sql`
+        select to_char(${restaurantes.createdAt} at time zone ${sql.raw(TZ_SQL)}, 'YYYY-MM') as mes, count(*)::int as altas
+        from ${restaurantes}
+        where ${restaurantes.deletedAt} is null and ${restaurantes.createdAt} >= ${inicioSerieMeses.toISOString()}::timestamptz
+        group by 1`),
+      db.execute<{ id: string; nombre: string; slug: string; volumen: string; pedidos: number }>(sql`
+        select r.id, r.nombre, r.slug,
+               (select coalesce(sum(t.monto), 0) from ${transaccionesPago} t
+                 where t.restaurant_id = r.id and t.estado = 'Aprobado' and t.created_at >= ${hace30.toISOString()}::timestamptz) as volumen,
+               (select count(*)::int from ${pedidos} p
+                 where p.restaurant_id = r.id and p.estado <> 'Cancelado' and p.created_at >= ${hace30.toISOString()}::timestamptz) as pedidos
+        from ${restaurantes} r
+        where r.deleted_at is null
+        order by volumen desc, pedidos desc
+        limit 5`),
     ]);
 
     const mrr = activosPagando.reduce((acc, r) => {
@@ -235,6 +298,31 @@ export async function getPlatformStatsAction(): Promise<PlatformStats | null> {
       }
     }
 
+    const porMes = new Map(Array.from(ingresosMesRows, (r) => [r.mes, r]));
+    const pedidosPorDiaMap = new Map(Array.from(pedidosDiaRows, (r) => [r.dia, Number(r.pedidos)]));
+    const volumenPorDiaMap = new Map(Array.from(volumenDiaRows, (r) => [r.dia, Number(r.volumen)]));
+    const altasPorMesMap = new Map(Array.from(altasMesRows, (r) => [r.mes, Number(r.altas)]));
+    const series = {
+      ingresosPorMes: meses.map((mes) => ({
+        mes,
+        monto: Number(porMes.get(mes)?.monto ?? 0),
+        pagos: Number(porMes.get(mes)?.pagos ?? 0),
+      })),
+      pedidosPorDia: dias.map((dia) => ({
+        dia,
+        pedidos: pedidosPorDiaMap.get(dia) ?? 0,
+        volumen: volumenPorDiaMap.get(dia) ?? 0,
+      })),
+      altasPorMes: meses.map((mes) => ({ mes, altas: altasPorMesMap.get(mes) ?? 0 })),
+      topLocales: Array.from(topRows, (r) => ({
+        id: r.id,
+        nombre: r.nombre,
+        slug: r.slug,
+        volumen30d: Number(r.volumen),
+        pedidos30d: Number(r.pedidos),
+      })).filter((l) => l.volumen30d > 0 || l.pedidos30d > 0),
+    };
+
     return {
       total: Number(conteos?.total ?? 0),
       activos: Number(conteos?.activos ?? 0),
@@ -269,6 +357,7 @@ export async function getPlatformStatsAction(): Promise<PlatformStats | null> {
         estado: pg.estado,
       })),
       atencion: atencion.slice(0, 20),
+      series,
     };
   } catch (error) {
     console.error('[getPlatformStatsAction]', error);

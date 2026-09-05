@@ -81,6 +81,17 @@ export type PlatformStats = {
   };
   pagosRecientes: PlatformPagoReciente[];
   atencion: PlatformAtencion[];
+  series: PlatformSeries;
+};
+
+export type PlatformSeries = {
+  /** Últimos 6 meses ('YYYY-MM'), del más viejo al actual. */
+  ingresosPorMes: Array<{ mes: string; monto: number; pagos: number }>;
+  /** Últimos 30 días ('YYYY-MM-DD') en la zona del local. */
+  pedidosPorDia: Array<{ dia: string; pedidos: number; volumen: number }>;
+  altasPorMes: Array<{ mes: string; altas: number }>;
+  /** Top 5 por cobrado a sus clientes en 30 días. */
+  topLocales: Array<{ id: string; nombre: string; slug: string; volumen30d: number; pedidos30d: number }>;
 };
 
 export type PlatformListFilters = {

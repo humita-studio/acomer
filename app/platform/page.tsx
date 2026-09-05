@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { getPlatformStatsAction } from '@/features/platform/platformActions';
+import { PlatformGraficos } from '@/features/platform/components/PlatformGraficos';
 import { PLAN_LABEL, type PlatformAtencionMotivo, type PlatformStats } from '@/features/platform/types';
 import { formatFecha, formatPeso } from '@/shared/lib/format';
 import { Badge } from '@/shared/ui/badge';
@@ -118,6 +119,8 @@ function Resumen({ stats }: { stats: PlatformStats }) {
       <Tiles titulo="Suscripciones" tiles={suscripciones} cols="lg:grid-cols-4" />
       <Tiles titulo="Locales" tiles={locales} cols="lg:grid-cols-3" />
       <Tiles titulo="Uso del producto" tiles={uso} cols="lg:grid-cols-4" />
+
+      <PlatformGraficos stats={stats} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
